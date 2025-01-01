@@ -6,7 +6,7 @@ export default function AuthLayout({
     return (
         <div className="grid h-screen grid-cols-1 lg:grid-cols-2">
             {/* Left side - Auth form */}
-            <div className="flex items-center justify-center px-4">
+            <div className="flex items-center justify-center">
                 {children}
             </div>
 
