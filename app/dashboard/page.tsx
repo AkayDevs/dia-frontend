@@ -24,6 +24,7 @@ import {
     AlertCircle
 } from 'lucide-react';
 import { Document } from '@/types/document';
+import { UploadHandler } from '@/components/ui/upload-handler';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 const API_VERSION = '/api/v1';
@@ -189,26 +190,6 @@ export default function DashboardPage() {
         fetchDocuments();
     }, []);
 
-    const handleUploadSuccess = async (document: Document) => {
-        setUploadError(null);
-        toast({
-            description: "Document uploaded successfully!",
-            duration: 3000,
-        });
-        await fetchDocuments(); // Refresh the document list
-        router.push(`/dashboard/analysis/${document.id}`);
-    };
-
-    const handleUploadError = (error: Error) => {
-        setUploadError(error.message);
-        toast({
-            title: "Upload Failed",
-            description: error.message,
-            variant: "destructive",
-            duration: 5000,
-        });
-    };
-
     return (
         <DashboardLayout>
             <div className="space-y-8">
@@ -294,9 +275,10 @@ export default function DashboardPage() {
                                     </motion.div>
                                 )}
                             </AnimatePresence>
-                            <FileUpload
-                                onUploadSuccess={handleUploadSuccess}
-                                onUploadError={handleUploadError}
+                            <UploadHandler
+                                onSuccess={() => setUploadError(null)}
+                                onError={(error) => setUploadError(error.message)}
+                                refreshDocuments={fetchDocuments}
                                 className="h-[300px]"
                             />
                         </CardContent>

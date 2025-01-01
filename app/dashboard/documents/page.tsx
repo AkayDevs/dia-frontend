@@ -44,6 +44,7 @@ import {
     PlayCircle
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { UploadHandler } from '@/components/ui/upload-handler';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 const API_VERSION = '/api/v1';
@@ -96,25 +97,6 @@ export default function DocumentsPage() {
     useEffect(() => {
         fetchDocuments();
     }, []);
-
-    const handleUploadSuccess = async (document: Document) => {
-        setUploadError(null);
-        toast({
-            description: "Document uploaded successfully!",
-            duration: 3000,
-        });
-        await fetchDocuments();
-    };
-
-    const handleUploadError = (error: Error) => {
-        setUploadError(error.message);
-        toast({
-            title: "Upload Failed",
-            description: error.message,
-            variant: "destructive",
-            duration: 5000,
-        });
-    };
 
     const handleAnalyze = async (documentId: number) => {
         try {
@@ -201,9 +183,11 @@ export default function DocumentsPage() {
                                     Upload a document for analysis. Supported formats: PDF, DOCX, XLSX, Images
                                 </DialogDescription>
                             </DialogHeader>
-                            <FileUpload
-                                onUploadSuccess={handleUploadSuccess}
-                                onUploadError={handleUploadError}
+                            <UploadHandler
+                                onSuccess={() => setUploadError(null)}
+                                onError={(error) => setUploadError(error.message)}
+                                refreshDocuments={fetchDocuments}
+                                redirectToAnalysis={false}
                                 className="h-[300px]"
                             />
                         </DialogContent>

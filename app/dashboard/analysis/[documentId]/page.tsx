@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { AnalysisWizard } from '@/components/analysis/analysis-wizard';
@@ -17,23 +17,33 @@ export default function AnalysisPage({
     const { documents } = useDocumentStore();
     const { setCurrentConfig } = useAnalysisStore();
     const { documentId } = use(params);
+    const [document, setDocument] = useState<Document | null>(null);
 
     // Find the document
-    const document = documents.find(doc => doc.id === documentId);
-
-    // Set up initial analysis configuration
     useEffect(() => {
-        if (document) {
+        const doc = documents.find(doc => doc.id === documentId);
+        setDocument(doc);
+        if (doc) {
             setCurrentConfig({
-                documentId: document.id,
+                documentId: doc.id,
                 analysisTypes: []
             });
         }
-    }, [document, setCurrentConfig]);
+    }, [documentId, documents, setCurrentConfig]);
+
+    useEffect(() => {
+        // If document not found after fetch, redirect to dashboard
+        if (document === null) {
+            return;
+        }
+
+        if (!document) {
+            router.push('/dashboard');
+        }
+    }, [document, router]);
 
     // If document not found, redirect to dashboard
     if (!document) {
-        router.push('/dashboard');
         return null;
     }
 

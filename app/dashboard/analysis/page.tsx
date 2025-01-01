@@ -1,9 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
-import { FileUpload } from '@/components/ui/file-upload';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -28,6 +27,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Document } from '@/types/document';
+import { UploadHandler } from '@/components/ui/upload-handler';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 const API_VERSION = '/api/v1';
@@ -105,25 +105,6 @@ export default function AnalysisPage() {
         fetchData();
     }, [toast]);
 
-    const handleUploadSuccess = async (document: Document) => {
-        setUploadError(null);
-        toast({
-            description: "Document uploaded successfully! Starting analysis...",
-            duration: 3000,
-        });
-        router.push(`/dashboard/analysis/${document.id}`);
-    };
-
-    const handleUploadError = (error: Error) => {
-        setUploadError(error.message);
-        toast({
-            title: "Upload Failed",
-            description: error.message,
-            variant: "destructive",
-            duration: 5000,
-        });
-    };
-
     const getStatusIcon = (status: string) => {
         switch (status) {
             case 'completed':
@@ -188,9 +169,9 @@ export default function AnalysisPage() {
                                         <AlertDescription>{uploadError}</AlertDescription>
                                     </Alert>
                                 )}
-                                <FileUpload
-                                    onUploadSuccess={handleUploadSuccess}
-                                    onUploadError={handleUploadError}
+                                <UploadHandler
+                                    onSuccess={() => setUploadError(null)}
+                                    onError={(error) => setUploadError(error.message)}
                                     className="h-[300px]"
                                 />
                             </CardContent>
