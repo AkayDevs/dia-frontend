@@ -1,28 +1,64 @@
 import { create } from 'zustand';
-import { Document, AnalysisResult } from '@/types/document';
+import { Document, DocumentType } from '@/types/document';
 
 interface DocumentStore {
     documents: Document[];
     selectedDocument: Document | null;
-    analysisResults: AnalysisResult[];
     setDocuments: (documents: Document[]) => void;
     addDocument: (document: Document) => void;
     setSelectedDocument: (document: Document | null) => void;
     updateDocumentStatus: (documentId: string, status: Document['status']) => void;
-    setAnalysisResults: (results: AnalysisResult[]) => void;
-    addAnalysisResult: (result: AnalysisResult) => void;
 }
+
+// Helper function to generate a unique ID
+const generateId = () => Math.random().toString(36).substr(2, 9);
+
+// Helper function to create a mock document
+export const createMockDocument = (file: File): Document => {
+    const now = new Date().toISOString();
+    const type = getDocumentType(file);
+
+    return {
+        id: generateId(),
+        name: file.name,
+        type,
+        status: 'pending',
+        uploadedAt: now,
+        size: file.size,
+        url: URL.createObjectURL(file), // Create a temporary URL for development
+    };
+};
+
+// Helper function to determine document type
+const getDocumentType = (file: File): DocumentType => {
+    const extension = file.name.split('.').pop()?.toLowerCase();
+    switch (extension) {
+        case 'pdf':
+            return 'pdf';
+        case 'doc':
+        case 'docx':
+            return 'docx';
+        case 'xls':
+        case 'xlsx':
+            return 'xlsx';
+        case 'png':
+        case 'jpg':
+        case 'jpeg':
+            return 'image';
+        default:
+            throw new Error('Unsupported file type');
+    }
+};
 
 export const useDocumentStore = create<DocumentStore>((set) => ({
     documents: [],
     selectedDocument: null,
-    analysisResults: [],
 
     setDocuments: (documents) => set({ documents }),
 
     addDocument: (document) =>
         set((state) => ({
-            documents: [...state.documents, document],
+            documents: [document, ...state.documents],
         })),
 
     setSelectedDocument: (document) => set({ selectedDocument: document }),
@@ -32,12 +68,5 @@ export const useDocumentStore = create<DocumentStore>((set) => ({
             documents: state.documents.map((doc) =>
                 doc.id === documentId ? { ...doc, status } : doc
             ),
-        })),
-
-    setAnalysisResults: (results) => set({ analysisResults: results }),
-
-    addAnalysisResult: (result) =>
-        set((state) => ({
-            analysisResults: [...state.analysisResults, result],
         })),
 })); 

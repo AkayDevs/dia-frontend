@@ -1,3 +1,5 @@
+'use client';
+
 import { useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { Upload, File } from 'lucide-react';

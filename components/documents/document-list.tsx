@@ -1,3 +1,5 @@
+'use client';
+
 import { useDocumentStore } from '@/store/useDocumentStore';
 import { FileIcon, FileTextIcon, ImageIcon, TableIcon } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';

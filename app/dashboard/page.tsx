@@ -6,6 +6,8 @@ import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { BarChart, FileText, Clock, CheckCircle } from 'lucide-react';
 import { useDocumentStore } from '@/store/useDocumentStore';
 import { Document } from '@/types/document';
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 
 function StatsCard({
     title,
@@ -32,7 +34,9 @@ function StatsCard({
 }
 
 export default function DashboardPage() {
+    const router = useRouter();
     const { documents } = useDocumentStore();
+    const [uploadError, setUploadError] = useState<string | null>(null);
 
     const stats = {
         total: documents.length,
@@ -44,11 +48,13 @@ export default function DashboardPage() {
     };
 
     const handleUploadSuccess = (document: Document) => {
-        console.log('Document uploaded:', document);
+        setUploadError(null);
+        // Redirect to analysis configuration
+        router.push(`/dashboard/analysis/${document.id}`);
     };
 
     const handleUploadError = (error: Error) => {
-        console.error('Upload error:', error);
+        setUploadError(error.message);
     };
 
     return (
@@ -87,6 +93,11 @@ export default function DashboardPage() {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                     <div>
                         <h2 className="text-xl font-semibold mb-4">Upload Document</h2>
+                        {uploadError && (
+                            <div className="mb-4 p-4 rounded-lg bg-destructive/10 text-destructive text-sm">
+                                {uploadError}
+                            </div>
+                        )}
                         <FileUpload
                             onUploadSuccess={handleUploadSuccess}
                             onUploadError={handleUploadError}

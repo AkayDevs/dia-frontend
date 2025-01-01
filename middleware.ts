@@ -5,27 +5,37 @@ import type { NextRequest } from 'next/server';
 const publicPaths = ['/login', '/signup', '/forgot-password'];
 
 export function middleware(request: NextRequest) {
-    const { pathname } = request.nextUrl;
-
-    // Check if the path is public
-    const isPublicPath = publicPaths.some(path => pathname.startsWith(path));
-
-    // Get the token from the cookies
-    const token = request.cookies.get('auth_token')?.value;
-
-    // Redirect to login if accessing a protected route without a token
-    if (!isPublicPath && !token) {
-        const loginUrl = new URL('/login', request.url);
-        loginUrl.searchParams.set('from', pathname);
-        return NextResponse.redirect(loginUrl);
-    }
-
-    // Redirect to dashboard if accessing auth pages with a valid token
-    if (isPublicPath && token) {
+    // For development, bypass all auth checks and redirect to dashboard
+    if (request.nextUrl.pathname === '/') {
         return NextResponse.redirect(new URL('/dashboard', request.url));
     }
 
+    // For development, allow all requests
     return NextResponse.next();
+
+    /* Comment out the actual auth checks for now
+    const { pathname } = request.nextUrl;
+    
+    // Check if the path is public
+    const isPublicPath = publicPaths.some(path => pathname.startsWith(path));
+    
+    // Get the token from the cookies
+    const token = request.cookies.get('auth_token')?.value;
+  
+    // Redirect to login if accessing a protected route without a token
+    if (!isPublicPath && !token) {
+      const loginUrl = new URL('/login', request.url);
+      loginUrl.searchParams.set('from', pathname);
+      return NextResponse.redirect(loginUrl);
+    }
+  
+    // Redirect to dashboard if accessing auth pages with a valid token
+    if (isPublicPath && token) {
+      return NextResponse.redirect(new URL('/dashboard', request.url));
+    }
+  
+    return NextResponse.next();
+    */
 }
 
 // Configure the middleware to run on specific paths

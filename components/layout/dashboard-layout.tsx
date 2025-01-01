@@ -1,3 +1,5 @@
+'use client';
+
 import { ReactNode } from 'react';
 import { Sidebar } from './sidebar';
 import { UserMenu } from './user-menu';

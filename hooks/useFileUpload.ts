@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { useDocumentStore } from '@/store/useDocumentStore';
-import { Document, DocumentType } from '@/types/document';
+import { useDocumentStore, createMockDocument } from '@/store/useDocumentStore';
+import { Document } from '@/types/document';
 
 interface UploadOptions {
     onSuccess?: (document: Document) => void;
@@ -15,11 +15,24 @@ export const useFileUpload = () => {
         try {
             setIsUploading(true);
 
-            // Create form data
+            // For development: Create a mock document
+            const mockDocument = createMockDocument(file);
+
+            // Simulate network delay
+            await new Promise(resolve => setTimeout(resolve, 1000));
+
+            // Add the document to the store
+            addDocument(mockDocument);
+
+            // Call success callback
+            options?.onSuccess?.(mockDocument);
+
+            return mockDocument;
+
+            /* TODO: Replace with actual API implementation
             const formData = new FormData();
             formData.append('file', file);
 
-            // TODO: Replace with your actual API endpoint
             const response = await fetch('/api/documents/upload', {
                 method: 'POST',
                 body: formData,
@@ -30,11 +43,11 @@ export const useFileUpload = () => {
             }
 
             const document: Document = await response.json();
-
             addDocument(document);
             options?.onSuccess?.(document);
-
+            
             return document;
+            */
         } catch (error) {
             const err = error instanceof Error ? error : new Error('Unknown error occurred');
             options?.onError?.(err);
@@ -44,29 +57,8 @@ export const useFileUpload = () => {
         }
     };
 
-    const getFileType = (file: File): DocumentType => {
-        const extension = file.name.split('.').pop()?.toLowerCase();
-        switch (extension) {
-            case 'pdf':
-                return 'pdf';
-            case 'doc':
-            case 'docx':
-                return 'docx';
-            case 'xls':
-            case 'xlsx':
-                return 'xlsx';
-            case 'png':
-            case 'jpg':
-            case 'jpeg':
-                return 'image';
-            default:
-                throw new Error('Unsupported file type');
-        }
-    };
-
     return {
         upload,
         isUploading,
-        getFileType,
     };
 }; 
