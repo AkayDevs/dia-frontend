@@ -2,8 +2,33 @@
 
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/useAuthStore';
+<<<<<<< HEAD
 import { LogOut, Settings, User } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
+=======
+import { LogOut, Settings, User, FileText, Bell, HelpCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuGroup,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+
+interface UserResponse {
+    id: string;
+    email: string;
+    name: string;
+    is_active: boolean;
+    is_verified: boolean;
+    created_at: string;
+    updated_at: string;
+}
+>>>>>>> 238a4d0 (Initial Commit)
 
 export function UserMenu() {
     const router = useRouter();
