@@ -1,78 +1,121 @@
 import { create } from 'zustand';
-import { AuthState, LoginCredentials, User } from '@/types/auth';
+import { authService, UserResponse, LoginData } from '@/services/auth.service';
+import { AUTH_TOKEN_KEY } from '@/lib/constants';
 
-// Mock user for development
-const mockUser: User = {
-    id: '1',
-    name: 'Alice',
-    email: 'alice@example.com',
-    role: 'user',
-    createdAt: new Date().toISOString(),
-};
-
-interface AuthStore extends AuthState {
-    login: (credentials: LoginCredentials) => Promise<void>;
-    logout: () => Promise<void>;
-    setUser: (user: User | null) => void;
+interface AuthState {
+    isAuthenticated: boolean;
+    isLoading: boolean;
+    error: string | null;
+    user: UserResponse | null;
+    token: string | null;
+    login: (credentials: LoginData) => Promise<void>;
+    logout: () => void;
+    requestPasswordReset: (email: string) => Promise<void>;
+    resetPassword: (token: string, newPassword: string) => Promise<void>;
+    verifyEmail: (token: string) => Promise<void>;
 }
 
-export const useAuthStore = create<AuthStore>((set) => ({
-    // Initialize with mock user for development
-    user: mockUser,
+// Helper function to safely access localStorage
+const getStorageItem = (key: string): string | null => {
+    if (typeof window !== 'undefined') {
+        return localStorage.getItem(key);
+    }
+    return null;
+};
+
+// Helper function to safely set localStorage
+const setStorageItem = (key: string, value: string): void => {
+    if (typeof window !== 'undefined') {
+        localStorage.setItem(key, value);
+    }
+};
+
+// Helper function to safely remove localStorage item
+const removeStorageItem = (key: string): void => {
+    if (typeof window !== 'undefined') {
+        localStorage.removeItem(key);
+    }
+};
+
+export const useAuthStore = create<AuthState>((set) => ({
+    isAuthenticated: !!getStorageItem(AUTH_TOKEN_KEY),
     isLoading: false,
     error: null,
-
-    setUser: (user) => set({ user }),
+    user: null,
+    token: getStorageItem(AUTH_TOKEN_KEY),
 
     login: async (credentials) => {
+        set({ isLoading: true, error: null });
         try {
-            set({ isLoading: true, error: null });
+            const { access_token, token_type } = await authService.login(credentials);
 
-            // For development, just set the mock user
-            set({ user: mockUser, isLoading: false });
+            setStorageItem(AUTH_TOKEN_KEY, access_token);
 
-            // Comment out the actual API call for now
-            /*
-            const response = await fetch('/api/auth/login', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(credentials),
-            });
-      
-            if (!response.ok) {
-              throw new Error('Invalid credentials');
-            }
-      
-            const user: User = await response.json();
-            set({ user, isLoading: false });
-            */
-        } catch (error) {
+            const userData = await authService.getCurrentUser(access_token);
+
             set({
-                error: error instanceof Error ? error.message : 'An error occurred',
-                isLoading: false
+                isAuthenticated: true,
+                token: access_token,
+                user: userData,
+                error: null
+            });
+        } catch (error) {
+            removeStorageItem(AUTH_TOKEN_KEY);
+            set({
+                isAuthenticated: false,
+                token: null,
+                user: null,
+                error: error instanceof Error ? error.message : 'An error occurred during login'
             });
             throw error;
+        } finally {
+            set({ isLoading: false });
         }
     },
 
-    logout: async () => {
+    logout: () => {
+        removeStorageItem(AUTH_TOKEN_KEY);
+        set({
+            isAuthenticated: false,
+            token: null,
+            user: null,
+            error: null
+        });
+    },
+
+    requestPasswordReset: async (email) => {
+        set({ isLoading: true, error: null });
         try {
-            set({ isLoading: true, error: null });
-
-            // For development, just clear the user
-            set({ user: null, isLoading: false });
-
-            // Comment out the actual API call for now
-            /*
-            await fetch('/api/auth/logout', { method: 'POST' });
-            set({ user: null, isLoading: false });
-            */
+            await authService.requestPasswordReset(email);
         } catch (error) {
-            set({
-                error: error instanceof Error ? error.message : 'An error occurred',
-                isLoading: false
-            });
+            set({ error: error instanceof Error ? error.message : 'Failed to request password reset' });
             throw error;
+        } finally {
+            set({ isLoading: false });
         }
     },
+
+    resetPassword: async (token, newPassword) => {
+        set({ isLoading: true, error: null });
+        try {
+            await authService.resetPassword(token, newPassword);
+        } catch (error) {
+            set({ error: error instanceof Error ? error.message : 'Failed to reset password' });
+            throw error;
+        } finally {
+            set({ isLoading: false });
+        }
+    },
+
+    verifyEmail: async (token) => {
+        set({ isLoading: true, error: null });
+        try {
+            await authService.verifyEmail(token);
+        } catch (error) {
+            set({ error: error instanceof Error ? error.message : 'Failed to verify email' });
+            throw error;
+        } finally {
+            set({ isLoading: false });
+        }
+    }
 })); 

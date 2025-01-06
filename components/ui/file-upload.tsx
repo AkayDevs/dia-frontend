@@ -25,7 +25,7 @@ const DEFAULT_ALLOWED_TYPES: Record<string, string[]> = {
     'image/*': ['.png', '.jpg', '.jpeg']
 };
 
-export function FileUpload({
+export function  FileUpload({
     onUploadSuccess,
     onUploadError,
     className = '',

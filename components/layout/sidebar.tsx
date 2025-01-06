@@ -2,27 +2,26 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
-import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { useToast } from '@/hooks/use-toast';
+import { useAuthStore } from '@/store/useAuthStore';
+import { documentService, AnalysisStatus } from '@/services/document.service';
 import {
-    LayoutDashboard,
-    FileText,
-    History,
-    Settings,
-    BarChart,
-    Menu,
-    LogOut,
-    User,
-    ChevronRight
-} from 'lucide-react';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-const API_VERSION = '/api/v1';
+    DocumentIcon,
+    ChartBarIcon,
+    Cog6ToothIcon,
+    ArrowRightOnRectangleIcon,
+    UserIcon,
+    Bars3Icon,
+    DocumentTextIcon,
+    ClockIcon,
+    ChevronRightIcon
+} from '@heroicons/react/24/outline';
 
 interface NavItem {
     title: string;
@@ -35,27 +34,27 @@ const navItems: NavItem[] = [
     {
         title: 'Dashboard',
         href: '/dashboard',
-        icon: LayoutDashboard
+        icon: DocumentIcon
     },
     {
         title: 'Documents',
         href: '/dashboard/documents',
-        icon: FileText,
+        icon: DocumentTextIcon,
     },
     {
         title: 'Analysis',
         href: '/dashboard/analysis',
-        icon: BarChart
+        icon: ChartBarIcon
     },
     {
         title: 'History',
         href: '/dashboard/history',
-        icon: History
+        icon: ClockIcon
     },
     {
         title: 'Settings',
         href: '/dashboard/settings',
-        icon: Settings
+        icon: Cog6ToothIcon
     }
 ];
 
@@ -65,11 +64,18 @@ interface SidebarProps {
 
 export function Sidebar({ className }: SidebarProps) {
     const pathname = usePathname();
+    const router = useRouter();
     const { toast } = useToast();
+    const { user, logout } = useAuthStore();
     const [isMobile, setIsMobile] = useState(false);
     const [isOpen, setIsOpen] = useState(false);
-    const [user, setUser] = useState<{ name: string; email: string } | null>(null);
-    const [pendingCount, setPendingCount] = useState(0);
+    const [processingCount, setProcessingCount] = useState(0);
+    const [isMounted, setIsMounted] = useState(false);
+
+    useEffect(() => {
+        setIsMounted(true);
+        return () => setIsMounted(false);
+    }, []);
 
     useEffect(() => {
         const checkMobile = () => {
@@ -83,75 +89,40 @@ export function Sidebar({ className }: SidebarProps) {
     }, []);
 
     useEffect(() => {
-        const fetchUserProfile = async () => {
+        const fetchProcessingDocuments = async () => {
             try {
-                const token = localStorage.getItem('token');
-                if (!token) {
-                    window.location.href = '/login';
-                    return;
-                }
-
-                // Decode the JWT token to get user info
-                const tokenPayload = JSON.parse(atob(token.split('.')[1]));
-                setUser({
-                    name: tokenPayload.name || 'User',
-                    email: tokenPayload.email || 'user@example.com'
+                const documents = await documentService.getDocuments({
+                    status: AnalysisStatus.PROCESSING
                 });
-
+                setProcessingCount(documents.length);
             } catch (error) {
-                console.error('Failed to decode user token:', error);
-                // If token is invalid, redirect to login
-                window.location.href = '/login';
+                console.error('Error fetching processing documents:', error);
+                // If authentication error, handle logout
+                if (error instanceof Error &&
+                    (error.message.includes('Could not validate credentials') ||
+                        error.message.includes('No authentication token found'))) {
+                    handleLogout();
+                }
+                setProcessingCount(0);
             }
         };
 
-        const fetchPendingDocuments = async () => {
-            try {
-                const token = localStorage.getItem('token');
-                if (!token) return;
+        if (isMounted) {
+            fetchProcessingDocuments();
+            // Refresh processing count every minute
+            const interval = setInterval(fetchProcessingDocuments, 60000);
+            return () => clearInterval(interval);
+        }
+    }, [isMounted]);
 
-                const response = await fetch(`${API_URL}${API_VERSION}/documents/list?status=processing`, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
-
-                if (response.ok) {
-                    const data = await response.json();
-                    setPendingCount(data.length);
-                } else if (response.status === 401) {
-                    // If unauthorized, redirect to login
-                    window.location.href = '/login';
-                }
-            } catch (error) {
-                console.error('Failed to fetch pending documents:', error);
-                setPendingCount(0);
-            }
-        };
-
-        fetchUserProfile();
-        fetchPendingDocuments();
-
-        // Refresh pending count every minute
-        const interval = setInterval(fetchPendingDocuments, 60000);
-        return () => clearInterval(interval);
-    }, []);
-
-    const handleLogout = () => {
+    const handleLogout = async () => {
         try {
-            // Clear the token
-            localStorage.removeItem('token');
-
-            // Show success message
+            logout();
             toast({
                 description: "Logged out successfully",
                 duration: 2000,
             });
-
-            // Redirect to login page
-            setTimeout(() => {
-                window.location.href = '/login';
-            }, 500);
+            router.push('/login');
         } catch (error) {
             toast({
                 title: "Logout Failed",
@@ -166,7 +137,7 @@ export function Sidebar({ className }: SidebarProps) {
             <div className="px-6 py-4 border-b">
                 <div className="flex items-center gap-3">
                     <div className="p-2 rounded-lg bg-primary/10 backdrop-blur-sm">
-                        <BarChart className="h-6 w-6 text-primary" />
+                        <ChartBarIcon className="h-6 w-6 text-primary" />
                     </div>
                     <div>
                         <h2 className="text-xl font-semibold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text">DIA Platform</h2>
@@ -203,16 +174,16 @@ export function Sidebar({ className }: SidebarProps) {
                                     <Icon className="h-4 w-4" />
                                 </div>
                                 <span className="flex-1">{item.title}</span>
-                                {item.title === 'Documents' && pendingCount > 0 && (
+                                {item.title === 'Documents' && processingCount > 0 && (
                                     <Badge
                                         variant="secondary"
                                         className="ml-auto px-2 py-0.5 bg-primary/10 text-primary hover:bg-primary/15"
                                     >
-                                        {pendingCount}
+                                        {processingCount}
                                     </Badge>
                                 )}
                                 {isActive && (
-                                    <ChevronRight className="ml-auto h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                    <ChevronRightIcon className="ml-auto h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />
                                 )}
                             </Link>
                         );
@@ -225,7 +196,7 @@ export function Sidebar({ className }: SidebarProps) {
                 {user && (
                     <div className="mb-4 flex items-center gap-3 rounded-lg p-3 bg-background/50 backdrop-blur-sm shadow-sm">
                         <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 ring-1 ring-primary/20">
-                            <User className="h-5 w-5 text-primary" />
+                            <UserIcon className="h-5 w-5 text-primary" />
                         </div>
                         <div className="flex flex-col">
                             <span className="text-sm font-medium tracking-tight">{user.name}</span>
@@ -239,7 +210,7 @@ export function Sidebar({ className }: SidebarProps) {
                     className="w-full justify-start gap-3 h-11 px-4 hover:bg-destructive/10 hover:text-destructive"
                     onClick={handleLogout}
                 >
-                    <LogOut className="h-4 w-4" />
+                    <ArrowRightOnRectangleIcon className="h-4 w-4" />
                     Sign Out
                 </Button>
 
@@ -257,14 +228,15 @@ export function Sidebar({ className }: SidebarProps) {
         return (
             <Sheet open={isOpen} onOpenChange={setIsOpen}>
                 <SheetTrigger asChild>
-                    <Button variant="ghost" size="icon" className="md:hidden" aria-label="Open Menu">
-                        <Menu className="h-5 w-5" />
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="md:hidden fixed top-4 left-4 z-40"
+                    >
+                        <Bars3Icon className="h-5 w-5" />
                     </Button>
                 </SheetTrigger>
-                <SheetContent side="left" className="w-64 p-0">
-                    <SheetHeader className="sr-only">
-                        <SheetTitle>Navigation Menu</SheetTitle>
-                    </SheetHeader>
+                <SheetContent side="left" className="p-0">
                     <SidebarContent />
                 </SheetContent>
             </Sheet>
@@ -272,8 +244,11 @@ export function Sidebar({ className }: SidebarProps) {
     }
 
     return (
-        <div className={`hidden md:flex h-screen w-64 flex-col border-r bg-card ${className}`}>
+        <aside className={`
+            hidden md:flex flex-col w-72 border-r bg-card/50 backdrop-blur-sm
+            ${className}
+        `}>
             <SidebarContent />
-        </div>
+        </aside>
     );
 } 

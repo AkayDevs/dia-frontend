@@ -38,22 +38,6 @@ export default function LoginPage() {
         }
 
         try {
-            const response = await fetch(`${API_URL}${API_VERSION}/auth/login`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ email, password }),
-                credentials: 'include',
-            });
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data.detail || 'Failed to login');
-            }
-
-            localStorage.setItem('token', data.access_token);
             await login({ email, password });
 
             toast({
@@ -63,7 +47,6 @@ export default function LoginPage() {
 
             router.push('/dashboard');
         } catch (error) {
-            // console.error('Login error:', error);
             toast({
                 title: "Login Failed",
                 description: error instanceof Error ? error.message : 'An error occurred during login',

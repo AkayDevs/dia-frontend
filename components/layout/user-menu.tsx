@@ -2,10 +2,6 @@
 
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/useAuthStore';
-<<<<<<< HEAD
-import { LogOut, Settings, User } from 'lucide-react';
-import { useState, useRef, useEffect } from 'react';
-=======
 import { LogOut, Settings, User, FileText, Bell, HelpCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -28,24 +24,10 @@ interface UserResponse {
     created_at: string;
     updated_at: string;
 }
->>>>>>> 238a4d0 (Initial Commit)
 
 export function UserMenu() {
     const router = useRouter();
     const { user, logout } = useAuthStore();
-    const [isOpen, setIsOpen] = useState(false);
-    const menuRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-                setIsOpen(false);
-            }
-        };
-
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
 
     const handleLogout = async () => {
         try {
@@ -56,70 +38,74 @@ export function UserMenu() {
         }
     };
 
-    if (!user) return null;
+    if (!user) {
+        console.log('No user found in UserMenu');
+        return null;
+    }
+
+    console.log('Rendering UserMenu for user:', user.name);
+
+    const userInitials = user.name
+        .split(' ')
+        .map(n => n[0])
+        .join('')
+        .toUpperCase();
 
     return (
-        <div className="relative" ref={menuRef}>
-            <button
-                onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center gap-2 p-2 rounded-lg hover:bg-muted transition-colors"
-            >
-                {user.avatar ? (
-                    <img
-                        src={user.avatar}
-                        alt={user.name}
-                        className="w-8 h-8 rounded-full"
-                    />
-                ) : (
-                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                        <span className="text-primary font-medium">
-                            {user.name.charAt(0).toUpperCase()}
-                        </span>
-                    </div>
-                )}
-                <span className="text-sm font-medium hidden md:block">
-                    {user.name}
-                </span>
-            </button>
-
-            {isOpen && (
-                <div className="absolute right-0 mt-2 w-56 rounded-lg border bg-card shadow-lg">
-                    <div className="p-2">
-                        <div className="px-3 py-2 text-sm text-muted-foreground">
-                            Signed in as <br />
-                            <strong className="text-foreground">{user.email}</strong>
+        <div className="relative z-50">
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                        <Avatar className="h-8 w-8">
+                            <AvatarFallback className="bg-primary/10 text-primary">
+                                {userInitials}
+                            </AvatarFallback>
+                        </Avatar>
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-56" align="end" forceMount>
+                    <DropdownMenuLabel className="font-normal">
+                        <div className="flex flex-col space-y-1">
+                            <p className="text-sm font-medium leading-none">{user.name}</p>
+                            <p className="text-xs leading-none text-muted-foreground">
+                                {user.email}
+                            </p>
                         </div>
-
-                        <div className="h-px bg-border my-2" />
-
-                        <button
-                            onClick={() => router.push('/dashboard/profile')}
-                            className="w-full flex items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-muted transition-colors"
-                        >
-                            <User className="w-4 h-4" />
-                            Profile
-                        </button>
-
-                        <button
-                            onClick={() => router.push('/dashboard/settings')}
-                            className="w-full flex items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-muted transition-colors"
-                        >
-                            <Settings className="w-4 h-4" />
-                            Settings
-                        </button>
-
-                        <div className="h-px bg-border my-2" />
-
-                        <button
-                            onClick={handleLogout}
-                            className="w-full flex items-center gap-2 rounded-md px-3 py-2 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-950/50 transition-colors"
-                        >
-                            <LogOut className="w-4 h-4" />
-                            Sign out
-                        </button>
-                    </div>
-                </div>
-            )}
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuGroup>
+                        <DropdownMenuItem onClick={() => router.push('/dashboard/profile')}>
+                            <User className="mr-2 h-4 w-4" />
+                            <span>Profile</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => router.push('/dashboard/documents')}>
+                            <FileText className="mr-2 h-4 w-4" />
+                            <span>My Documents</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => router.push('/dashboard/notifications')}>
+                            <Bell className="mr-2 h-4 w-4" />
+                            <span>Notifications</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => router.push('/dashboard/settings')}>
+                            <Settings className="mr-2 h-4 w-4" />
+                            <span>Settings</span>
+                        </DropdownMenuItem>
+                    </DropdownMenuGroup>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => router.push('/help')}>
+                        <HelpCircle className="mr-2 h-4 w-4" />
+                        <span>Help & Support</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                        className="text-red-600 dark:text-red-400"
+                        onClick={handleLogout}
+                    >
+                        <LogOut className="mr-2 h-4 w-4" />
+                        <span>Sign out</span>
+                    </DropdownMenuItem>
+                </DropdownMenuContent>
+            </DropdownMenu>
         </div>
     );
 } 

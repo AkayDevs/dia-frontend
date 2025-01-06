@@ -1,18 +1,28 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { DashboardLayout } from '@/components/layout/dashboard-layout';
-import { FileUpload } from '@/components/ui/file-upload';
+import { DocumentType, AnalysisStatus, Document } from '@/services/document.service';
+import { documentService } from '@/services/document.service';
+import { useToast } from '@/hooks/use-toast';
+import { useAuthStore } from '@/store/useAuthStore';
+import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import {
     Table,
     TableBody,
     TableCell,
     TableHead,
     TableHeader,
-    TableRow
+    TableRow,
 } from '@/components/ui/table';
 import {
     DropdownMenu,
@@ -20,69 +30,84 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from '@/components/ui/dialog';
-import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { useToast } from '@/hooks/use-toast';
+import { formatDistanceToNow } from 'date-fns';
 import { motion } from 'framer-motion';
 import {
-    FileText,
-    MoreVertical,
-    Upload,
-    Search,
-    Filter,
-    Download,
-    Trash2,
-    ExternalLink,
-    PlayCircle
-} from 'lucide-react';
-import { format } from 'date-fns';
-import { UploadHandler } from '@/components/ui/upload-handler';
+    ChevronDownIcon,
+    DocumentIcon,
+    DocumentTextIcon,
+    DocumentChartBarIcon,
+    PhotoIcon,
+    TrashIcon,
+    PencilIcon,
+    EyeIcon,
+    ArrowPathIcon,
+} from '@heroicons/react/24/outline';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-const API_VERSION = '/api/v1';
+const ITEMS_PER_PAGE = 10;
 
-interface Document {
-    id: number;
-    name: string;
-    type: string;
-    size: number;
-    status: 'pending' | 'processing' | 'completed' | 'failed';
-    uploadedAt: string;
-    url: string;
-}
+const DocumentTypeIcon = ({ type }: { type: DocumentType }) => {
+    switch (type) {
+        case DocumentType.PDF:
+            return <DocumentIcon className="h-5 w-5 text-blue-500" />;
+        case DocumentType.DOCX:
+            return <DocumentTextIcon className="h-5 w-5 text-indigo-500" />;
+        case DocumentType.XLSX:
+            return <DocumentChartBarIcon className="h-5 w-5 text-green-500" />;
+        case DocumentType.IMAGE:
+            return <PhotoIcon className="h-5 w-5 text-purple-500" />;
+        default:
+            return <DocumentIcon className="h-5 w-5 text-gray-500" />;
+    }
+};
+
+const StatusBadge = ({ status }: { status: AnalysisStatus }) => {
+    const getStatusStyles = () => {
+        switch (status) {
+            case AnalysisStatus.PENDING:
+                return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400';
+            case AnalysisStatus.PROCESSING:
+                return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400';
+            case AnalysisStatus.COMPLETED:
+                return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400';
+            case AnalysisStatus.FAILED:
+                return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400';
+            default:
+                return 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400';
+        }
+    };
+
+    return (
+        <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium inline-flex items-center ${getStatusStyles()}`}>
+            {status === AnalysisStatus.PROCESSING && (
+                <ArrowPathIcon className="w-3 h-3 mr-1 animate-spin" />
+            )}
+            {status.toLowerCase()}
+        </span>
+    );
+};
 
 export default function DocumentsPage() {
     const router = useRouter();
     const { toast } = useToast();
+    const { token } = useAuthStore();
     const [documents, setDocuments] = useState<Document[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [statusFilter, setStatusFilter] = useState<AnalysisStatus | 'ALL'>('ALL');
     const [searchQuery, setSearchQuery] = useState('');
-    const [statusFilter, setStatusFilter] = useState<string | null>(null);
-    const [uploadError, setUploadError] = useState<string | null>(null);
+    const [currentPage, setCurrentPage] = useState(1);
 
     const fetchDocuments = async () => {
         try {
-            const token = localStorage.getItem('token');
-            const response = await fetch(`${API_URL}${API_VERSION}/documents/list`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
+            setIsLoading(true);
+            const skip = (currentPage - 1) * ITEMS_PER_PAGE;
+            const status = statusFilter === 'ALL' ? undefined : statusFilter;
+            const docs = await documentService.getDocuments({
+                skip,
+                limit: ITEMS_PER_PAGE,
+                status,
             });
-
-            if (!response.ok) {
-                throw new Error('Failed to fetch documents');
-            }
-
-            const data = await response.json();
-            setDocuments(data);
+            setDocuments(docs);
         } catch (error) {
             toast({
                 title: "Error",
@@ -95,33 +120,39 @@ export default function DocumentsPage() {
     };
 
     useEffect(() => {
-        fetchDocuments();
-    }, []);
+        if (token) {
+            fetchDocuments();
+        }
+    }, [token, currentPage, statusFilter]);
 
-    const handleAnalyze = async (documentId: number) => {
+    const handleDelete = async (documentId: string) => {
         try {
-            const token = localStorage.getItem('token');
-            const response = await fetch(`${API_URL}${API_VERSION}/documents/${documentId}/analyze`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    types: ['text_extraction', 'table_detection']
-                })
+            await documentService.deleteDocument(documentId);
+            toast({
+                description: "Document deleted successfully",
+                duration: 3000,
             });
+            fetchDocuments();
+        } catch (error) {
+            toast({
+                title: "Error",
+                description: "Failed to delete document. Please try again.",
+                variant: "destructive",
+            });
+        }
+    };
 
-            if (!response.ok) {
-                throw new Error('Failed to start analysis');
-            }
-
+    const handleAnalyze = async (documentId: string) => {
+        try {
+            await documentService.analyzeDocument(documentId, {
+                type: 'default',
+                parameters: {},
+            });
             toast({
                 description: "Analysis started successfully",
                 duration: 3000,
             });
-
-            router.push(`/dashboard/analysis/${documentId}`);
+            fetchDocuments();
         } catch (error) {
             toast({
                 title: "Error",
@@ -131,210 +162,164 @@ export default function DocumentsPage() {
         }
     };
 
-    const handleDelete = async (documentId: number) => {
-        // Add delete functionality when backend endpoint is available
-        toast({
-            description: "Delete functionality coming soon",
-            duration: 3000,
-        });
-    };
-
-    const filteredDocuments = documents.filter(doc => {
-        const matchesSearch = doc.name.toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesStatus = !statusFilter || doc.status === statusFilter;
-        return matchesSearch && matchesStatus;
-    });
-
-    const getStatusColor = (status: string) => {
-        switch (status) {
-            case 'completed':
-                return 'bg-green-500/10 text-green-500 hover:bg-green-500/20';
-            case 'processing':
-                return 'bg-blue-500/10 text-blue-500 hover:bg-blue-500/20';
-            case 'failed':
-                return 'bg-red-500/10 text-red-500 hover:bg-red-500/20';
-            default:
-                return 'bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/20';
-        }
-    };
+    const filteredDocuments = documents.filter(doc =>
+        doc.name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
 
     return (
-        <DashboardLayout>
-            <div className="space-y-8">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h1 className="text-3xl font-bold tracking-tight">Documents</h1>
-                        <p className="text-muted-foreground mt-2">
-                            Manage and analyze your documents
-                        </p>
-                    </div>
-
-                    <Dialog>
-                        <DialogTrigger asChild>
-                            <Button className="gap-2">
-                                <Upload className="h-4 w-4" />
-                                Upload Document
-                            </Button>
-                        </DialogTrigger>
-                        <DialogContent className="sm:max-w-[600px]">
-                            <DialogHeader>
-                                <DialogTitle>Upload Document</DialogTitle>
-                                <DialogDescription>
-                                    Upload a document for analysis. Supported formats: PDF, DOCX, XLSX, Images
-                                </DialogDescription>
-                            </DialogHeader>
-                            <UploadHandler
-                                onSuccess={() => setUploadError(null)}
-                                onError={(error) => setUploadError(error.message)}
-                                refreshDocuments={fetchDocuments}
-                                redirectToAnalysis={false}
-                                className="h-[300px]"
-                            />
-                        </DialogContent>
-                    </Dialog>
+        <div className="container mx-auto p-6 max-w-7xl space-y-8">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                    <h1 className="text-3xl font-bold tracking-tight">Documents</h1>
+                    <p className="text-muted-foreground">
+                        Manage and analyze your documents
+                    </p>
                 </div>
+                <Button
+                    onClick={() => router.push('/dashboard/upload')}
+                    size="lg"
+                    className="w-full md:w-auto"
+                >
+                    Upload Document
+                </Button>
+            </div>
 
-                <div className="flex items-center gap-4">
-                    <div className="relative flex-1">
-                        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Card className="p-6">
+                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6">
+                    <div className="flex flex-col gap-4 md:flex-row md:items-center">
                         <Input
                             placeholder="Search documents..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="pl-10"
+                            className="w-full md:w-[300px]"
                         />
+                        <Select
+                            value={statusFilter}
+                            onValueChange={(value) => setStatusFilter(value as AnalysisStatus | 'ALL')}
+                        >
+                            <SelectTrigger className="w-full md:w-[200px]">
+                                <SelectValue placeholder="Filter by status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="ALL">All Status</SelectItem>
+                                <SelectItem value={AnalysisStatus.PENDING}>Pending</SelectItem>
+                                <SelectItem value={AnalysisStatus.PROCESSING}>Processing</SelectItem>
+                                <SelectItem value={AnalysisStatus.COMPLETED}>Completed</SelectItem>
+                                <SelectItem value={AnalysisStatus.FAILED}>Failed</SelectItem>
+                            </SelectContent>
+                        </Select>
                     </div>
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="outline" className="gap-2">
-                                <Filter className="h-4 w-4" />
-                                Filter
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => setStatusFilter(null)}>
-                                All
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setStatusFilter('pending')}>
-                                Pending
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setStatusFilter('processing')}>
-                                Processing
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setStatusFilter('completed')}>
-                                Completed
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setStatusFilter('failed')}>
-                                Failed
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
                 </div>
 
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5 }}
-                >
-                    <ScrollArea className="rounded-lg border bg-card">
+                {isLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                        <ArrowPathIcon className="w-8 h-8 animate-spin text-primary" />
+                    </div>
+                ) : filteredDocuments.length === 0 ? (
+                    <div className="text-center py-8">
+                        <DocumentIcon className="mx-auto h-12 w-12 text-muted-foreground/50" />
+                        <h3 className="mt-4 text-lg font-semibold">No documents found</h3>
+                        <p className="text-muted-foreground">
+                            {searchQuery
+                                ? "No documents match your search criteria"
+                                : "Upload a document to get started"}
+                        </p>
+                    </div>
+                ) : (
+                    <div className="relative overflow-x-auto">
                         <Table>
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>Name</TableHead>
-                                    <TableHead>Status</TableHead>
                                     <TableHead>Type</TableHead>
-                                    <TableHead>Size</TableHead>
+                                    <TableHead>Status</TableHead>
                                     <TableHead>Uploaded</TableHead>
-                                    <TableHead className="w-[100px]">Actions</TableHead>
+                                    <TableHead className="text-right">Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {isLoading ? (
-                                    <TableRow>
-                                        <TableCell colSpan={6} className="text-center py-8">
-                                            Loading documents...
+                                {filteredDocuments.map((document, index) => (
+                                    <TableRow key={document.id}>
+                                        <TableCell className="font-medium">
+                                            <div className="flex items-center gap-3">
+                                                <DocumentTypeIcon type={document.type} />
+                                                <span className="truncate max-w-[300px]">
+                                                    {document.name}
+                                                </span>
+                                            </div>
                                         </TableCell>
-                                    </TableRow>
-                                ) : filteredDocuments.length === 0 ? (
-                                    <TableRow>
-                                        <TableCell colSpan={6} className="text-center py-8">
-                                            No documents found
+                                        <TableCell>{document.type}</TableCell>
+                                        <TableCell>
+                                            <StatusBadge status={document.status} />
                                         </TableCell>
-                                    </TableRow>
-                                ) : (
-                                    filteredDocuments.map((doc) => (
-                                        <TableRow key={doc.id}>
-                                            <TableCell className="font-medium">
-                                                <div className="flex items-center gap-2">
-                                                    <FileText className="h-4 w-4 text-muted-foreground" />
-                                                    {doc.name}
-                                                </div>
-                                            </TableCell>
-                                            <TableCell>
-                                                <Badge className={getStatusColor(doc.status)}>
-                                                    {doc.status}
-                                                </Badge>
-                                            </TableCell>
-                                            <TableCell className="uppercase text-xs">
-                                                {doc.type}
-                                            </TableCell>
-                                            <TableCell>
-                                                {(doc.size / 1024 / 1024).toFixed(2)} MB
-                                            </TableCell>
-                                            <TableCell>
-                                                {format(new Date(doc.uploadedAt), 'MMM d, yyyy')}
-                                            </TableCell>
-                                            <TableCell>
-                                                <DropdownMenu>
-                                                    <DropdownMenuTrigger asChild>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            className="h-8 w-8"
-                                                        >
-                                                            <MoreVertical className="h-4 w-4" />
-                                                        </Button>
-                                                    </DropdownMenuTrigger>
-                                                    <DropdownMenuContent align="end">
+                                        <TableCell>
+                                            {formatDistanceToNow(new Date(document.uploaded_at), { addSuffix: true })}
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" size="icon">
+                                                        <ChevronDownIcon className="h-4 w-4" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    <DropdownMenuItem
+                                                        onClick={() => router.push(`/dashboard/documents/${document.id}`)}
+                                                    >
+                                                        <EyeIcon className="mr-2 h-4 w-4" />
+                                                        View Details
+                                                    </DropdownMenuItem>
+                                                    {document.status !== AnalysisStatus.PROCESSING && (
                                                         <DropdownMenuItem
-                                                            onClick={() => handleAnalyze(doc.id)}
-                                                            className="gap-2"
+                                                            onClick={() => handleAnalyze(document.id)}
                                                         >
-                                                            <PlayCircle className="h-4 w-4" />
+                                                            <ArrowPathIcon className="mr-2 h-4 w-4" />
                                                             Analyze
                                                         </DropdownMenuItem>
-                                                        <DropdownMenuItem
-                                                            onClick={() => window.open(doc.url, '_blank')}
-                                                            className="gap-2"
-                                                        >
-                                                            <ExternalLink className="h-4 w-4" />
-                                                            View
-                                                        </DropdownMenuItem>
-                                                        <DropdownMenuItem
-                                                            onClick={() => window.open(doc.url)}
-                                                            className="gap-2"
-                                                        >
-                                                            <Download className="h-4 w-4" />
-                                                            Download
-                                                        </DropdownMenuItem>
-                                                        <DropdownMenuItem
-                                                            onClick={() => handleDelete(doc.id)}
-                                                            className="gap-2 text-red-600 focus:text-red-600"
-                                                        >
-                                                            <Trash2 className="h-4 w-4" />
-                                                            Delete
-                                                        </DropdownMenuItem>
-                                                    </DropdownMenuContent>
-                                                </DropdownMenu>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))
-                                )}
+                                                    )}
+                                                    <DropdownMenuItem
+                                                        className="text-red-600 dark:text-red-400"
+                                                        onClick={() => handleDelete(document.id)}
+                                                    >
+                                                        <TrashIcon className="mr-2 h-4 w-4" />
+                                                        Delete
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
                             </TableBody>
                         </Table>
-                    </ScrollArea>
-                </motion.div>
-            </div>
-        </DashboardLayout>
+                    </div>
+                )}
+
+                {documents.length > 0 && (
+                    <div className="mt-4 flex items-center justify-between">
+                        <p className="text-sm text-muted-foreground">
+                            Showing {Math.min(ITEMS_PER_PAGE, filteredDocuments.length)} of {documents.length} documents
+                        </p>
+                        <div className="flex items-center gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                                disabled={currentPage === 1}
+                            >
+                                Previous
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setCurrentPage(prev => prev + 1)}
+                                disabled={documents.length < ITEMS_PER_PAGE}
+                            >
+                                Next
+                            </Button>
+                        </div>
+                    </div>
+                )}
+            </Card>
+        </div>
     );
 } 

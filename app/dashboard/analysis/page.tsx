@@ -2,7 +2,6 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -23,74 +22,33 @@ import {
     CheckCircle,
     XCircle,
     ArrowRight,
-    RefreshCw
+    RefreshCw,
+    Settings,
+    Zap,
+    File
 } from 'lucide-react';
 import { format } from 'date-fns';
-import { Document } from '@/types/document';
-import { UploadHandler } from '@/components/ui/upload-handler';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-const API_VERSION = '/api/v1';
-
-interface AnalysisParameters {
-    available_types: string[];
-    parameters: {
-        [key: string]: {
-            [key: string]: {
-                type: string;
-                min?: number;
-                max?: number;
-                default: any;
-                options?: string[];
-            };
-        };
-    };
-}
+import { Document, documentService } from '@/services/document.service';
+import { analysisService, AnalysisType, AnalysisStatus, AnalysisTypeInfo, AnalysisResult } from '@/services/analysis.service';
 
 export default function AnalysisPage() {
     const router = useRouter();
     const { toast } = useToast();
+    const [analysisTypes, setAnalysisTypes] = useState<AnalysisTypeInfo[]>([]);
     const [documents, setDocuments] = useState<Document[]>([]);
-    const [recentAnalyses, setRecentAnalyses] = useState<any[]>([]);
-    const [parameters, setParameters] = useState<AnalysisParameters | null>(null);
     const [isLoading, setIsLoading] = useState(true);
-    const [uploadError, setUploadError] = useState<string | null>(null);
-    const [activeTab, setActiveTab] = useState('upload');
+    const [activeTab, setActiveTab] = useState('select');
 
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const token = localStorage.getItem('token');
-                if (!token) return;
-
-                // Fetch documents
-                const docsResponse = await fetch(`${API_URL}${API_VERSION}/documents/list`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-
-                // Fetch analysis parameters
-                const paramsResponse = await fetch(`${API_URL}${API_VERSION}/documents/parameters`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-
-                // Fetch recent analyses
-                const analysesResponse = await fetch(`${API_URL}${API_VERSION}/documents/history`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-
-                if (!docsResponse.ok || !paramsResponse.ok || !analysesResponse.ok) {
-                    throw new Error('Failed to fetch data');
-                }
-
-                const [docsData, paramsData, analysesData] = await Promise.all([
-                    docsResponse.json(),
-                    paramsResponse.json(),
-                    analysesResponse.json()
+                setIsLoading(true);
+                const [types, docs] = await Promise.all([
+                    analysisService.getAnalysisTypes(),
+                    documentService.getDocuments({ limit: 10 })
                 ]);
-
-                setDocuments(docsData);
-                setParameters(paramsData);
-                setRecentAnalyses(analysesData);
+                setAnalysisTypes(types);
+                setDocuments(docs);
             } catch (error) {
                 toast({
                     title: "Error",
@@ -105,253 +63,238 @@ export default function AnalysisPage() {
         fetchData();
     }, [toast]);
 
-    const getStatusIcon = (status: string) => {
-        switch (status) {
-            case 'completed':
-                return <CheckCircle className="h-4 w-4 text-green-500" />;
-            case 'processing':
-                return <Clock className="h-4 w-4 text-blue-500" />;
-            case 'failed':
-                return <XCircle className="h-4 w-4 text-red-500" />;
-            default:
-                return <Clock className="h-4 w-4 text-yellow-500" />;
-        }
+    const handleDocumentSelect = (documentId: string) => {
+        router.push(`/dashboard/analysis/${documentId}`);
     };
 
     return (
-        <DashboardLayout>
-            <div className="space-y-8">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h1 className="text-3xl font-bold tracking-tight">Analysis</h1>
-                        <p className="text-muted-foreground mt-2">
-                            Upload and analyze your documents with AI
-                        </p>
-                    </div>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-2"
-                        onClick={() => window.location.reload()}
-                    >
-                        <RefreshCw className="h-4 w-4" />
-                        Refresh
-                    </Button>
+        <div className="container mx-auto p-6 max-w-7xl space-y-8">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                    <h1 className="text-3xl font-bold tracking-tight">Document Analysis</h1>
+                    <p className="text-muted-foreground mt-2">
+                        Select a document to analyze using AI-powered tools
+                    </p>
                 </div>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2 w-full md:w-auto"
+                    onClick={() => window.location.reload()}
+                >
+                    <RefreshCw className="h-4 w-4" />
+                    Refresh
+                </Button>
+            </div>
 
-                <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-                    <TabsList>
-                        <TabsTrigger value="upload" className="gap-2">
-                            <Upload className="h-4 w-4" />
-                            Upload
-                        </TabsTrigger>
-                        <TabsTrigger value="recent" className="gap-2">
-                            <FileStack className="h-4 w-4" />
-                            Recent
-                        </TabsTrigger>
-                        <TabsTrigger value="capabilities" className="gap-2">
-                            <FileSearch className="h-4 w-4" />
-                            Capabilities
-                        </TabsTrigger>
-                    </TabsList>
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
+                <TabsList className="grid w-full grid-cols-2 lg:w-[400px]">
+                    <TabsTrigger value="select" className="gap-2">
+                        <FileText className="h-4 w-4" />
+                        Select Document
+                    </TabsTrigger>
+                    <TabsTrigger value="capabilities" className="gap-2">
+                        <Zap className="h-4 w-4" />
+                        Capabilities
+                    </TabsTrigger>
+                </TabsList>
 
-                    <TabsContent value="upload" className="space-y-6">
-                        <Card>
+                <TabsContent value="select" className="space-y-6">
+                    <div className="grid gap-6 lg:grid-cols-2">
+                        <Card className="lg:col-span-2">
                             <CardHeader>
-                                <CardTitle>Upload Document</CardTitle>
+                                <CardTitle className="flex items-center gap-2">
+                                    <FileText className="h-5 w-5 text-primary" />
+                                    Select Document
+                                </CardTitle>
                                 <CardDescription>
-                                    Upload a document to start the analysis process
+                                    Choose a document from your uploads to begin the analysis
                                 </CardDescription>
                             </CardHeader>
                             <CardContent>
-                                {uploadError && (
-                                    <Alert variant="destructive" className="mb-6">
-                                        <AlertDescription>{uploadError}</AlertDescription>
-                                    </Alert>
-                                )}
-                                <UploadHandler
-                                    onSuccess={() => setUploadError(null)}
-                                    onError={(error) => setUploadError(error.message)}
-                                    className="h-[300px]"
-                                />
-                            </CardContent>
-                        </Card>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle className="flex items-center gap-2">
-                                        <TableIcon className="h-5 w-5" />
-                                        Table Detection
-                                    </CardTitle>
-                                    <CardDescription>
-                                        Automatically detect and extract tables from documents
-                                    </CardDescription>
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="space-y-4">
-                                        <div className="flex items-center gap-4">
-                                            <div className="flex-1">
-                                                <div className="text-sm font-medium mb-1">Accuracy</div>
-                                                <Progress value={95} className="h-2" />
-                                            </div>
-                                            <div className="text-sm font-medium">95%</div>
-                                        </div>
-                                        <div className="flex items-center gap-4">
-                                            <div className="flex-1">
-                                                <div className="text-sm font-medium mb-1">Speed</div>
-                                                <Progress value={85} className="h-2" />
-                                            </div>
-                                            <div className="text-sm font-medium">85%</div>
-                                        </div>
+                                {isLoading ? (
+                                    <div className="flex justify-center items-center h-[300px]">
+                                        <RefreshCw className="h-8 w-8 animate-spin text-primary" />
                                     </div>
-                                </CardContent>
-                            </Card>
-
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle className="flex items-center gap-2">
-                                        <FileSearch className="h-5 w-5" />
-                                        Text Extraction
-                                    </CardTitle>
-                                    <CardDescription>
-                                        Extract and process text with high accuracy
-                                    </CardDescription>
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="space-y-4">
-                                        <div className="flex items-center gap-4">
-                                            <div className="flex-1">
-                                                <div className="text-sm font-medium mb-1">Accuracy</div>
-                                                <Progress value={98} className="h-2" />
-                                            </div>
-                                            <div className="text-sm font-medium">98%</div>
-                                        </div>
-                                        <div className="flex items-center gap-4">
-                                            <div className="flex-1">
-                                                <div className="text-sm font-medium mb-1">Speed</div>
-                                                <Progress value={90} className="h-2" />
-                                            </div>
-                                            <div className="text-sm font-medium">90%</div>
-                                        </div>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        </div>
-                    </TabsContent>
-
-                    <TabsContent value="recent">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Recent Analyses</CardTitle>
-                                <CardDescription>
-                                    View and manage your recent document analyses
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <ScrollArea className="h-[400px] pr-4">
-                                    <div className="space-y-4">
-                                        {isLoading ? (
-                                            <div className="text-center py-8 text-muted-foreground">
-                                                Loading analyses...
-                                            </div>
-                                        ) : recentAnalyses.length === 0 ? (
-                                            <div className="text-center py-8 text-muted-foreground">
-                                                No recent analyses found
-                                            </div>
-                                        ) : (
-                                            recentAnalyses.map((analysis) => (
-                                                <motion.div
-                                                    key={analysis.id}
-                                                    initial={{ opacity: 0, y: 20 }}
-                                                    animate={{ opacity: 1, y: 0 }}
-                                                    className="p-4 rounded-lg border bg-card hover:bg-muted/50 transition-colors"
-                                                >
-                                                    <div className="flex items-center justify-between">
-                                                        <div className="flex items-center gap-3">
-                                                            <FileText className="h-5 w-5 text-muted-foreground" />
-                                                            <div>
-                                                                <h3 className="font-medium">{analysis.document.name}</h3>
-                                                                <p className="text-sm text-muted-foreground">
-                                                                    {format(new Date(analysis.createdAt), 'MMM d, yyyy')}
-                                                                </p>
-                                                            </div>
-                                                        </div>
-                                                        <div className="flex items-center gap-4">
-                                                            <Badge variant="secondary" className="gap-1">
-                                                                {getStatusIcon(analysis.status)}
-                                                                {analysis.status}
-                                                            </Badge>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                onClick={() => router.push(`/dashboard/analysis/${analysis.document.id}`)}
-                                                            >
-                                                                <ArrowRight className="h-4 w-4" />
-                                                            </Button>
-                                                        </div>
-                                                    </div>
-                                                </motion.div>
-                                            ))
-                                        )}
-                                    </div>
-                                </ScrollArea>
-                            </CardContent>
-                        </Card>
-                    </TabsContent>
-
-                    <TabsContent value="capabilities">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Analysis Capabilities</CardTitle>
-                                <CardDescription>
-                                    Available analysis types and their parameters
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                {parameters ? (
-                                    <div className="space-y-6">
-                                        {parameters.available_types.map((type) => (
-                                            <div key={type} className="space-y-4">
-                                                <h3 className="text-lg font-semibold capitalize">
-                                                    {type.replace('_', ' ')}
-                                                </h3>
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                    {Object.entries(parameters.parameters[type] || {}).map(([param, config]) => (
-                                                        <div key={param} className="p-4 rounded-lg border bg-card">
-                                                            <h4 className="font-medium capitalize mb-2">
-                                                                {param.replace('_', ' ')}
-                                                            </h4>
-                                                            <div className="text-sm text-muted-foreground space-y-1">
-                                                                <p>Type: {config.type}</p>
-                                                                {config.min !== undefined && (
-                                                                    <p>Min: {config.min}</p>
-                                                                )}
-                                                                {config.max !== undefined && (
-                                                                    <p>Max: {config.max}</p>
-                                                                )}
-                                                                <p>Default: {config.default.toString()}</p>
-                                                                {config.options && (
-                                                                    <p>Options: {config.options.join(', ')}</p>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                                <Separator className="my-6" />
-                                            </div>
-                                        ))}
+                                ) : documents.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center h-[300px] text-center">
+                                        <File className="h-12 w-12 text-muted-foreground mb-4" />
+                                        <h3 className="text-lg font-semibold mb-2">No Documents Found</h3>
+                                        <p className="text-sm text-muted-foreground mb-4">
+                                            Upload some documents to get started with analysis
+                                        </p>
+                                        <Button onClick={() => router.push('/dashboard')}>
+                                            Upload Documents
+                                        </Button>
                                     </div>
                                 ) : (
-                                    <div className="text-center py-8 text-muted-foreground">
-                                        Loading capabilities...
-                                    </div>
+                                    <ScrollArea className="h-[400px] pr-4">
+                                        <div className="space-y-4">
+                                            {documents.map((doc) => (
+                                                <Card
+                                                    key={doc.id}
+                                                    className="flex items-center p-4 hover:bg-muted/50 cursor-pointer transition-colors"
+                                                    onClick={() => handleDocumentSelect(doc.id)}
+                                                >
+                                                    <div className="p-2 rounded-lg bg-primary/10 mr-4">
+                                                        <FileText className="h-6 w-6 text-primary" />
+                                                    </div>
+                                                    <div className="flex-grow">
+                                                        <h4 className="font-medium">{doc.name}</h4>
+                                                        <p className="text-sm text-muted-foreground">
+                                                            Uploaded on {format(new Date(doc.uploaded_at), 'MMM d, yyyy')}
+                                                        </p>
+                                                    </div>
+                                                    <Button variant="ghost" size="icon">
+                                                        <ArrowRight className="h-4 w-4" />
+                                                    </Button>
+                                                </Card>
+                                            ))}
+                                        </div>
+                                    </ScrollArea>
                                 )}
                             </CardContent>
                         </Card>
-                    </TabsContent>
-                </Tabs>
-            </div>
-        </DashboardLayout>
+
+                        {analysisTypes.slice(0, 2).map((type) => (
+                            <Card key={type.type} className="overflow-hidden">
+                                <CardHeader className="border-b bg-muted/50">
+                                    <CardTitle className="flex items-center gap-2 text-lg">
+                                        {type.type === AnalysisType.TABLE_DETECTION ? (
+                                            <TableIcon className="h-5 w-5 text-primary" />
+                                        ) : (
+                                            <FileSearch className="h-5 w-5 text-primary" />
+                                        )}
+                                        {type.name}
+                                    </CardTitle>
+                                    <CardDescription>
+                                        {type.description}
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent className="p-6">
+                                    <div className="space-y-6">
+                                        <div>
+                                            <h4 className="text-sm font-medium mb-3">Supported Formats</h4>
+                                            <div className="flex flex-wrap gap-2">
+                                                {type.supported_formats.map((format) => (
+                                                    <Badge key={format} variant="secondary">
+                                                        {format.toUpperCase()}
+                                                    </Badge>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <h4 className="text-sm font-medium mb-3">Parameters</h4>
+                                            <div className="space-y-3">
+                                                {Object.entries(type.parameters).map(([key, param]) => (
+                                                    <div key={key} className="text-sm">
+                                                        <span className="font-medium capitalize">{key.replace(/_/g, ' ')}:</span>{' '}
+                                                        <span className="text-muted-foreground">{param.description}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        ))}
+                    </div>
+                </TabsContent>
+
+                <TabsContent value="capabilities">
+                    <Card>
+                        <CardHeader className="border-b">
+                            <CardTitle className="flex items-center gap-2">
+                                <Settings className="h-5 w-5 text-primary" />
+                                Analysis Capabilities
+                            </CardTitle>
+                            <CardDescription>
+                                Explore available analysis types and their configurations
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="p-6">
+                            {isLoading ? (
+                                <div className="flex flex-col items-center justify-center py-12">
+                                    <RefreshCw className="h-8 w-8 animate-spin text-primary" />
+                                    <p className="text-muted-foreground mt-4">Loading capabilities...</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-12">
+                                    {analysisTypes.map((type) => (
+                                        <div key={type.type} className="space-y-6">
+                                            <div className="flex items-center gap-4">
+                                                <div className="p-3 rounded-lg bg-primary/10">
+                                                    {type.type === AnalysisType.TABLE_DETECTION ? (
+                                                        <TableIcon className="h-6 w-6 text-primary" />
+                                                    ) : (
+                                                        <FileSearch className="h-6 w-6 text-primary" />
+                                                    )}
+                                                </div>
+                                                <div>
+                                                    <h3 className="text-xl font-semibold">{type.name}</h3>
+                                                    <p className="text-muted-foreground">{type.description}</p>
+                                                </div>
+                                            </div>
+
+                                            <div className="grid gap-6 md:grid-cols-2">
+                                                <div>
+                                                    <h4 className="text-sm font-medium mb-3">Supported Formats</h4>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {type.supported_formats.map((format) => (
+                                                            <Badge key={format} variant="secondary">
+                                                                {format.toUpperCase()}
+                                                            </Badge>
+                                                        ))}
+                                                    </div>
+                                                </div>
+
+                                                <div>
+                                                    <h4 className="text-sm font-medium mb-3">Parameters</h4>
+                                                    <div className="grid gap-4">
+                                                        {Object.entries(type.parameters).map(([key, param]) => (
+                                                            <Card key={key} className="p-4">
+                                                                <h5 className="font-medium capitalize mb-2">
+                                                                    {key.replace(/_/g, ' ')}
+                                                                </h5>
+                                                                <div className="space-y-2 text-sm text-muted-foreground">
+                                                                    <p>{param.description}</p>
+                                                                    <div className="grid grid-cols-2 gap-2 text-xs">
+                                                                        <div>Type: <span className="font-medium">{param.type}</span></div>
+                                                                        {param.min !== undefined && (
+                                                                            <div>Min: <span className="font-medium">{param.min}</span></div>
+                                                                        )}
+                                                                        {param.max !== undefined && (
+                                                                            <div>Max: <span className="font-medium">{param.max}</span></div>
+                                                                        )}
+                                                                        <div>Default: <span className="font-medium">{String(param.default)}</span></div>
+                                                                    </div>
+                                                                    {param.options && (
+                                                                        <div className="flex flex-wrap gap-1 mt-2">
+                                                                            {param.options.map((option) => (
+                                                                                <Badge key={option} variant="outline" className="text-xs">
+                                                                                    {option}
+                                                                                </Badge>
+                                                                            ))}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </Card>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {type !== analysisTypes[analysisTypes.length - 1] && (
+                                                <Separator className="my-8" />
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+            </Tabs>
+        </div>
     );
 } 
