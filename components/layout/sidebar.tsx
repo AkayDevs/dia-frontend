@@ -89,7 +89,12 @@ export function Sidebar({ className }: SidebarProps) {
     const router = useRouter();
     const { toast } = useToast();
     const { user, logout } = useAuthStore();
-    const { documents = [], fetchDocuments, setFilters } = useDocumentStore();
+    const {
+        documents = [],
+        fetchDocuments,
+        setFilters,
+        getProcessingDocuments
+    } = useDocumentStore();
     const [isMobile, setIsMobile] = useState(false);
     const [isOpen, setIsOpen] = useState(false);
     const [processingCount, setProcessingCount] = useState(0);
@@ -112,18 +117,10 @@ export function Sidebar({ className }: SidebarProps) {
     }, []);
 
     useEffect(() => {
-        const fetchProcessingDocuments = async () => {
+        const updateProcessingCount = async () => {
             try {
-                // Only fetch if we don't have documents or if they're stale
-                if (!documents.length) {
-                    setFilters({ status: AnalysisStatus.PROCESSING });
-                    await fetchDocuments();
-                }
-
-                // Use existing documents if available
-                const processingDocs = documents.filter(
-                    doc => doc.status === AnalysisStatus.PROCESSING || doc.status === AnalysisStatus.PENDING
-                );
+                await fetchDocuments();
+                const processingDocs = getProcessingDocuments();
                 setProcessingCount(processingDocs.length);
             } catch (error) {
                 console.error('Error fetching processing documents:', error);
@@ -147,12 +144,14 @@ export function Sidebar({ className }: SidebarProps) {
         };
 
         if (isMounted) {
-            fetchProcessingDocuments();
-            // Refresh processing count every 2 minutes instead of 30 seconds
-            const interval = setInterval(fetchProcessingDocuments, 120000);
+            updateProcessingCount();
+            // Refresh processing count every 2 minutes
+            const interval = setInterval(() => {
+                updateProcessingCount();
+            }, 120000);
             return () => clearInterval(interval);
         }
-    }, [isMounted, documents.length]); // Only depend on documents.length instead of entire documents array
+    }, [isMounted]);
 
     const handleLogout = async () => {
         try {

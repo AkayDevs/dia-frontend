@@ -1,233 +1,142 @@
 import { create } from 'zustand';
 import { documentService } from '@/services/document.service';
-import {
-    Document,
-    DocumentWithAnalysis,
-    DocumentType,
-    AnalysisStatus,
-    DocumentListParams,
-    DocumentListResponse
-} from '@/types/document';
-import { useAuthStore } from '@/store/useAuthStore';
-import { AUTH_TOKEN_KEY } from '@/lib/constants';
+import { Document, DocumentListParams, AnalysisStatus } from '@/types/document';
 
 interface DocumentState {
-    // Document list state
     documents: Document[];
-    total: number;
-    currentPage: number;
-    pageSize: number;
-    totalPages: number;
-
-    // Loading and error states
     isLoading: boolean;
     error: string | null;
-
-    // Filters
     filters: DocumentListParams;
+    lastFetched: number | null;
+    isFetching: boolean;
 
-    // Selected document state
-    selectedDocument: DocumentWithAnalysis | null;
-
-    // Actions
-    setDocuments: (response: DocumentListResponse) => void;
-    setSelectedDocument: (document: DocumentWithAnalysis | null) => void;
-    setError: (error: string | null) => void;
-    setLoading: (isLoading: boolean) => void;
+    // Methods
     setFilters: (filters: Partial<DocumentListParams>) => void;
     clearError: () => void;
-
-    // Async actions
-    fetchDocuments: () => Promise<void>;
-    fetchDocument: (id: string) => Promise<void>;
-    uploadDocument: (file: File) => Promise<void>;
-    uploadDocuments: (files: File[]) => Promise<void>;
-    deleteDocument: (id: string) => Promise<void>;
+    fetchDocuments: (forceRefresh?: boolean) => Promise<void>;
+    uploadDocument: (file: File) => Promise<Document>;
+    uploadDocuments: (files: File[]) => Promise<Document[]>;
+    deleteDocument: (documentId: string) => Promise<void>;
+    getProcessingDocuments: () => Document[];
 }
 
 export const useDocumentStore = create<DocumentState>((set, get) => ({
-    // Initial state
     documents: [],
-    total: 0,
-    currentPage: 1,
-    pageSize: 10,
-    totalPages: 0,
     isLoading: false,
     error: null,
     filters: {},
-    selectedDocument: null,
+    lastFetched: null,
+    isFetching: false,
 
-    // State setters
-    setDocuments: (response: DocumentListResponse) => set({
-        documents: response.items,
-        total: response.total,
-        currentPage: response.page,
-        pageSize: response.size,
-        totalPages: response.pages
-    }),
-
-    setSelectedDocument: (document: DocumentWithAnalysis | null) => set({
-        selectedDocument: document
-    }),
-
-    setError: (error: string | null) => set({ error }),
-
-    setLoading: (isLoading: boolean) => set({ isLoading }),
+    setFilters: (newFilters) => {
+        set((state) => ({
+            filters: { ...state.filters, ...newFilters },
+            // Reset lastFetched when filters change to force a new fetch
+            lastFetched: null
+        }));
+    },
 
     clearError: () => set({ error: null }),
 
-    setFilters: (newFilters: Partial<DocumentListParams>) => set(state => ({
-        filters: { ...state.filters, ...newFilters }
-    })),
+    fetchDocuments: async (forceRefresh = false) => {
+        const state = get();
+        const now = Date.now();
+        const CACHE_DURATION = 30000; // 30 seconds cache
 
-    // Async actions
-    fetchDocuments: async () => {
-        const { setLoading, setError, setDocuments, filters } = get();
-        const token = localStorage.getItem(AUTH_TOKEN_KEY);
-
-        if (!token) {
-            setError('Not authenticated');
+        // Return cached data if available and not forced refresh
+        if (!forceRefresh &&
+            state.lastFetched &&
+            now - state.lastFetched < CACHE_DURATION &&
+            !state.isFetching) {
             return;
         }
 
-        try {
-            setLoading(true);
-            setError(null);
-
-            const response = await documentService.getDocuments(filters);
-            setDocuments(response);
-        } catch (error) {
-            const message = error instanceof Error ? error.message : 'Failed to fetch documents';
-            setError(message);
-
-            // Handle authentication errors
-            if (message.includes('authentication') || message.includes('credentials')) {
-                useAuthStore.getState().logout();
-            }
-
-            throw error;
-        } finally {
-            setLoading(false);
-        }
-    },
-
-    fetchDocument: async (id: string) => {
-        const { setLoading, setError, setSelectedDocument } = get();
-        const token = localStorage.getItem(AUTH_TOKEN_KEY);
-
-        if (!token) {
-            setError('Not authenticated');
+        // Prevent concurrent fetches
+        if (state.isFetching) {
             return;
         }
 
+        set({ isLoading: true, isFetching: true, error: null });
+
         try {
-            setLoading(true);
-            setError(null);
-
-            const document = await documentService.getDocument(id);
-            setSelectedDocument(document);
+            const response = await documentService.getDocuments(state.filters);
+            set({
+                documents: response.items,
+                lastFetched: now,
+                isLoading: false,
+                isFetching: false
+            });
         } catch (error) {
-            const message = error instanceof Error ? error.message : 'Failed to fetch document';
-            setError(message);
-
-            // Handle authentication errors
-            if (message.includes('authentication') || message.includes('credentials')) {
-                useAuthStore.getState().logout();
-            }
-
+            set({
+                error: error instanceof Error ? error.message : 'Failed to fetch documents',
+                isLoading: false,
+                isFetching: false
+            });
             throw error;
-        } finally {
-            setLoading(false);
         }
     },
 
     uploadDocument: async (file: File) => {
-        const { setLoading, setError, fetchDocuments } = get();
-        const token = localStorage.getItem(AUTH_TOKEN_KEY);
-
-        if (!token) {
-            setError('Not authenticated');
-            return;
-        }
-
+        set({ isLoading: true, error: null });
         try {
-            setLoading(true);
-            setError(null);
-
-            await documentService.uploadDocument(file);
-            await fetchDocuments(); // Refresh the list after upload
+            const document = await documentService.uploadDocument(file);
+            set((state) => ({
+                documents: [document, ...state.documents],
+                isLoading: false,
+                lastFetched: Date.now() // Update lastFetched to reflect new data
+            }));
+            return document;
         } catch (error) {
-            const message = error instanceof Error ? error.message : 'Failed to upload document';
-            setError(message);
-
-            // Handle authentication errors
-            if (message.includes('authentication') || message.includes('credentials')) {
-                useAuthStore.getState().logout();
-            }
-
+            set({
+                error: error instanceof Error ? error.message : 'Failed to upload document',
+                isLoading: false
+            });
             throw error;
-        } finally {
-            setLoading(false);
         }
     },
 
     uploadDocuments: async (files: File[]) => {
-        const { setLoading, setError, fetchDocuments } = get();
-        const token = localStorage.getItem(AUTH_TOKEN_KEY);
-
-        if (!token) {
-            setError('Not authenticated');
-            return;
-        }
-
+        set({ isLoading: true, error: null });
         try {
-            setLoading(true);
-            setError(null);
-
-            await documentService.uploadDocuments(files);
-            await fetchDocuments(); // Refresh the list after upload
+            const documents = await documentService.uploadDocuments(files);
+            set((state) => ({
+                documents: [...documents, ...state.documents],
+                isLoading: false,
+                lastFetched: Date.now() // Update lastFetched to reflect new data
+            }));
+            return documents;
         } catch (error) {
-            const message = error instanceof Error ? error.message : 'Failed to upload documents';
-            setError(message);
-
-            // Handle authentication errors
-            if (message.includes('authentication') || message.includes('credentials')) {
-                useAuthStore.getState().logout();
-            }
-
+            set({
+                error: error instanceof Error ? error.message : 'Failed to upload documents',
+                isLoading: false
+            });
             throw error;
-        } finally {
-            setLoading(false);
         }
     },
 
-    deleteDocument: async (id: string) => {
-        const { setLoading, setError, fetchDocuments } = get();
-        const token = localStorage.getItem(AUTH_TOKEN_KEY);
-
-        if (!token) {
-            setError('Not authenticated');
-            return;
-        }
-
+    deleteDocument: async (documentId: string) => {
+        set({ isLoading: true, error: null });
         try {
-            setLoading(true);
-            setError(null);
-
-            await documentService.deleteDocument(id);
-            await fetchDocuments(); // Refresh the list after deletion
+            await documentService.deleteDocument(documentId);
+            set((state) => ({
+                documents: state.documents.filter(doc => doc.id !== documentId),
+                isLoading: false,
+                lastFetched: Date.now() // Update lastFetched to reflect new data
+            }));
         } catch (error) {
-            const message = error instanceof Error ? error.message : 'Failed to delete document';
-            setError(message);
-
-            // Handle authentication errors
-            if (message.includes('authentication') || message.includes('credentials')) {
-                useAuthStore.getState().logout();
-            }
-
+            set({
+                error: error instanceof Error ? error.message : 'Failed to delete document',
+                isLoading: false
+            });
             throw error;
-        } finally {
-            setLoading(false);
         }
     },
+
+    getProcessingDocuments: () => {
+        const state = get();
+        return state.documents.filter(
+            doc => doc.status === AnalysisStatus.PROCESSING ||
+                doc.status === AnalysisStatus.PENDING
+        );
+    }
 })); 
