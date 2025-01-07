@@ -26,12 +26,19 @@ interface DashboardStats {
     failedAnalyses: number;
 }
 
+const initialStats: DashboardStats = {
+    totalDocuments: 0,
+    analyzedDocuments: 0,
+    pendingAnalyses: 0,
+    failedAnalyses: 0
+};
+
 export default function DashboardPage() {
     const router = useRouter();
     const { toast } = useToast();
     const { isAuthenticated, user, logout } = useAuthStore();
     const {
-        documents,
+        documents = [],
         isLoading,
         error,
         fetchDocuments,
@@ -57,17 +64,16 @@ export default function DashboardPage() {
 
     // Calculate dashboard stats from documents
     const calculateStats = (): DashboardStats => {
+        if (!Array.isArray(documents) || documents.length === 0) {
+            return initialStats;
+        }
+
         return documents.reduce((stats, doc) => ({
             totalDocuments: stats.totalDocuments + 1,
             analyzedDocuments: doc.status === 'completed' ? stats.analyzedDocuments + 1 : stats.analyzedDocuments,
             pendingAnalyses: ['pending', 'processing'].includes(doc.status) ? stats.pendingAnalyses + 1 : stats.pendingAnalyses,
             failedAnalyses: doc.status === 'failed' ? stats.failedAnalyses + 1 : stats.failedAnalyses
-        }), {
-            totalDocuments: 0,
-            analyzedDocuments: 0,
-            pendingAnalyses: 0,
-            failedAnalyses: 0
-        });
+        }), { ...initialStats });
     };
 
     const handleUploadSuccess = async (file: File) => {
@@ -129,7 +135,7 @@ export default function DashboardPage() {
 
     if (isLoading) {
         return (
-            <div className="flex items-center justify-center min-h-screen">
+            <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
                 <motion.div
                     animate={{ rotate: 360 }}
                     transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
@@ -142,42 +148,40 @@ export default function DashboardPage() {
     const stats = calculateStats();
 
     return (
-        <div className="container mx-auto p-6">
-            <div className="mb-8 space-y-2 max-w-7xl">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h1 className="text-4xl font-bold tracking-tight">Dashboard</h1>
-                        <p className="text-lg text-muted-foreground">
-                            Welcome back, {user?.name || 'User'}
-                        </p>
-                    </div>
-                    <Button
-                        variant="outline"
-                        onClick={() => {
-                            clearError();
-                            fetchDocuments();
-                        }}
-                        className="gap-2"
-                    >
-                        <ArrowPathIcon className="w-4 h-4" />
-                        Refresh
-                    </Button>
+        <div className="space-y-8">
+            <div className="flex items-center justify-between">
+                <div>
+                    <h1 className="text-4xl font-bold tracking-tight">Dashboard</h1>
+                    <p className="text-lg text-muted-foreground">
+                        Welcome back, {user?.name || 'User'}
+                    </p>
                 </div>
+                <Button
+                    variant="outline"
+                    onClick={() => {
+                        clearError();
+                        fetchDocuments();
+                    }}
+                    className="gap-2"
+                >
+                    <ArrowPathIcon className="w-4 h-4" />
+                    Refresh
+                </Button>
             </div>
 
             {error ? (
-                <Card className="p-6 mb-8 bg-destructive/10 border-destructive/20">
+                <Card className="p-6 bg-destructive/10 border-destructive/20">
                     <div className="flex items-center gap-3 text-destructive">
                         <ExclamationCircleIcon className="w-5 h-5" />
                         <p>{error}</p>
                     </div>
                 </Card>
             ) : (
-                <div className="space-y-8 w-full">
+                <>
                     <StatsOverview stats={stats} />
 
-                    <div className="grid gap-6 md:grid-cols-2 w-full">
-                        <Card className="p-6 hover:shadow-lg transition-shadow h-full">
+                    <div className="grid gap-6 md:grid-cols-2">
+                        <Card className="p-6 hover:shadow-lg transition-shadow">
                             <div className="flex items-start gap-4 mb-6">
                                 <div className="p-3 rounded-xl bg-primary/10">
                                     <DocumentIcon className="w-6 h-6 text-primary" />
@@ -259,7 +263,7 @@ export default function DashboardPage() {
                             isCompact
                         />
                     </div>
-                </div>
+                </>
             )}
         </div>
     );

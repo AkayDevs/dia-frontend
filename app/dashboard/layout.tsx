@@ -158,7 +158,7 @@ export default function DashboardLayout({
 
                     {/* Main content area with proper padding */}
                     <main className="flex-1">
-                        <div className="container py-6 md:py-8">
+                        <div className="container py-6 md:py-8 px-4">
                             {children}
                         </div>
                     </main>
