@@ -25,6 +25,7 @@ import {
     DocumentDuplicateIcon,
     DocumentMagnifyingGlassIcon
 } from '@heroicons/react/24/outline';
+import { cn } from '@/lib/utils';
 
 interface NavItem {
     title: string;
@@ -88,7 +89,7 @@ export function Sidebar({ className }: SidebarProps) {
     const router = useRouter();
     const { toast } = useToast();
     const { user, logout } = useAuthStore();
-    const { documents, fetchDocuments, setFilters } = useDocumentStore();
+    const { documents = [], fetchDocuments, setFilters } = useDocumentStore();
     const [isMobile, setIsMobile] = useState(false);
     const [isOpen, setIsOpen] = useState(false);
     const [processingCount, setProcessingCount] = useState(0);
@@ -113,15 +114,29 @@ export function Sidebar({ className }: SidebarProps) {
     useEffect(() => {
         const fetchProcessingDocuments = async () => {
             try {
-                setFilters({ status: AnalysisStatus.PROCESSING });
-                await fetchDocuments();
+                // Only fetch if we don't have documents or if they're stale
+                if (!documents.length) {
+                    setFilters({ status: AnalysisStatus.PROCESSING });
+                    await fetchDocuments();
+                }
+
+                // Use existing documents if available
                 const processingDocs = documents.filter(
                     doc => doc.status === AnalysisStatus.PROCESSING || doc.status === AnalysisStatus.PENDING
                 );
                 setProcessingCount(processingDocs.length);
             } catch (error) {
                 console.error('Error fetching processing documents:', error);
-                // If authentication error, handle logout
+                // Handle rate limiting specifically
+                if (error instanceof Error && error.message.includes('Too many requests')) {
+                    toast({
+                        title: "Rate Limited",
+                        description: "Please wait a moment before refreshing",
+                        variant: "destructive",
+                    });
+                    return;
+                }
+                // Handle authentication errors
                 if (error instanceof Error &&
                     (error.message.includes('Could not validate credentials') ||
                         error.message.includes('No authentication token found'))) {
@@ -133,11 +148,11 @@ export function Sidebar({ className }: SidebarProps) {
 
         if (isMounted) {
             fetchProcessingDocuments();
-            // Refresh processing count every 30 seconds
-            const interval = setInterval(fetchProcessingDocuments, 30000);
+            // Refresh processing count every 2 minutes instead of 30 seconds
+            const interval = setInterval(fetchProcessingDocuments, 120000);
             return () => clearInterval(interval);
         }
-    }, [isMounted, fetchDocuments, setFilters, documents]);
+    }, [isMounted, documents.length]); // Only depend on documents.length instead of entire documents array
 
     const handleLogout = async () => {
         try {
@@ -157,8 +172,8 @@ export function Sidebar({ className }: SidebarProps) {
     };
 
     const SidebarContent = () => (
-        <div className="flex h-full flex-col gap-4">
-            <div className="px-6 py-4 border-b">
+        <div className="flex h-full flex-col">
+            <div className="sticky top-0 z-20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-6 py-4 border-b">
                 <div className="flex items-center gap-3">
                     <div className="p-2 rounded-lg bg-primary/10 backdrop-blur-sm">
                         <ChartBarIcon className="h-6 w-6 text-primary" />
@@ -170,8 +185,8 @@ export function Sidebar({ className }: SidebarProps) {
                 </div>
             </div>
 
-            <ScrollArea className="flex-1 px-3">
-                <div className="space-y-1 p-2">
+            <ScrollArea className="flex-1 h-[calc(100vh-5rem)] w-full">
+                <div className="space-y-1 p-4">
                     {navItems.map((item) => {
                         const isActive = pathname === item.href;
                         const Icon = item.icon;
@@ -222,34 +237,25 @@ export function Sidebar({ className }: SidebarProps) {
                 </div>
             </ScrollArea>
 
-            <div className="mt-auto px-4 py-4 border-t bg-muted/30">
-                <Separator className="mb-4 opacity-50" />
-                {user && (
-                    <div className="mb-4 flex items-center gap-3 rounded-lg p-3 bg-background/50 backdrop-blur-sm shadow-sm">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 ring-1 ring-primary/20">
-                            <UserIcon className="h-5 w-5 text-primary" />
+            <div className="sticky bottom-0 z-20 mt-auto bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 p-4 border-t">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <div className="p-1.5 rounded-md bg-muted">
+                            <UserIcon className="h-4 w-4 text-muted-foreground" />
                         </div>
-                        <div className="flex flex-col">
-                            <span className="text-sm font-medium tracking-tight">{user.name}</span>
-                            <span className="text-xs text-muted-foreground">{user.email}</span>
+                        <div className="text-sm">
+                            <p className="font-medium">{user?.name || 'User'}</p>
+                            <p className="text-xs text-muted-foreground">{user?.email}</p>
                         </div>
                     </div>
-                )}
-
-                <Button
-                    variant="ghost"
-                    className="w-full justify-start gap-3 h-11 px-4 hover:bg-destructive/10 hover:text-destructive"
-                    onClick={handleLogout}
-                >
-                    <ArrowRightOnRectangleIcon className="h-4 w-4" />
-                    Sign Out
-                </Button>
-
-                <div className="mt-6 text-center">
-                    <div className="text-sm font-medium bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text">
-                        Document Analysis
-                    </div>
-                    <div className="text-xs text-muted-foreground mt-1">Version 1.0.0</div>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={handleLogout}
+                        className="hover:bg-destructive/10 hover:text-destructive"
+                    >
+                        <ArrowRightOnRectangleIcon className="h-4 w-4" />
+                    </Button>
                 </div>
             </div>
         </div>
@@ -259,15 +265,11 @@ export function Sidebar({ className }: SidebarProps) {
         return (
             <Sheet open={isOpen} onOpenChange={setIsOpen}>
                 <SheetTrigger asChild>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="md:hidden fixed top-4 left-4 z-40"
-                    >
+                    <Button variant="ghost" size="icon" className="md:hidden">
                         <Bars3Icon className="h-5 w-5" />
                     </Button>
                 </SheetTrigger>
-                <SheetContent side="left" className="p-0">
+                <SheetContent side="left" className="w-72 p-0">
                     <SidebarContent />
                 </SheetContent>
             </Sheet>
@@ -275,10 +277,10 @@ export function Sidebar({ className }: SidebarProps) {
     }
 
     return (
-        <aside className={`
-            hidden md:flex flex-col w-72 border-r bg-card/50 backdrop-blur-sm
-            ${className}
-        `}>
+        <aside className={cn(
+            "fixed left-0 top-0 z-30 h-screen w-72 border-r bg-background",
+            className
+        )}>
             <SidebarContent />
         </aside>
     );

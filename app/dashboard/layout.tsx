@@ -98,19 +98,12 @@ export default function DashboardLayout({
 
     return (
         <div className="min-h-screen bg-background">
-            <div className="flex h-screen">
-                {/* Sidebar - Fixed for mobile, static for desktop */}
-                <div
-                    className={cn(
-                        "fixed inset-y-0 z-50 flex w-72 flex-col md:sticky md:top-0 md:h-screen",
-                        isSidebarOpen ? "left-0" : "-left-72"
-                    )}
-                >
-                    <Sidebar />
-                </div>
+            <div className="flex">
+                {/* Sidebar */}
+                <Sidebar />
 
-                {/* Main Content */}
-                <div className="flex-1 flex flex-col min-w-0">
+                {/* Main Content - Add margin to account for fixed sidebar */}
+                <div className="flex-1 flex flex-col min-w-0 md:ml-72">
                     {/* Header */}
                     <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
                         <div className="container flex h-16 items-center justify-between px-4">
@@ -156,7 +149,7 @@ export default function DashboardLayout({
                         )}
                     </header>
 
-                    {/* Main content area with proper padding */}
+                    {/* Main content area */}
                     <main className="flex-1">
                         <div className="container py-6 md:py-8 px-4">
                             {children}
