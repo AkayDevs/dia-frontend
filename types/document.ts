@@ -59,16 +59,6 @@ export interface DocumentListParams {
     limit?: number;
 }
 
-/**
- * Response for document list
- */
-export interface DocumentListResponse {
-    items: Document[];
-    total: number;
-    page: number;
-    size: number;
-    pages: number;
-}
 
 /**
  * Analysis parameters for document analysis

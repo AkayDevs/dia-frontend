@@ -5,7 +5,6 @@ import {
     Document,
     DocumentWithAnalysis,
     DocumentListParams,
-    DocumentListResponse,
 } from '@/types/document';
 
 class DocumentService {
@@ -79,7 +78,7 @@ class DocumentService {
     /**
      * Get list of documents with optional filtering
      */
-    async getDocuments(params: DocumentListParams = {}): Promise<DocumentListResponse> {
+    async getDocuments(params: DocumentListParams = {}): Promise<Document[]> {
         const queryParams = new URLSearchParams();
 
         if (params.skip !== undefined) queryParams.append('skip', params.skip.toString());
@@ -90,8 +89,7 @@ class DocumentService {
         const response = await fetch(`${this.baseUrl}?${queryParams.toString()}`, {
             headers: this.getHeaders(),
         });
-
-        return this.handleResponse<DocumentListResponse>(response);
+        return this.handleResponse<Document[]>(response);
     }
 
     /**

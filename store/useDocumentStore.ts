@@ -60,8 +60,9 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
 
         try {
             const response = await documentService.getDocuments(state.filters);
+
             set({
-                documents: response.items,
+                documents: response,
                 lastFetched: now,
                 isLoading: false,
                 isFetching: false
