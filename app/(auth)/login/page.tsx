@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/useAuthStore';
 import Link from 'next/link';
@@ -12,22 +12,37 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { motion } from 'framer-motion';
-import { LockClosedIcon, EnvelopeIcon } from '@heroicons/react/24/outline';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-const API_VERSION = '/api/v1';
+import { LockClosedIcon, EnvelopeIcon, ExclamationCircleIcon } from '@heroicons/react/24/outline';
 
 export default function LoginPage() {
     const router = useRouter();
-    const { login, isLoading, error: authError } = useAuthStore();
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
+    const { login, isLoading, error: storeError, clearError } = useAuthStore();
     const { toast } = useToast();
+    const [formData, setFormData] = useState({
+        email: '',
+        password: ''
+    });
+
+    // Clear any auth errors when component unmounts
+    useEffect(() => {
+        return () => {
+            clearError();
+        };
+    }, [clearError]);
+
+    const handleInputChange = (field: keyof typeof formData) => (
+        e: React.ChangeEvent<HTMLInputElement>
+    ) => {
+        setFormData({ ...formData, [field]: e.target.value });
+        if (storeError) {
+            clearError();
+        }
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        if (!email || !password) {
+        if (!formData.email || !formData.password) {
             toast({
                 title: "Validation Error",
                 description: "Please enter both email and password",
@@ -38,7 +53,10 @@ export default function LoginPage() {
         }
 
         try {
-            await login({ email, password });
+            await login({
+                email: formData.email,
+                password: formData.password
+            });
 
             toast({
                 description: "Successfully logged in. Redirecting...",
@@ -57,137 +75,140 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background/95 to-background/90 p-4 md:p-2 w-full">
+        <main className="min-h-screen flex items-center justify-center p-4 w-full">
             <div className="w-full max-w-[540px] mx-auto">
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5 }}
-                    className="w-full"
                 >
-                    <Card className="backdrop-blur-sm bg-card/50 shadow-xl border-muted/20">
-                        <CardHeader className="space-y-3 text-center pt-8 pb-4">
-                            <motion.div
-                                initial={{ scale: 0.5 }}
-                                animate={{ scale: 1 }}
-                                transition={{ delay: 0.2, type: "spring", stiffness: 150 }}
-                            >
-                                <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6">
-                                    <LockClosedIcon className="w-10 h-10 text-primary" />
-                                </div>
-                            </motion.div>
-                            <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text">
-                                Welcome Back
-                            </h1>
-                            <p className="text-sm text-muted-foreground px-4">
-                                Sign in to your account to continue
-                            </p>
-                        </CardHeader>
+                    <Card className="relative overflow-hidden border border-border/50">
+                        {/* Gradient background */}
+                        <div className="absolute inset-0 bg-gradient-to-br from-background via-background/95 to-background/90 backdrop-blur-sm" />
 
-                        <CardContent className="p-6 md:p-8">
-                            <form onSubmit={handleSubmit} className="space-y-6">
-                                {authError && (
-                                    <motion.div
-                                        initial={{ opacity: 0, x: -20 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                    >
-                                        <Alert variant="destructive" className="text-sm">
-                                            <AlertDescription>{authError}</AlertDescription>
-                                        </Alert>
-                                    </motion.div>
-                                )}
-
-                                <div className="space-y-3">
-                                    <Label htmlFor="email" className="text-sm font-medium inline-block">
-                                        Email Address
-                                    </Label>
-                                    <div className="relative">
-                                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/60">
-                                            <EnvelopeIcon className="w-5 h-5" />
-                                        </div>
-                                        <Input
-                                            id="email"
-                                            type="email"
-                                            placeholder="alice@example.com"
-                                            value={email}
-                                            onChange={(e) => setEmail(e.target.value)}
-                                            className="pl-10 h-11 bg-background/50 border-muted-foreground/20 focus:border-primary"
-                                            required
-                                        />
+                        <div className="relative">
+                            <CardHeader className="space-y-3 text-center pb-4 pt-8">
+                                <motion.div
+                                    initial={{ scale: 0.5 }}
+                                    animate={{ scale: 1 }}
+                                    transition={{ delay: 0.2, type: "spring", stiffness: 150 }}
+                                >
+                                    <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6">
+                                        <LockClosedIcon className="w-10 h-10 text-primary" />
                                     </div>
-                                </div>
+                                </motion.div>
+                                <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
+                                    Welcome Back
+                                </h1>
+                                <p className="text-sm text-muted-foreground">
+                                    Sign in to your account to continue
+                                </p>
+                            </CardHeader>
 
-                                <div className="space-y-3">
-                                    <Label htmlFor="password" className="text-sm font-medium inline-block">
-                                        Password
-                                    </Label>
-                                    <div className="relative">
-                                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/60">
-                                            <LockClosedIcon className="w-5 h-5" />
-                                        </div>
-                                        <Input
-                                            id="password"
-                                            type="password"
-                                            value={password}
-                                            onChange={(e) => setPassword(e.target.value)}
-                                            className="pl-10 h-11 bg-background/50 border-muted-foreground/20 focus:border-primary"
-                                            required
-                                        />
-                                    </div>
-                                </div>
+                            <CardContent className="p-4 md:p-6 lg:p-8">
+                                <form onSubmit={handleSubmit} className="space-y-4">
+                                    {storeError && (
+                                        <motion.div
+                                            initial={{ opacity: 0, x: -20 }}
+                                            animate={{ opacity: 1, x: 0 }}
+                                        >
+                                            <Alert variant="destructive" className="text-sm">
+                                                <ExclamationCircleIcon className="h-4 w-4 shrink-0" />
+                                                <AlertDescription>{storeError}</AlertDescription>
+                                            </Alert>
+                                        </motion.div>
+                                    )}
 
-                                <div className="flex items-center justify-between pt-2">
-                                    <div className="flex items-center space-x-2">
-                                        <Checkbox
-                                            id="remember"
-                                            className="border-muted-foreground/30 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
-                                        />
-                                        <Label htmlFor="remember" className="text-sm font-normal text-muted-foreground">
-                                            Remember me
+                                    <div className="space-y-2">
+                                        <Label htmlFor="email" className="text-sm font-medium">
+                                            Email Address
                                         </Label>
+                                        <div className="relative">
+                                            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/60">
+                                                <EnvelopeIcon className="w-4 h-4" />
+                                            </div>
+                                            <Input
+                                                id="email"
+                                                type="email"
+                                                placeholder="alice@example.com"
+                                                value={formData.email}
+                                                onChange={handleInputChange('email')}
+                                                className="pl-9"
+                                                required
+                                            />
+                                        </div>
                                     </div>
-                                    <Link
-                                        href="/forgot-password"
-                                        className="text-sm text-primary hover:text-primary/80 transition-colors font-medium"
-                                    >
-                                        Forgot password?
-                                    </Link>
-                                </div>
 
-                                <div className="pt-2">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="password" className="text-sm font-medium">
+                                            Password
+                                        </Label>
+                                        <div className="relative">
+                                            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/60">
+                                                <LockClosedIcon className="w-4 h-4" />
+                                            </div>
+                                            <Input
+                                                id="password"
+                                                type="password"
+                                                value={formData.password}
+                                                onChange={handleInputChange('password')}
+                                                className="pl-9"
+                                                required
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center space-x-2">
+                                            <Checkbox
+                                                id="remember"
+                                                className="border-border data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+                                            />
+                                            <Label htmlFor="remember" className="text-sm font-normal text-muted-foreground">
+                                                Remember me
+                                            </Label>
+                                        </div>
+                                        <Link
+                                            href="/forgot-password"
+                                            className="text-sm text-primary hover:text-primary/90 transition-colors font-medium"
+                                        >
+                                            Forgot password?
+                                        </Link>
+                                    </div>
+
                                     <Button
                                         type="submit"
-                                        className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground transition-all shadow-sm shadow-primary/20 hover:shadow-lg hover:shadow-primary/30"
+                                        className="w-full mt-6"
                                         disabled={isLoading}
                                     >
                                         {isLoading ? (
                                             <motion.div
                                                 animate={{ rotate: 360 }}
                                                 transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                                                className="w-5 h-5 border-2 border-primary-foreground border-t-transparent rounded-full"
+                                                className="w-5 h-5 border-2 border-current border-t-transparent rounded-full"
                                             />
                                         ) : (
                                             'Sign in'
                                         )}
                                     </Button>
-                                </div>
-                            </form>
-                        </CardContent>
+                                </form>
+                            </CardContent>
 
-                        <CardFooter className="flex justify-center py-6 px-8 border-t border-muted-foreground/10">
-                            <p className="text-sm text-muted-foreground">
-                                Don't have an account?{' '}
-                                <Link
-                                    href="/register"
-                                    className="text-primary hover:text-primary/80 transition-colors font-medium"
-                                >
-                                    Sign up
-                                </Link>
-                            </p>
-                        </CardFooter>
+                            <CardFooter className="flex justify-center py-6 px-8 border-t border-border/10">
+                                <p className="text-sm text-muted-foreground">
+                                    Don't have an account?{' '}
+                                    <Link
+                                        href="/register"
+                                        className="text-primary hover:text-primary/90 transition-colors font-medium"
+                                    >
+                                        Sign up
+                                    </Link>
+                                </p>
+                            </CardFooter>
+                        </div>
                     </Card>
                 </motion.div>
             </div>
-        </div>
+        </main>
     );
 } 

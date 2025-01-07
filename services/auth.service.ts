@@ -1,160 +1,133 @@
-import { API_URL, API_VERSION } from '@/lib/constants';
-
-export interface AuthResponse {
-    access_token: string;
-    token_type: string;
-}
-
-export interface UserResponse {
-    id: string;
-    email: string;
-    name: string;
-    is_active: boolean;
-    is_superuser: boolean;
-}
-
-export interface RegisterData {
-    email: string;
-    password: string;
-    name: string;
-    confirm_password: string;
-    avatar?: string;
-}
-
-export interface LoginData {
-    email: string;
-    password: string;
-}
+import { API_URL, API_VERSION, AUTH_TOKEN_KEY } from '@/lib/constants';
+import { BaseResponse } from '@/types/base';
+import {
+    TokenResponse,
+    UserResponse,
+    UserWithStatsResponse,
+    RegisterRequest,
+    LoginRequest,
+    PasswordResetRequest,
+} from '@/types/auth';
 
 class AuthService {
     private baseUrl = `${API_URL}${API_VERSION}/auth`;
+    private userUrl = `${API_URL}${API_VERSION}/users`;
 
-    async register(data: RegisterData): Promise<UserResponse> {
+    // Helper method for common fetch options
+    private getHeaders(includeAuth: boolean = false, isFormData: boolean = false): HeadersInit {
+        const headers: HeadersInit = {
+            'Accept': 'application/json',
+        };
+
+        if (!isFormData) {
+            headers['Content-Type'] = 'application/json';
+        }
+
+        if (includeAuth) {
+            const token = localStorage.getItem(AUTH_TOKEN_KEY);
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+        }
+
+        return headers;
+    }
+
+    // Helper method to handle errors
+    private async handleResponse<T>(response: Response): Promise<T> {
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || error.message || 'An error occurred');
+        }
+        return response.json();
+    }
+
+    async register(data: RegisterRequest): Promise<UserResponse> {
         const response = await fetch(`${this.baseUrl}/register`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-            },
+            headers: this.getHeaders(),
             credentials: 'include',
             body: JSON.stringify(data),
         });
 
-        if (!response.ok) {
-            const error = await response.json();
-            this.handleError(error, response.status);
-        }
-
-        return response.json();
+        return this.handleResponse<UserResponse>(response);
     }
 
-    async login(data: LoginData): Promise<AuthResponse> {
+    async login(data: LoginRequest): Promise<TokenResponse> {
+        const formData = new URLSearchParams({
+            username: data.email,
+            password: data.password,
+        });
+
         const response = await fetch(`${this.baseUrl}/login`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'Accept': 'application/json',
-            },
+            headers: this.getHeaders(false, true),
             credentials: 'include',
-            body: new URLSearchParams({
-                username: data.email,
-                password: data.password,
-            }),
+            body: formData,
         });
 
-        if (!response.ok) {
-            const error = await response.json();
-            this.handleError(error, response.status);
-        }
-
-        return response.json();
+        return this.handleResponse<TokenResponse>(response);
     }
 
-    async getCurrentUser(token: string): Promise<UserResponse> {
-        const response = await fetch(`${API_URL}${API_VERSION}/users/me`, {
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Accept': 'application/json',
-            },
+    async refreshToken(refreshToken: string): Promise<TokenResponse> {
+        const response = await fetch(`${this.baseUrl}/refresh-token`, {
+            method: 'POST',
+            headers: this.getHeaders(),
+            credentials: 'include',
+            body: JSON.stringify({ refresh_token: refreshToken }),
+        });
+
+        return this.handleResponse<TokenResponse>(response);
+    }
+
+    async getCurrentUser(): Promise<UserWithStatsResponse> {
+        const response = await fetch(`${this.userUrl}/me`, {
+            headers: this.getHeaders(true),
             credentials: 'include',
         });
 
-        if (!response.ok) {
-            const error = await response.json();
-            this.handleError(error, response.status);
-        }
-
-        return response.json();
+        return this.handleResponse<UserWithStatsResponse>(response);
     }
 
-    async requestPasswordReset(email: string): Promise<{ msg: string }> {
+    async requestPasswordReset(email: string): Promise<BaseResponse> {
         const response = await fetch(`${this.baseUrl}/password-recovery/${email}`, {
             method: 'POST',
-            headers: {
-                'Accept': 'application/json',
-            },
+            headers: this.getHeaders(),
             credentials: 'include',
         });
 
-        if (!response.ok) {
-            const error = await response.json();
-            this.handleError(error, response.status);
-        }
-
-        return response.json();
+        return this.handleResponse<BaseResponse>(response);
     }
 
-    async resetPassword(token: string, newPassword: string): Promise<{ msg: string }> {
+    async resetPassword(data: PasswordResetRequest): Promise<BaseResponse> {
         const response = await fetch(`${this.baseUrl}/reset-password`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-            },
+            headers: this.getHeaders(),
             credentials: 'include',
-            body: JSON.stringify({
-                token,
-                new_password: newPassword,
-            }),
+            body: JSON.stringify(data),
         });
 
-        if (!response.ok) {
-            const error = await response.json();
-            this.handleError(error, response.status);
-        }
-
-        return response.json();
+        return this.handleResponse<BaseResponse>(response);
     }
 
-    async verifyEmail(token: string): Promise<{ msg: string }> {
+    async verifyEmail(token: string): Promise<BaseResponse> {
         const response = await fetch(`${this.baseUrl}/verify/${token}`, {
             method: 'POST',
-            headers: {
-                'Accept': 'application/json',
-            },
+            headers: this.getHeaders(),
             credentials: 'include',
         });
 
-        if (!response.ok) {
-            const error = await response.json();
-            this.handleError(error, response.status);
-        }
-
-        return response.json();
+        return this.handleResponse<BaseResponse>(response);
     }
 
-    private handleError(error: any, status: number): never {
-        if (status === 400) {
-            if (error.detail) {
-                if (typeof error.detail === 'string') {
-                    throw new Error(error.detail);
-                } else if (Array.isArray(error.detail)) {
-                    const errors = error.detail.map((err: any) => err.msg).join(', ');
-                    throw new Error(errors);
-                }
-            }
-        }
-        throw new Error(error.message || 'Authentication failed');
+    async logout(): Promise<BaseResponse> {
+        const response = await fetch(`${this.baseUrl}/logout`, {
+            method: 'POST',
+            headers: this.getHeaders(true),
+            credentials: 'include',
+        });
+
+        return this.handleResponse<BaseResponse>(response);
     }
 }
 
