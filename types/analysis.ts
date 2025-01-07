@@ -1,5 +1,3 @@
-import { AnalysisStatus } from './document';
-
 /**
  * Analysis types supported by the system
  */
@@ -8,6 +6,16 @@ export enum AnalysisType {
     TEXT_EXTRACTION = 'text_extraction',
     TEXT_SUMMARIZATION = 'text_summarization',
     TEMPLATE_CONVERSION = 'template_conversion'
+}
+
+/**
+ * Analysis status types
+ */
+export enum AnalysisStatus {
+    PENDING = 'pending',
+    PROCESSING = 'processing',
+    COMPLETED = 'completed',
+    FAILED = 'failed'
 }
 
 /**
@@ -45,6 +53,28 @@ export interface AnalysisResponse {
     parameters: TableDetectionParameters | TextExtractionParameters | TextSummarizationParameters | TemplateConversionParameters;
 }
 
+export interface BatchAnalysisDocument {
+    document_id: string;
+    analysis_type: AnalysisType;
+    parameters: TableDetectionParameters | TextExtractionParameters | TextSummarizationParameters | TemplateConversionParameters;
+}
+
+export interface BatchAnalysisRequest {
+    documents: BatchAnalysisDocument[];
+}
+
+export interface BatchAnalysisResponse {
+    batch_id: string;
+    results: AnalysisResponse[];
+    errors: BatchAnalysisError[];
+    total_submitted: number;
+    total_failed: number;
+}
+
+export interface BatchAnalysisError {
+    document_id: string;
+    error: string;
+}
 
 
 /**
@@ -53,20 +83,11 @@ export interface AnalysisResponse {
 export interface AnalysisListParams {
     document_id?: string;
     status?: AnalysisStatus;
-    type?: AnalysisType;
+    analysis_type?: AnalysisType;
     skip?: number;
     limit?: number;
-}
-
-/**
- * Analysis task list response
- */
-export interface AnalysisListResponse {
-    items: AnalysisResponse[];
-    total: number;
-    page: number;
-    size: number;
-    pages: number;
+    start_date?: string;
+    end_date?: string;
 }
 
 /**
@@ -91,7 +112,7 @@ export interface AnalysisResultWithMetadata {
         version: string;
     };
     created_at: string;
-} 
+}
 
 
 /**
