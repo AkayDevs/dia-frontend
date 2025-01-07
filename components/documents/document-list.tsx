@@ -146,10 +146,10 @@ export function DocumentList({
                                         <TooltipContent>
                                             <div className="space-y-1">
                                                 <p className="font-medium">{document.name}</p>
-                                                <p className="text-xs text-muted-foreground">
+                                                <p className="text-xs text-white">
                                                     Size: {(document.size / 1024).toFixed(2)} KB
                                                 </p>
-                                                <p className="text-xs text-muted-foreground">
+                                                <p className="text-xs text-white">
                                                     Uploaded: {format(new Date(document.uploaded_at), 'PPpp')}
                                                 </p>
                                             </div>
