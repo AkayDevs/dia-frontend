@@ -1,5 +1,6 @@
 import { API_URL, API_VERSION } from '@/lib/constants';
 import { BaseResponse } from '@/types/base';
+import { AUTH_TOKEN_KEY } from '@/lib/constants';
 import {
     Document,
     DocumentWithAnalysis,
@@ -12,7 +13,7 @@ class DocumentService {
 
     // Helper method for common fetch options
     private getHeaders(isFormData: boolean = false): HeadersInit {
-        const token = localStorage.getItem('access_token');
+        const token = localStorage.getItem(AUTH_TOKEN_KEY);
         if (!token) {
             throw new Error('Not authenticated');
         }

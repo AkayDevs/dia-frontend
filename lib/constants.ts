@@ -2,6 +2,7 @@ export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000
 export const API_VERSION = '/api/v1';
 
 export const AUTH_TOKEN_KEY = 'token';
+export const REFRESH_TOKEN_KEY = 'refresh_token';
 
 export const PASSWORD_REQUIREMENTS = {
     minLength: 8,

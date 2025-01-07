@@ -9,6 +9,7 @@ import {
     DocumentListResponse
 } from '@/types/document';
 import { useAuthStore } from '@/store/useAuthStore';
+import { AUTH_TOKEN_KEY } from '@/lib/constants';
 
 interface DocumentState {
     // Document list state
@@ -82,7 +83,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     // Async actions
     fetchDocuments: async () => {
         const { setLoading, setError, setDocuments, filters } = get();
-        const token = localStorage.getItem('access_token');
+        const token = localStorage.getItem(AUTH_TOKEN_KEY);
 
         if (!token) {
             setError('Not authenticated');
@@ -112,7 +113,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
 
     fetchDocument: async (id: string) => {
         const { setLoading, setError, setSelectedDocument } = get();
-        const token = localStorage.getItem('access_token');
+        const token = localStorage.getItem(AUTH_TOKEN_KEY);
 
         if (!token) {
             setError('Not authenticated');
@@ -142,7 +143,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
 
     uploadDocument: async (file: File) => {
         const { setLoading, setError, fetchDocuments } = get();
-        const token = localStorage.getItem('access_token');
+        const token = localStorage.getItem(AUTH_TOKEN_KEY);
 
         if (!token) {
             setError('Not authenticated');
@@ -172,7 +173,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
 
     uploadDocuments: async (files: File[]) => {
         const { setLoading, setError, fetchDocuments } = get();
-        const token = localStorage.getItem('access_token');
+        const token = localStorage.getItem(AUTH_TOKEN_KEY);
 
         if (!token) {
             setError('Not authenticated');
@@ -202,7 +203,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
 
     deleteDocument: async (id: string) => {
         const { setLoading, setError, fetchDocuments } = get();
-        const token = localStorage.getItem('access_token');
+        const token = localStorage.getItem(AUTH_TOKEN_KEY);
 
         if (!token) {
             setError('Not authenticated');
