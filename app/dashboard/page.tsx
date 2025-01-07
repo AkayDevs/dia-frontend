@@ -68,12 +68,26 @@ export default function DashboardPage() {
             return initialStats;
         }
 
-        return documents.reduce((stats, doc) => ({
-            totalDocuments: stats.totalDocuments + 1,
-            analyzedDocuments: doc.status === 'completed' ? stats.analyzedDocuments + 1 : stats.analyzedDocuments,
-            pendingAnalyses: ['pending', 'processing'].includes(doc.status) ? stats.pendingAnalyses + 1 : stats.pendingAnalyses,
-            failedAnalyses: doc.status === 'failed' ? stats.failedAnalyses + 1 : stats.failedAnalyses
-        }), { ...initialStats });
+        return documents.reduce((stats, doc) => {
+            // Always increment total documents
+            stats.totalDocuments += 1;
+
+            // Update specific counters based on status
+            switch (doc.status) {
+                case 'completed':
+                    stats.analyzedDocuments += 1;
+                    break;
+                case 'pending':
+                case 'processing':
+                    stats.pendingAnalyses += 1;
+                    break;
+                case 'failed':
+                    stats.failedAnalyses += 1;
+                    break;
+            }
+
+            return stats;
+        }, { ...initialStats });
     };
 
     const handleUploadSuccess = async (file: File) => {
