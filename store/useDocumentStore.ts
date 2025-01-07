@@ -1,72 +1,232 @@
 import { create } from 'zustand';
-import { Document, DocumentType } from '@/types/document';
+import { documentService } from '@/services/document.service';
+import {
+    Document,
+    DocumentWithAnalysis,
+    DocumentType,
+    AnalysisStatus,
+    DocumentListParams,
+    DocumentListResponse
+} from '@/types/document';
+import { useAuthStore } from '@/store/useAuthStore';
 
-interface DocumentStore {
+interface DocumentState {
+    // Document list state
     documents: Document[];
-    selectedDocument: Document | null;
-    setDocuments: (documents: Document[]) => void;
-    addDocument: (document: Document) => void;
-    setSelectedDocument: (document: Document | null) => void;
-    updateDocumentStatus: (documentId: string, status: Document['status']) => void;
+    total: number;
+    currentPage: number;
+    pageSize: number;
+    totalPages: number;
+
+    // Loading and error states
+    isLoading: boolean;
+    error: string | null;
+
+    // Filters
+    filters: DocumentListParams;
+
+    // Selected document state
+    selectedDocument: DocumentWithAnalysis | null;
+
+    // Actions
+    setDocuments: (response: DocumentListResponse) => void;
+    setSelectedDocument: (document: DocumentWithAnalysis | null) => void;
+    setError: (error: string | null) => void;
+    setLoading: (isLoading: boolean) => void;
+    setFilters: (filters: Partial<DocumentListParams>) => void;
+    clearError: () => void;
+
+    // Async actions
+    fetchDocuments: () => Promise<void>;
+    fetchDocument: (id: string) => Promise<void>;
+    uploadDocument: (file: File) => Promise<void>;
+    uploadDocuments: (files: File[]) => Promise<void>;
+    deleteDocument: (id: string) => Promise<void>;
 }
 
-// Helper function to generate a unique ID
-const generateId = () => Math.random().toString(36).substr(2, 9);
-
-// Helper function to create a mock document
-export const createMockDocument = (file: File): Document => {
-    const now = new Date().toISOString();
-    const type = getDocumentType(file);
-
-    return {
-        id: generateId(),
-        name: file.name,
-        type,
-        status: 'pending',
-        uploadedAt: now,
-        size: file.size,
-        url: URL.createObjectURL(file), // Create a temporary URL for development
-    };
-};
-
-// Helper function to determine document type
-const getDocumentType = (file: File): DocumentType => {
-    const extension = file.name.split('.').pop()?.toLowerCase();
-    switch (extension) {
-        case 'pdf':
-            return 'pdf';
-        case 'doc':
-        case 'docx':
-            return 'docx';
-        case 'xls':
-        case 'xlsx':
-            return 'xlsx';
-        case 'png':
-        case 'jpg':
-        case 'jpeg':
-            return 'image';
-        default:
-            throw new Error('Unsupported file type');
-    }
-};
-
-export const useDocumentStore = create<DocumentStore>((set) => ({
+export const useDocumentStore = create<DocumentState>((set, get) => ({
+    // Initial state
     documents: [],
+    total: 0,
+    currentPage: 1,
+    pageSize: 10,
+    totalPages: 0,
+    isLoading: false,
+    error: null,
+    filters: {},
     selectedDocument: null,
 
-    setDocuments: (documents) => set({ documents }),
+    // State setters
+    setDocuments: (response: DocumentListResponse) => set({
+        documents: response.items,
+        total: response.total,
+        currentPage: response.page,
+        pageSize: response.size,
+        totalPages: response.pages
+    }),
 
-    addDocument: (document) =>
-        set((state) => ({
-            documents: [document, ...state.documents],
-        })),
+    setSelectedDocument: (document: DocumentWithAnalysis | null) => set({
+        selectedDocument: document
+    }),
 
-    setSelectedDocument: (document) => set({ selectedDocument: document }),
+    setError: (error: string | null) => set({ error }),
 
-    updateDocumentStatus: (documentId, status) =>
-        set((state) => ({
-            documents: state.documents.map((doc) =>
-                doc.id === documentId ? { ...doc, status } : doc
-            ),
-        })),
+    setLoading: (isLoading: boolean) => set({ isLoading }),
+
+    clearError: () => set({ error: null }),
+
+    setFilters: (newFilters: Partial<DocumentListParams>) => set(state => ({
+        filters: { ...state.filters, ...newFilters }
+    })),
+
+    // Async actions
+    fetchDocuments: async () => {
+        const { setLoading, setError, setDocuments, filters } = get();
+        const token = localStorage.getItem('access_token');
+
+        if (!token) {
+            setError('Not authenticated');
+            return;
+        }
+
+        try {
+            setLoading(true);
+            setError(null);
+
+            const response = await documentService.getDocuments(filters);
+            setDocuments(response);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to fetch documents';
+            setError(message);
+
+            // Handle authentication errors
+            if (message.includes('authentication') || message.includes('credentials')) {
+                useAuthStore.getState().logout();
+            }
+
+            throw error;
+        } finally {
+            setLoading(false);
+        }
+    },
+
+    fetchDocument: async (id: string) => {
+        const { setLoading, setError, setSelectedDocument } = get();
+        const token = localStorage.getItem('access_token');
+
+        if (!token) {
+            setError('Not authenticated');
+            return;
+        }
+
+        try {
+            setLoading(true);
+            setError(null);
+
+            const document = await documentService.getDocument(id);
+            setSelectedDocument(document);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to fetch document';
+            setError(message);
+
+            // Handle authentication errors
+            if (message.includes('authentication') || message.includes('credentials')) {
+                useAuthStore.getState().logout();
+            }
+
+            throw error;
+        } finally {
+            setLoading(false);
+        }
+    },
+
+    uploadDocument: async (file: File) => {
+        const { setLoading, setError, fetchDocuments } = get();
+        const token = localStorage.getItem('access_token');
+
+        if (!token) {
+            setError('Not authenticated');
+            return;
+        }
+
+        try {
+            setLoading(true);
+            setError(null);
+
+            await documentService.uploadDocument(file);
+            await fetchDocuments(); // Refresh the list after upload
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to upload document';
+            setError(message);
+
+            // Handle authentication errors
+            if (message.includes('authentication') || message.includes('credentials')) {
+                useAuthStore.getState().logout();
+            }
+
+            throw error;
+        } finally {
+            setLoading(false);
+        }
+    },
+
+    uploadDocuments: async (files: File[]) => {
+        const { setLoading, setError, fetchDocuments } = get();
+        const token = localStorage.getItem('access_token');
+
+        if (!token) {
+            setError('Not authenticated');
+            return;
+        }
+
+        try {
+            setLoading(true);
+            setError(null);
+
+            await documentService.uploadDocuments(files);
+            await fetchDocuments(); // Refresh the list after upload
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to upload documents';
+            setError(message);
+
+            // Handle authentication errors
+            if (message.includes('authentication') || message.includes('credentials')) {
+                useAuthStore.getState().logout();
+            }
+
+            throw error;
+        } finally {
+            setLoading(false);
+        }
+    },
+
+    deleteDocument: async (id: string) => {
+        const { setLoading, setError, fetchDocuments } = get();
+        const token = localStorage.getItem('access_token');
+
+        if (!token) {
+            setError('Not authenticated');
+            return;
+        }
+
+        try {
+            setLoading(true);
+            setError(null);
+
+            await documentService.deleteDocument(id);
+            await fetchDocuments(); // Refresh the list after deletion
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to delete document';
+            setError(message);
+
+            // Handle authentication errors
+            if (message.includes('authentication') || message.includes('credentials')) {
+                useAuthStore.getState().logout();
+            }
+
+            throw error;
+        } finally {
+            setLoading(false);
+        }
+    },
 })); 

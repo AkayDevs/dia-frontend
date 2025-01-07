@@ -10,7 +10,8 @@ import { Badge } from '@/components/ui/badge';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { useToast } from '@/hooks/use-toast';
 import { useAuthStore } from '@/store/useAuthStore';
-import { documentService, AnalysisStatus } from '@/services/document.service';
+import { useDocumentStore } from '@/store/useDocumentStore';
+import { AnalysisStatus } from '@/types/document';
 import {
     DocumentIcon,
     ChartBarIcon,
@@ -20,7 +21,9 @@ import {
     Bars3Icon,
     DocumentTextIcon,
     ClockIcon,
-    ChevronRightIcon
+    ChevronRightIcon,
+    DocumentDuplicateIcon,
+    DocumentMagnifyingGlassIcon
 } from '@heroicons/react/24/outline';
 
 interface NavItem {
@@ -28,33 +31,51 @@ interface NavItem {
     href: string;
     icon: React.ElementType;
     badge?: string;
+    description?: string;
 }
 
 const navItems: NavItem[] = [
     {
         title: 'Dashboard',
         href: '/dashboard',
-        icon: DocumentIcon
+        icon: DocumentIcon,
+        description: 'Overview and quick actions'
     },
     {
         title: 'Documents',
         href: '/dashboard/documents',
         icon: DocumentTextIcon,
+        description: 'Manage your documents'
     },
     {
         title: 'Analysis',
         href: '/dashboard/analysis',
-        icon: ChartBarIcon
+        icon: ChartBarIcon,
+        description: 'Analyze documents'
+    },
+    {
+        title: 'Batch Processing',
+        href: '/dashboard/batch',
+        icon: DocumentDuplicateIcon,
+        description: 'Process multiple documents'
     },
     {
         title: 'History',
         href: '/dashboard/history',
-        icon: ClockIcon
+        icon: ClockIcon,
+        description: 'View analysis history'
+    },
+    {
+        title: 'Templates',
+        href: '/dashboard/templates',
+        icon: DocumentMagnifyingGlassIcon,
+        description: 'Manage analysis templates'
     },
     {
         title: 'Settings',
         href: '/dashboard/settings',
-        icon: Cog6ToothIcon
+        icon: Cog6ToothIcon,
+        description: 'Configure your preferences'
     }
 ];
 
@@ -67,6 +88,7 @@ export function Sidebar({ className }: SidebarProps) {
     const router = useRouter();
     const { toast } = useToast();
     const { user, logout } = useAuthStore();
+    const { documents, fetchDocuments, setFilters } = useDocumentStore();
     const [isMobile, setIsMobile] = useState(false);
     const [isOpen, setIsOpen] = useState(false);
     const [processingCount, setProcessingCount] = useState(0);
@@ -91,10 +113,12 @@ export function Sidebar({ className }: SidebarProps) {
     useEffect(() => {
         const fetchProcessingDocuments = async () => {
             try {
-                const documents = await documentService.getDocuments({
-                    status: AnalysisStatus.PROCESSING
-                });
-                setProcessingCount(documents.length);
+                setFilters({ status: AnalysisStatus.PROCESSING });
+                await fetchDocuments();
+                const processingDocs = documents.filter(
+                    doc => doc.status === AnalysisStatus.PROCESSING || doc.status === AnalysisStatus.PENDING
+                );
+                setProcessingCount(processingDocs.length);
             } catch (error) {
                 console.error('Error fetching processing documents:', error);
                 // If authentication error, handle logout
@@ -109,11 +133,11 @@ export function Sidebar({ className }: SidebarProps) {
 
         if (isMounted) {
             fetchProcessingDocuments();
-            // Refresh processing count every minute
-            const interval = setInterval(fetchProcessingDocuments, 60000);
+            // Refresh processing count every 30 seconds
+            const interval = setInterval(fetchProcessingDocuments, 30000);
             return () => clearInterval(interval);
         }
-    }, [isMounted]);
+    }, [isMounted, fetchDocuments, setFilters, documents]);
 
     const handleLogout = async () => {
         try {
@@ -173,8 +197,15 @@ export function Sidebar({ className }: SidebarProps) {
                                 `}>
                                     <Icon className="h-4 w-4" />
                                 </div>
-                                <span className="flex-1">{item.title}</span>
-                                {item.title === 'Documents' && processingCount > 0 && (
+                                <div className="flex-1">
+                                    <div>{item.title}</div>
+                                    {item.description && (
+                                        <div className="text-xs text-muted-foreground/70 font-normal">
+                                            {item.description}
+                                        </div>
+                                    )}
+                                </div>
+                                {(item.title === 'Documents' || item.title === 'Analysis') && processingCount > 0 && (
                                     <Badge
                                         variant="secondary"
                                         className="ml-auto px-2 py-0.5 bg-primary/10 text-primary hover:bg-primary/15"

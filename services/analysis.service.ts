@@ -1,67 +1,30 @@
 import { API_URL, API_VERSION } from '@/lib/constants';
-import { Document } from '@/services/document.service';
-
-export enum AnalysisType {
-    TABLE_DETECTION = 'table_detection',
-    TEXT_EXTRACTION = 'text_extraction',
-    TEXT_SUMMARIZATION = 'text_summarization',
-    TEMPLATE_CONVERSION = 'template_conversion',
-    DOCUMENT_CLASSIFICATION = 'document_classification',
-    ENTITY_EXTRACTION = 'entity_extraction',
-    DOCUMENT_COMPARISON = 'document_comparison'
-}
-
-export enum AnalysisStatus {
-    PENDING = 'pending',
-    PROCESSING = 'processing',
-    COMPLETED = 'completed',
-    FAILED = 'failed'
-}
-
-export interface AnalysisParameter {
-    type: string;
-    default: any;
-    min?: number;
-    max?: number;
-    description: string;
-    options?: string[];
-}
-
-export interface AnalysisTypeInfo {
-    type: AnalysisType;
-    name: string;
-    description: string;
-    supported_formats: string[];
-    parameters: Record<string, AnalysisParameter>;
-}
-
-export interface AnalysisResult {
-    id: string;
-    document_id: string;
-    analysis_type: AnalysisType;
-    status: AnalysisStatus;
-    parameters: Record<string, any>;
-    result?: Record<string, any>;
-    error?: string;
-    created_at: string;
-    completed_at?: string;
-}
-
-export interface AnalysisHistoryItem {
-    id: string;
-    document: Document;
-    type: AnalysisType;
-    status: AnalysisStatus;
-    created_at: string;
-    results?: Record<string, any>;
-}
+import { BaseResponse } from '@/types/base';
+import {
+    AnalysisType,
+    AnalysisConfig,
+    AnalysisRequest,
+    AnalysisResponse,
+    AnalysisListParams,
+    AnalysisListResponse,
+    AnalysisProgress,
+    AnalysisResultWithMetadata,
+} from '@/types/analysis';
 
 class AnalysisService {
-    private getHeaders(token?: string): HeadersInit {
+    private baseUrl = `${API_URL}${API_VERSION}/analysis`;
+
+    // Helper method for common fetch options
+    private getHeaders(isFormData: boolean = false): HeadersInit {
         const headers: HeadersInit = {
-            'Content-Type': 'application/json',
+            'Accept': 'application/json',
         };
 
+        if (!isFormData) {
+            headers['Content-Type'] = 'application/json';
+        }
+
+        const token = localStorage.getItem('access_token');
         if (token) {
             headers['Authorization'] = `Bearer ${token}`;
         }
@@ -69,131 +32,109 @@ class AnalysisService {
         return headers;
     }
 
-    async getAnalysisTypes(): Promise<AnalysisTypeInfo[]> {
-        const token = localStorage.getItem('token');
-        if (!token) throw new Error('No authentication token found');
-
-        const response = await fetch(
-            `${API_URL}${API_VERSION}/analysis/types`,
-            {
-                headers: this.getHeaders(token),
-            }
-        );
-
+    // Helper method to handle errors
+    private async handleResponse<T>(response: Response): Promise<T> {
         if (!response.ok) {
-            throw new Error('Failed to fetch analysis types');
+            const error = await response.json();
+            throw new Error(error.detail || error.message || 'An error occurred');
         }
-
         return response.json();
     }
 
-    async getAnalysisHistory(): Promise<AnalysisHistoryItem[]> {
-        const token = localStorage.getItem('token');
-        if (!token) throw new Error('No authentication token found');
+    /**
+     * Start a new analysis task single file upload { create analysis task }
+     */
+    async startAnalysis(request: AnalysisRequest, document_id: string): Promise<AnalysisResponse> {
+        const response = await fetch(`${this.baseUrl}/${document_id}`, {
+            method: 'POST',
+            headers: this.getHeaders(),
+            credentials: 'include',
+            body: JSON.stringify(request),
+        });
 
-        const response = await fetch(
-            `${API_URL}${API_VERSION}/analysis/history`,
-            {
-                headers: this.getHeaders(token),
-            }
-        );
-
-        if (!response.ok) {
-            throw new Error('Failed to fetch analysis history');
-        }
-
-        const results = await response.json();
-        return results.map((result: any) => ({
-            id: result.id,
-            document: result.document,
-            type: result.analysis_type,
-            status: result.status,
-            created_at: result.created_at,
-            results: result.result
-        }));
+        return this.handleResponse<AnalysisResponse>(response);
     }
 
-    async startAnalysis(
-        documentId: string,
-        analysisType: AnalysisType,
-        parameters: Record<string, any> = {}
-    ): Promise<AnalysisResult> {
-        const token = localStorage.getItem('token');
-        if (!token) throw new Error('No authentication token found');
+    /**
+     * Get analysis task status and progress { get analysis task status }
+     */
+    async getAnalysisStatus(analysisId: string): Promise<AnalysisResponse> {
+        const response = await fetch(`${this.baseUrl}/${analysisId}`, {
+            headers: this.getHeaders(),
+            credentials: 'include',
+        });
 
-        const response = await fetch(
-            `${API_URL}${API_VERSION}/documents/${documentId}/analyze`,
-            {
-                method: 'POST',
-                headers: this.getHeaders(token),
-                body: JSON.stringify({
-                    analysis_type: analysisType,
-                    parameters
-                }),
-            }
-        );
-
-        if (!response.ok) {
-            throw new Error('Failed to start analysis');
-        }
-
-        return response.json();
+        return this.handleResponse<AnalysisResponse>(response);
     }
 
-    async getDocumentAnalyses(documentId: string): Promise<AnalysisResult[]> {
-        const token = localStorage.getItem('token');
-        if (!token) throw new Error('No authentication token found');
+    /**
+     * List analysis tasks with filtering
+     */
+    async listAnalysisTasks(params: AnalysisListParams = {}): Promise<AnalysisListResponse> {
+        const queryParams = new URLSearchParams();
 
-        const response = await fetch(
-            `${API_URL}${API_VERSION}/documents/${documentId}/analyses`,
-            {
-                headers: this.getHeaders(token),
-            }
-        );
+        if (params.document_id) queryParams.append('document_id', params.document_id);
+        if (params.status) queryParams.append('status', params.status);
+        if (params.type) queryParams.append('type', params.type);
+        if (params.skip !== undefined) queryParams.append('skip', params.skip.toString());
+        if (params.limit !== undefined) queryParams.append('limit', params.limit.toString());
 
-        if (!response.ok) {
-            throw new Error('Failed to fetch analyses');
-        }
+        const response = await fetch(`${this.baseUrl}?${queryParams.toString()}`, {
+            headers: this.getHeaders(),
+            credentials: 'include',
+        });
 
-        return response.json();
+        return this.handleResponse<AnalysisListResponse>(response);
     }
 
-    async getAnalysisResult(analysisId: string): Promise<AnalysisResult> {
-        const token = localStorage.getItem('token');
-        if (!token) throw new Error('No authentication token found');
+    /**
+     * Cancel an ongoing analysis task
+     */
+    async cancelAnalysis(analysisId: string): Promise<BaseResponse> {
+        const response = await fetch(`${this.baseUrl}/${analysisId}/cancel`, {
+            method: 'POST',
+            headers: this.getHeaders(),
+            credentials: 'include',
+        });
 
-        const response = await fetch(
-            `${API_URL}${API_VERSION}/documents/analysis/${analysisId}`,
-            {
-                headers: this.getHeaders(token),
-            }
-        );
-
-        if (!response.ok) {
-            throw new Error('Failed to fetch analysis result');
-        }
-
-        return response.json();
+        return this.handleResponse<BaseResponse>(response);
     }
 
-    async exportAnalysisResults(documentId: string, format: 'pdf' | 'docx' | 'xlsx'): Promise<Blob> {
-        const token = localStorage.getItem('token');
-        if (!token) throw new Error('No authentication token found');
+    /**
+     * Get available analysis types and parameters
+     */
+    async getAnalysisConfigs(): Promise<AnalysisConfig[]> {
+        const response = await fetch(`${this.baseUrl}/types`, {
+            headers: this.getHeaders(),
+            credentials: 'include',
+        });
 
-        const response = await fetch(
-            `${API_URL}${API_VERSION}/documents/${documentId}/export`,
-            {
-                method: 'POST',
-                headers: this.getHeaders(token),
-                body: JSON.stringify({ format }),
-            }
-        );
+        return this.handleResponse<AnalysisConfig[]>(response);
+    }
 
-        if (!response.ok) {
-            throw new Error('Failed to export analysis results');
-        }
+    /**
+     * Retry a failed analysis task
+     */
+    async retryAnalysis(analysisId: string): Promise<AnalysisResponse> {
+        const response = await fetch(`${this.baseUrl}/${analysisId}/retry`, {
+            method: 'POST',
+            headers: this.getHeaders(),
+            credentials: 'include',
+        });
 
-        return response.blob();
+        return this.handleResponse<AnalysisResponse>(response);
+    }
+
+    /**
+     * Get analysis task history for a document
+     */
+    async getDocumentAnalysisHistory(documentId: string): Promise<AnalysisResponse[]> {
+        const response = await fetch(`${this.baseUrl}/document/${documentId}`, {
+            headers: this.getHeaders(),
+            credentials: 'include',
+        });
+
+        return this.handleResponse<AnalysisResponse[]>(response);
     }
 }
 

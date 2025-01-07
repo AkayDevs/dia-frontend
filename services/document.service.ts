@@ -1,183 +1,119 @@
 import { API_URL, API_VERSION } from '@/lib/constants';
-
-export enum DocumentType {
-    PDF = 'PDF',
-    DOCX = 'DOCX',
-    XLSX = 'XLSX',
-    IMAGE = 'IMAGE'
-}
-
-export enum AnalysisStatus {
-    PENDING = 'pending',
-    PROCESSING = 'processing',
-    COMPLETED = 'completed',
-    FAILED = 'failed'
-}
-
-export interface UserStats {
-    total_documents: number;
-    documents_analyzed: number;
-}
-
-export interface Document {
-    id: string;
-    name: string;
-    type: DocumentType;
-    size: number;
-    url: string;
-    status: AnalysisStatus;
-    uploaded_at: string;
-    user_id: string;
-}
-
-export interface AnalysisParameters {
-    type: string;
-    parameters: Record<string, any>;
-}
-
-export interface AnalysisResult {
-    id: string;
-    document_id: string;
-    type: string;
-    result: Record<string, any>;
-    created_at: string;
-}
-
-export interface GetDocumentsParams {
-    skip?: number;
-    limit?: number;
-    status?: AnalysisStatus;
-}
+import { BaseResponse } from '@/types/base';
+import {
+    Document,
+    DocumentWithAnalysis,
+    DocumentListParams,
+    DocumentListResponse,
+} from '@/types/document';
 
 class DocumentService {
-    private getHeaders(token?: string): HeadersInit {
+    private baseUrl = `${API_URL}${API_VERSION}/documents`;
+
+    // Helper method for common fetch options
+    private getHeaders(isFormData: boolean = false): HeadersInit {
+        const token = localStorage.getItem('access_token');
+        if (!token) {
+            throw new Error('Not authenticated');
+        }
+
         const headers: HeadersInit = {
-            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json',
         };
 
-        if (token) {
-            headers['Authorization'] = `Bearer ${token}`;
+        if (!isFormData) {
+            headers['Content-Type'] = 'application/json';
         }
 
         return headers;
     }
 
-    async getDocuments(params: GetDocumentsParams = {}): Promise<Document[]> {
-        const token = localStorage.getItem('token');
-        if (!token) throw new Error('No authentication token found');
-
-        const queryParams = new URLSearchParams();
-        if (params.skip !== undefined) queryParams.append('skip', params.skip.toString());
-        if (params.limit !== undefined) queryParams.append('limit', params.limit.toString());
-        if (params.status) queryParams.append('status', params.status);
-
-        const response = await fetch(
-            `${API_URL}${API_VERSION}/documents?${queryParams.toString()}`,
-            {
-                headers: this.getHeaders(token),
-            }
-        );
-
+    // Helper method to handle errors
+    private async handleResponse<T>(response: Response): Promise<T> {
         if (!response.ok) {
-            throw new Error('Failed to fetch documents');
+            if (response.status === 401) {
+                throw new Error('Authentication failed');
+            }
+            const error = await response.json();
+            throw new Error(error.detail || error.message || 'An error occurred');
         }
-
         return response.json();
     }
 
+    /**
+     * Upload a single document
+     */
     async uploadDocument(file: File): Promise<Document> {
-        const token = localStorage.getItem('token');
-        if (!token) throw new Error('No authentication token found');
-
         const formData = new FormData();
         formData.append('file', file);
 
-        const response = await fetch(`${API_URL}${API_VERSION}/documents`, {
+        const response = await fetch(`${this.baseUrl}`, {
             method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-            },
+            headers: this.getHeaders(true),
             body: formData,
         });
 
-        if (!response.ok) {
-            throw new Error('Failed to upload document');
-        }
-
-        return response.json();
+        return this.handleResponse<Document>(response);
     }
 
-    async deleteDocument(documentId: string): Promise<void> {
-        const token = localStorage.getItem('token');
-        if (!token) throw new Error('No authentication token found');
+    /**
+     * Upload multiple documents
+     */
+    async uploadDocuments(files: File[]): Promise<Document[]> {
+        const formData = new FormData();
+        files.forEach(file => {
+            formData.append('files', file);
+        });
 
-        const response = await fetch(
-            `${API_URL}${API_VERSION}/documents/${documentId}`,
-            {
-                method: 'DELETE',
-                headers: this.getHeaders(token),
-            }
-        );
+        const response = await fetch(`${this.baseUrl}/batch`, {
+            method: 'POST',
+            headers: this.getHeaders(true),
+            body: formData,
+        });
 
-        if (!response.ok) {
-            throw new Error('Failed to delete document');
-        }
+        return this.handleResponse<Document[]>(response);
     }
 
-    async analyzeDocument(documentId: string, params: AnalysisParameters): Promise<{ message: string; analysis_id: string }> {
-        const token = localStorage.getItem('token');
-        if (!token) throw new Error('No authentication token found');
+    /**
+     * Get list of documents with optional filtering
+     */
+    async getDocuments(params: DocumentListParams = {}): Promise<DocumentListResponse> {
+        const queryParams = new URLSearchParams();
 
-        const response = await fetch(
-            `${API_URL}${API_VERSION}/documents/${documentId}/analyze`,
-            {
-                method: 'POST',
-                headers: this.getHeaders(token),
-                body: JSON.stringify(params),
-            }
-        );
+        if (params.skip !== undefined) queryParams.append('skip', params.skip.toString());
+        if (params.limit !== undefined) queryParams.append('limit', params.limit.toString());
+        if (params.status) queryParams.append('status', params.status);
+        if (params.doc_type) queryParams.append('doc_type', params.doc_type);
 
-        if (!response.ok) {
-            throw new Error('Failed to start analysis');
-        }
+        const response = await fetch(`${this.baseUrl}?${queryParams.toString()}`, {
+            headers: this.getHeaders(),
+        });
 
-        return response.json();
+        return this.handleResponse<DocumentListResponse>(response);
     }
 
-    async getAnalysisResult(documentId: string, analysisId: string): Promise<AnalysisResult> {
-        const token = localStorage.getItem('token');
-        if (!token) throw new Error('No authentication token found');
+    /**
+     * Get document by ID with analysis results
+     */
+    async getDocument(documentId: string): Promise<DocumentWithAnalysis> {
+        const response = await fetch(`${this.baseUrl}/${documentId}`, {
+            headers: this.getHeaders(),
+        });
 
-        const response = await fetch(
-            `${API_URL}${API_VERSION}/documents/${documentId}/analysis/${analysisId}`,
-            {
-                headers: this.getHeaders(token),
-            }
-        );
-
-        if (!response.ok) {
-            throw new Error('Failed to fetch analysis result');
-        }
-
-        return response.json();
+        return this.handleResponse<DocumentWithAnalysis>(response);
     }
 
-    async getUserStats(): Promise<UserStats> {
-        const token = localStorage.getItem('token');
-        if (!token) throw new Error('No authentication token found');
+    /**
+     * Delete a document
+     */
+    async deleteDocument(documentId: string): Promise<BaseResponse> {
+        const response = await fetch(`${this.baseUrl}/${documentId}`, {
+            method: 'DELETE',
+            headers: this.getHeaders(),
+        });
 
-        const response = await fetch(
-            `${API_URL}${API_VERSION}/users/me/stats`,
-            {
-                headers: this.getHeaders(token),
-            }
-        );
-
-        if (!response.ok) {
-            throw new Error('Failed to fetch user stats');
-        }
-
-        return response.json();
+        return this.handleResponse<BaseResponse>(response);
     }
 }
 

@@ -1,54 +1,105 @@
+import { AnalysisStatus } from './document';
+
+/**
+ * Analysis types supported by the system
+ */
+export enum AnalysisType {
+    TABLE_DETECTION = 'table_detection',
+    TEXT_EXTRACTION = 'text_extraction',
+    TEXT_SUMMARIZATION = 'text_summarization',
+    TEMPLATE_CONVERSION = 'template_conversion'
+}
+
+/**
+ * Base analysis configuration
+ */
 export interface AnalysisConfig {
-    documentId: string;
-    analysisTypes: AnalysisTypeConfig[];
-}
-
-export interface AnalysisTypeConfig {
     type: AnalysisType;
-    options: AnalysisOptions;
-    enabled: boolean;
-}
-
-export type AnalysisType =
-    | 'table_detection'
-    | 'text_extraction'
-    | 'text_summarization'
-    | 'template_conversion';
-
-export interface AnalysisOptions {
-    // Table Detection Options
-    confidenceThreshold?: number;
-    minTableSize?: number;
-
-    // Text Extraction Options
-    language?: string;
-    ocrEnabled?: boolean;
-
-    // Text Summarization Options
-    maxLength?: number;
-    style?: 'bullet_points' | 'paragraph' | 'structured';
-
-    // Template Conversion Options
-    targetFormat?: 'pdf' | 'docx' | 'html';
-    preserveStyles?: boolean;
-}
-
-export interface AnalysisPreset {
-    id: string;
     name: string;
     description: string;
-    config: AnalysisTypeConfig[];
+    supported_formats: string[];
+    parameters: Record<string, any>;
 }
 
-export type AnalysisStatus =
-    | 'queued'
-    | 'processing'
-    | 'completed'
-    | 'failed';
+/**
+ * Analysis task request
+ */
+export interface AnalysisRequest {
+    analysis_type: AnalysisType;
+    parameters?: Record<string, any>;
+}
 
+/**
+ * Analysis task response
+ */
+export interface AnalysisResponse {
+    id: string;
+    document_id: string;
+    type: AnalysisType;
+    status: AnalysisStatus;
+    result?: Record<string, any>;
+    error?: string;
+    created_at: string;
+    completed_at?: string;
+    progress: number;
+    parameters: Record<string, any>;
+}
+
+
+
+/**
+ * Analysis task list parameters
+ */
+export interface AnalysisListParams {
+    document_id?: string;
+    status?: AnalysisStatus;
+    type?: AnalysisType;
+    skip?: number;
+    limit?: number;
+}
+
+/**
+ * Analysis task list response
+ */
+export interface AnalysisListResponse {
+    items: AnalysisResponse[];
+    total: number;
+    page: number;
+    size: number;
+    pages: number;
+}
+
+/**
+ * Analysis progress update
+ */
 export interface AnalysisProgress {
     status: AnalysisStatus;
     progress: number;
-    currentStep?: string;
-    error?: string;
+    message?: string;
+}
+
+/**
+ * Analysis result with metadata
+ */
+export interface AnalysisResultWithMetadata {
+    id: string;
+    type: AnalysisType;
+    result: Record<string, any>;
+    metadata: {
+        processing_time: number;
+        confidence_score?: number;
+        version: string;
+    };
+    created_at: string;
 } 
+
+
+/**
+ * Analysis result interface
+ */
+export interface AnalysisResult {
+    id: string;
+    type: string;
+    result: Record<string, any>;
+    created_at: string;
+}
