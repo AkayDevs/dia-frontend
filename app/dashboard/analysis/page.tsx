@@ -3,7 +3,12 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Document } from '@/types/document';
-import { AnalysisType, AnalysisConfig } from '@/types/analysis';
+import {
+    AnalysisType,
+    AnalysisConfig,
+    AnalysisResponse,
+    AnalysisStatus
+} from '@/types/analysis';
 import { useDocumentStore } from '@/store/useDocumentStore';
 import { useAnalysisStore } from '@/store/useAnalysisStore';
 import { useToast } from '@/hooks/use-toast';
@@ -34,6 +39,12 @@ import {
     History,
     Layers
 } from 'lucide-react';
+import {
+    Accordion,
+    AccordionContent,
+    AccordionItem,
+    AccordionTrigger,
+} from "@/components/ui/accordion";
 
 // Analysis type icon mapping
 const AnalysisTypeIcon = ({ type, className = "h-5 w-5" }: { type: AnalysisType; className?: string }) => {
@@ -87,28 +98,86 @@ const AnalysisCard = ({ config, onSelect, selected }: AnalysisCardProps) => (
 // Recent analysis card component
 interface RecentAnalysisProps {
     document: Document;
-    onSelect: () => void;
+    analyses: AnalysisResponse[];
 }
 
-const RecentAnalysisCard = ({ document, onSelect }: RecentAnalysisProps) => (
-    <Card
-        className="flex items-center p-4 hover:bg-muted/50 cursor-pointer transition-colors"
-        onClick={onSelect}
-    >
-        <div className="p-2 rounded-lg bg-primary/10 mr-4">
-            <FileText className="h-6 w-6 text-primary" />
+const RecentAnalysisCard = ({ document, analyses }: RecentAnalysisProps) => {
+    const router = useRouter();
+    const documentAnalyses = analyses.filter(analysis => analysis.document_id === document.id);
+    const analysesByType = documentAnalyses.reduce<Record<string, AnalysisResponse[]>>((acc, analysis) => {
+        if (!acc[analysis.type]) {
+            acc[analysis.type] = [];
+        }
+        acc[analysis.type].push(analysis);
+        return acc;
+    }, {});
+
+    return (
+        <div className="rounded-lg border bg-card">
+            <div className="flex items-center justify-between p-4 bg-muted/30">
+                <div className="flex items-center gap-4">
+                    <div className="p-2 rounded-lg bg-primary/10">
+                        <FileText className="h-6 w-6 text-primary" />
+                    </div>
+                    <div>
+                        <h4 className="font-medium text-lg">{document.name}</h4>
+                        <p className="text-sm text-muted-foreground">
+                            Last analyzed {format(new Date(documentAnalyses[0].created_at), 'PPp')}
+                        </p>
+                    </div>
+                </div>
+                <Badge variant="secondary">{document.type.toUpperCase()}</Badge>
+            </div>
+            <Accordion type="single" collapsible className="w-full">
+                {Object.entries(analysesByType).map(([type, typeAnalyses]) => (
+                    <AccordionItem value={type} key={type}>
+                        <AccordionTrigger className="px-4 hover:no-underline hover:bg-muted/50">
+                            <div className="flex items-center gap-2">
+                                <AnalysisTypeIcon type={type as AnalysisType} />
+                                <span className="font-medium">
+                                    {type.split('_').map(word =>
+                                        word.charAt(0).toUpperCase() + word.slice(1)
+                                    ).join(' ')}
+                                </span>
+                                <Badge variant="outline" className="ml-2">
+                                    {typeAnalyses.length}
+                                </Badge>
+                            </div>
+                        </AccordionTrigger>
+                        <AccordionContent>
+                            <div className="px-4 py-2 space-y-2">
+                                {typeAnalyses.map((analysis: AnalysisResponse) => (
+                                    <div
+                                        key={analysis.id}
+                                        className="flex items-center justify-between p-2 rounded-md bg-muted/50 hover:bg-muted cursor-pointer"
+                                        onClick={() => router.push(`/dashboard/analysis/${document.id}/results/${analysis.id}`)}
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            {analysis.status === AnalysisStatus.COMPLETED ? (
+                                                <CheckCircle className="h-4 w-4 text-green-500" />
+                                            ) : analysis.status === AnalysisStatus.FAILED ? (
+                                                <XCircle className="h-4 w-4 text-destructive" />
+                                            ) : (
+                                                <RefreshCw className="h-4 w-4 text-muted-foreground animate-spin" />
+                                            )}
+                                            <span className="text-sm">
+                                                {format(new Date(analysis.created_at), 'MMM d, h:mm a')}
+                                            </span>
+                                        </div>
+                                        <Button variant="ghost" size="sm">
+                                            View Results
+                                            <ArrowRight className="ml-2 h-3 w-3" />
+                                        </Button>
+                                    </div>
+                                ))}
+                            </div>
+                        </AccordionContent>
+                    </AccordionItem>
+                ))}
+            </Accordion>
         </div>
-        <div className="flex-grow">
-            <h4 className="font-medium">{document.name}</h4>
-            <p className="text-sm text-muted-foreground">
-                Last analyzed {document.updated_at ? format(new Date(document.updated_at), 'PPp') : 'Never'}
-            </p>
-        </div>
-        <Button variant="ghost" size="icon">
-            <ArrowRight className="h-4 w-4" />
-        </Button>
-    </Card>
-);
+    );
+};
 
 export default function AnalysisPage() {
     const router = useRouter();
@@ -128,7 +197,8 @@ export default function AnalysisPage() {
         availableTypes = [],
         analyses = [],
         isLoading: isLoadingAnalysis,
-        loadAvailableTypes
+        loadAvailableTypes,
+        fetchAnalyses
     } = useAnalysisStore();
 
     // Check for batch analysis documents from URL
@@ -140,7 +210,8 @@ export default function AnalysisPage() {
             try {
                 await Promise.all([
                     fetchDocuments(),
-                    loadAvailableTypes()
+                    loadAvailableTypes(),
+                    fetchAnalyses()
                 ]);
             } catch (error) {
                 toast({
@@ -151,12 +222,20 @@ export default function AnalysisPage() {
             }
         };
         loadData();
-    }, []);
+    }, [fetchDocuments, loadAvailableTypes, fetchAnalyses, toast]);
 
     // Get recently analyzed documents
     const recentDocuments = documents
-        .filter(doc => doc.updated_at)
-        .sort((a, b) => new Date(b.updated_at!).getTime() - new Date(a.updated_at!).getTime())
+        .filter(doc => analyses.some(analysis => analysis.document_id === doc.id))
+        .sort((a, b) => {
+            const latestA = analyses
+                .filter(analysis => analysis.document_id === a.id)
+                .reduce((latest, analysis) => Math.max(latest, new Date(analysis.created_at).getTime()), 0);
+            const latestB = analyses
+                .filter(analysis => analysis.document_id === b.id)
+                .reduce((latest, analysis) => Math.max(latest, new Date(analysis.created_at).getTime()), 0);
+            return latestB - latestA;
+        })
         .slice(0, 5);
 
     // Handle document selection
@@ -287,7 +366,7 @@ export default function AnalysisPage() {
                                                 <RecentAnalysisCard
                                                     key={doc.id}
                                                     document={doc}
-                                                    onSelect={() => handleDocumentSelect(doc.id)}
+                                                    analyses={analyses}
                                                 />
                                             ))}
                                         </div>

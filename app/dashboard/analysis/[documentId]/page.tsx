@@ -246,7 +246,7 @@ export default function AnalysisPage({ params }: AnalysisPageProps) {
                     <Button
                         size="lg"
                         onClick={handleRedirectToConfigure}
-                        disabled={ !selectedType || supportedAnalysisTypes.length === 0}
+                        disabled={!selectedType || supportedAnalysisTypes.length === 0}
                     >
                         Configure Parameters
                         <Settings className="ml-2 h-4 w-4" />
