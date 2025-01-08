@@ -63,7 +63,7 @@ class AnalysisService {
      * Start a new analysis
      */
     async startAnalysis(documentId: string, request: AnalysisRequest): Promise<AnalysisResponse> {
-        const response = await fetch(`${this.baseUrl}/documents/${documentId}`, {
+        const response = await fetch(`${this.baseUrl}/${documentId}`, {
             method: 'POST',
             headers: this.getHeaders(),
             body: JSON.stringify(request),

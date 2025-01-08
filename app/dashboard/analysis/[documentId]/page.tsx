@@ -6,25 +6,22 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { useDocumentStore } from '@/store/useDocumentStore';
 import { useAnalysisStore } from '@/store/useAnalysisStore';
-import { Document } from '@/types/document';
-import { AnalysisType, AnalysisConfig } from '@/types/analysis';
+import { AnalysisType } from '@/types/analysis';
 import { motion } from 'framer-motion';
 import { use } from 'react';
 import {
     FileText,
     AlertTriangle,
     ArrowLeft,
-    PlayCircle,
-    Clock,
     CheckCircle,
     Table as TableIcon,
     FileSearch,
-    FileStack
+    FileStack,
+    Settings
 } from 'lucide-react';
 
 interface AnalysisPageProps {
@@ -37,7 +34,6 @@ export default function AnalysisPage({ params }: AnalysisPageProps) {
     const router = useRouter();
     const { toast } = useToast();
     const [selectedType, setSelectedType] = useState<AnalysisType | null>(null);
-    const [isAnalyzing, setIsAnalyzing] = useState(false);
 
     // Unwrap the documentId from params
     const { documentId } = use(params);
@@ -83,7 +79,7 @@ export default function AnalysisPage({ params }: AnalysisPageProps) {
         loadData();
     }, [fetchDocuments, loadAvailableTypes, router, toast]);
 
-    const handleStartAnalysis = async () => {
+    const handleRedirectToConfigure = async () => {
         if (!selectedType) {
             toast({
                 description: "Please select an analysis type",
@@ -92,34 +88,8 @@ export default function AnalysisPage({ params }: AnalysisPageProps) {
             return;
         }
 
-        try {
-            setIsAnalyzing(true);
-
-            // Get default parameters for the selected type
-            const typeConfig = availableTypes.find(t => t.type === selectedType);
-            const defaultParams = typeConfig?.parameters || undefined;
-
-            await startAnalysis(documentId, {
-                analysis_type: selectedType,
-                parameters: defaultParams
-            });
-
-            toast({
-                description: "Analysis started successfully",
-                duration: 3000,
-            });
-
-            // Redirect to document details page
-            router.push(`/dashboard/documents/${documentId}`);
-        } catch (error) {
-            toast({
-                title: "Error",
-                description: "Failed to start analysis",
-                variant: "destructive",
-            });
-        } finally {
-            setIsAnalyzing(false);
-        }
+        // Navigate to parameter configuration page
+        router.push(`/dashboard/analysis/${documentId}/configure?type=${selectedType}`);
     };
 
     if (isLoadingDocs || isLoadingAnalysis) {
@@ -275,26 +245,11 @@ export default function AnalysisPage({ params }: AnalysisPageProps) {
                 <CardFooter className="flex justify-end">
                     <Button
                         size="lg"
-                        onClick={handleStartAnalysis}
-                        disabled={isAnalyzing || !selectedType || supportedAnalysisTypes.length === 0}
+                        onClick={handleRedirectToConfigure}
+                        disabled={ !selectedType || supportedAnalysisTypes.length === 0}
                     >
-                        {isAnalyzing ? (
-                            <>
-                                <motion.div
-                                    animate={{ rotate: 360 }}
-                                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                                    className="mr-2"
-                                >
-                                    <Clock className="h-4 w-4" />
-                                </motion.div>
-                                Starting Analysis...
-                            </>
-                        ) : (
-                            <>
-                                Start Analysis
-                                <PlayCircle className="ml-2 h-4 w-4" />
-                            </>
-                        )}
+                        Configure Parameters
+                        <Settings className="ml-2 h-4 w-4" />
                     </Button>
                 </CardFooter>
             </Card>
