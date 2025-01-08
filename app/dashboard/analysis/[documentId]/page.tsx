@@ -4,81 +4,125 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { AnalysisWizard } from '@/components/analysis/analysis-wizard';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useToast } from '@/hooks/use-toast';
 import { useDocumentStore } from '@/store/useDocumentStore';
 import { useAnalysisStore } from '@/store/useAnalysisStore';
-import { useToast } from '@/hooks/use-toast';
-import { FileText, AlertTriangle, ArrowLeft } from 'lucide-react';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Skeleton } from '@/components/ui/skeleton';
-import { motion } from 'framer-motion';
 import { Document } from '@/types/document';
+import { AnalysisType, AnalysisConfig } from '@/types/analysis';
+import { motion } from 'framer-motion';
+import { use } from 'react';
+import {
+    FileText,
+    AlertTriangle,
+    ArrowLeft,
+    PlayCircle,
+    Clock,
+    CheckCircle,
+    Table as TableIcon,
+    FileSearch,
+    FileStack
+} from 'lucide-react';
 
-interface PageProps {
-    params: {
+interface AnalysisPageProps {
+    params: Promise<{
         documentId: string;
-    };
+    }>;
 }
 
-export default function AnalysisPage({ params }: PageProps) {
+export default function AnalysisPage({ params }: AnalysisPageProps) {
     const router = useRouter();
     const { toast } = useToast();
-    const { documents, fetchDocuments } = useDocumentStore();
-    const { setCurrentConfig, resetConfig } = useAnalysisStore();
-    const [document, setDocument] = useState<Document | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const [selectedType, setSelectedType] = useState<AnalysisType | null>(null);
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+    // Unwrap the documentId from params
+    const { documentId } = use(params);
+
+    const {
+        documents,
+        isLoading: isLoadingDocs,
+        fetchDocuments
+    } = useDocumentStore();
+
+    const {
+        availableTypes,
+        isLoading: isLoadingAnalysis,
+        loadAvailableTypes,
+        startAnalysis
+    } = useAnalysisStore();
+
+    // Get the current document
+    const document = documents.find(doc => doc.id === documentId);
+
+    // Get supported analysis types for this document type
+    const supportedAnalysisTypes = availableTypes.filter(type =>
+        type.supported_formats.includes(document?.type.toLowerCase() || '')
+    );
 
     useEffect(() => {
-        const initializePage = async () => {
+        const loadData = async () => {
             try {
-                setIsLoading(true);
-                setError(null);
-
-                // Fetch documents if not already loaded
-                if (documents.length === 0) {
-                    await fetchDocuments();
-                }
-
-                const doc = documents.find(doc => doc.id === params.documentId);
-
-                if (!doc) {
-                    setError('Document not found');
-                    return;
-                }
-
-                setDocument(doc);
-                setCurrentConfig({
-                    documentId: doc.id,
-                    analysisTypes: [],
-                    parameters: {}
-                });
+                await Promise.all([
+                    fetchDocuments(),
+                    loadAvailableTypes()
+                ]);
             } catch (error) {
-                const message = error instanceof Error ? error.message : 'Failed to load document';
-                setError(message);
                 toast({
                     title: "Error",
-                    description: message,
+                    description: "Failed to load document data",
                     variant: "destructive",
                 });
-            } finally {
-                setIsLoading(false);
+                router.push('/dashboard/documents');
             }
         };
 
-        initializePage();
+        loadData();
+    }, [fetchDocuments, loadAvailableTypes, router, toast]);
 
-        // Cleanup
-        return () => {
-            resetConfig();
-        };
-    }, [params.documentId, documents, setCurrentConfig, resetConfig, fetchDocuments, toast]);
+    const handleStartAnalysis = async () => {
+        if (!selectedType) {
+            toast({
+                description: "Please select an analysis type",
+                duration: 3000,
+            });
+            return;
+        }
 
-    const handleBack = () => {
-        router.push('/dashboard');
+        try {
+            setIsAnalyzing(true);
+
+            // Get default parameters for the selected type
+            const typeConfig = availableTypes.find(t => t.type === selectedType);
+            const defaultParams = typeConfig?.parameters || undefined;
+
+            await startAnalysis(documentId, {
+                analysis_type: selectedType,
+                parameters: defaultParams
+            });
+
+            toast({
+                description: "Analysis started successfully",
+                duration: 3000,
+            });
+
+            // Redirect to document details page
+            router.push(`/dashboard/documents/${documentId}`);
+        } catch (error) {
+            toast({
+                title: "Error",
+                description: "Failed to start analysis",
+                variant: "destructive",
+            });
+        } finally {
+            setIsAnalyzing(false);
+        }
     };
 
-    if (isLoading) {
+    if (isLoadingDocs || isLoadingAnalysis) {
         return (
             <div className="space-y-6">
                 <div className="flex items-center space-x-4">
@@ -88,35 +132,26 @@ export default function AnalysisPage({ params }: PageProps) {
                         <Skeleton className="h-4 w-[200px]" />
                     </div>
                 </div>
-                <Card>
-                    <CardContent className="p-6">
-                        <div className="space-y-4">
-                            <Skeleton className="h-4 w-full" />
-                            <Skeleton className="h-4 w-3/4" />
-                            <Skeleton className="h-4 w-1/2" />
-                        </div>
-                    </CardContent>
-                </Card>
             </div>
         );
     }
 
-    if (error || !document) {
+    if (!document) {
         return (
             <div className="space-y-6">
                 <Button
                     variant="ghost"
-                    onClick={handleBack}
+                    onClick={() => router.push('/dashboard/documents')}
                     className="gap-2"
                 >
                     <ArrowLeft className="h-4 w-4" />
-                    Back to Dashboard
+                    Back to Documents
                 </Button>
                 <Alert variant="destructive">
                     <AlertTriangle className="h-4 w-4" />
                     <AlertTitle>Error</AlertTitle>
                     <AlertDescription>
-                        {error || 'Document not found. Please try again or contact support if the issue persists.'}
+                        Document not found. Please try again or contact support if the issue persists.
                     </AlertDescription>
                 </Alert>
             </div>
@@ -128,43 +163,140 @@ export default function AnalysisPage({ params }: PageProps) {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3 }}
-            className="space-y-6"
+            className="container mx-auto p-6 max-w-7xl space-y-8"
         >
-            <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                        <Button
-                            variant="ghost"
-                            onClick={handleBack}
-                            className="gap-2"
-                        >
-                            <ArrowLeft className="h-4 w-4" />
-                            Back
-                        </Button>
-                        <h1 className="text-3xl font-bold">Analyze Document</h1>
-                    </div>
-                    <p className="text-muted-foreground">
-                        Configure analysis options for {document.name}
-                    </p>
-                </div>
-                <div className="flex items-center gap-2">
-                    <FileText className="h-5 w-5 text-muted-foreground" />
-                    <span className="text-sm text-muted-foreground">
-                        {(document.size / 1024 / 1024).toFixed(2)} MB • {document.type.toUpperCase()}
-                    </span>
-                </div>
+            {/* Header with Back Button */}
+            <div className="flex items-center gap-4">
+                <Button
+                    variant="ghost"
+                    onClick={() => router.push('/dashboard/documents')}
+                    className="gap-2"
+                >
+                    <ArrowLeft className="h-4 w-4" />
+                    Back to Documents
+                </Button>
             </div>
 
+            {/* Document Details Card */}
             <Card>
                 <CardHeader>
-                    <CardTitle>Analysis Configuration</CardTitle>
+                    <CardTitle className="flex items-center gap-2">
+                        <FileText className="h-5 w-5 text-primary" />
+                        Document Details
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                    <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                            <h3 className="font-medium text-lg">{document.name}</h3>
+                            <div className="flex items-center gap-2 text-muted-foreground">
+                                <Badge variant="secondary">{document.type.toUpperCase()}</Badge>
+                                <span>•</span>
+                                <span>{(document.size / 1024 / 1024).toFixed(2)} MB</span>
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <p className="text-sm text-muted-foreground">
+                                Uploaded on {new Date(document.uploaded_at).toLocaleDateString()}
+                            </p>
+                            {document.updated_at && (
+                                <p className="text-sm text-muted-foreground">
+                                    Last analyzed on {new Date(document.updated_at).toLocaleDateString()}
+                                </p>
+                            )}
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* Available Analysis Types */}
+            <Card>
+                <CardHeader>
+                    <CardTitle>Available Analysis Types</CardTitle>
                     <CardDescription>
-                        Select the types of analysis to perform on your document
+                        Select an analysis type to process your {document.type.toUpperCase()} document
                     </CardDescription>
                 </CardHeader>
-                <CardContent>
-                    <AnalysisWizard documentId={document.id} />
+                <CardContent className="grid gap-6 md:grid-cols-2">
+                    {supportedAnalysisTypes.length === 0 ? (
+                        <div className="md:col-span-2 text-center py-8">
+                            <AlertTriangle className="h-12 w-12 text-muted-foreground/50 mx-auto" />
+                            <h3 className="mt-4 text-lg font-semibold">No Supported Analysis Types</h3>
+                            <p className="text-muted-foreground">
+                                This document type does not support any analysis methods.
+                            </p>
+                        </div>
+                    ) : (
+                        supportedAnalysisTypes.map((type) => (
+                            <Card
+                                key={type.type}
+                                className={`cursor-pointer transition-colors hover:bg-muted/50 ${selectedType === type.type ? 'border-primary' : ''
+                                    }`}
+                                onClick={() => setSelectedType(type.type)}
+                            >
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2 text-lg">
+                                        {type.type === AnalysisType.TABLE_DETECTION ? (
+                                            <TableIcon className="h-5 w-5 text-primary" />
+                                        ) : type.type === AnalysisType.TEXT_EXTRACTION ? (
+                                            <FileText className="h-5 w-5 text-primary" />
+                                        ) : type.type === AnalysisType.TEXT_SUMMARIZATION ? (
+                                            <FileSearch className="h-5 w-5 text-primary" />
+                                        ) : (
+                                            <FileStack className="h-5 w-5 text-primary" />
+                                        )}
+                                        {type.name}
+                                    </CardTitle>
+                                    <CardDescription>{type.description}</CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="space-y-4">
+                                        <div>
+                                            <h4 className="text-sm font-medium mb-2">Features</h4>
+                                            <div className="space-y-2">
+                                                {Object.entries(type.parameters).map(([key]) => (
+                                                    <div key={key} className="flex items-center gap-2">
+                                                        <CheckCircle className="h-4 w-4 text-green-500" />
+                                                        <span className="text-sm">
+                                                            {key.split('_').map(word =>
+                                                                word.charAt(0).toUpperCase() + word.slice(1)
+                                                            ).join(' ')}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        ))
+                    )}
                 </CardContent>
+                <CardFooter className="flex justify-end">
+                    <Button
+                        size="lg"
+                        onClick={handleStartAnalysis}
+                        disabled={isAnalyzing || !selectedType || supportedAnalysisTypes.length === 0}
+                    >
+                        {isAnalyzing ? (
+                            <>
+                                <motion.div
+                                    animate={{ rotate: 360 }}
+                                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                                    className="mr-2"
+                                >
+                                    <Clock className="h-4 w-4" />
+                                </motion.div>
+                                Starting Analysis...
+                            </>
+                        ) : (
+                            <>
+                                Start Analysis
+                                <PlayCircle className="ml-2 h-4 w-4" />
+                            </>
+                        )}
+                    </Button>
+                </CardFooter>
             </Card>
         </motion.div>
     );
