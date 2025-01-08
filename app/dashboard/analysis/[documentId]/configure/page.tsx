@@ -114,6 +114,8 @@ export default function ConfigurePage({ params }: ConfigurePageProps) {
         try {
             setIsAnalyzing(true);
 
+            console.log(parameters);
+
             await startAnalysis(documentId, {
                 analysis_type: analysisType,
                 parameters: parameters as any
@@ -178,122 +180,167 @@ export default function ConfigurePage({ params }: ConfigurePageProps) {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3 }}
-            className="container mx-auto p-6 max-w-7xl space-y-8"
+            className="container mx-auto p-6 max-w-5xl space-y-8"
         >
-            {/* Header with Back Button */}
-            <div className="flex items-center gap-4">
-                <Button
-                    variant="ghost"
-                    onClick={() => router.back()}
-                    className="gap-2"
-                >
-                    <ArrowLeft className="h-4 w-4" />
-                    Back
-                </Button>
+            {/* Header */}
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                    <Button
+                        variant="ghost"
+                        onClick={() => router.back()}
+                        className="gap-2 hover:bg-primary/5"
+                    >
+                        <ArrowLeft className="h-4 w-4" />
+                        Back
+                    </Button>
+                </div>
+                <Badge variant="outline" className="px-3 py-1">
+                    {document.type.toUpperCase()}
+                </Badge>
             </div>
 
             {/* Analysis Configuration Card */}
-            <Card>
-                <CardHeader>
-                    <div className="flex items-center gap-4">
-                        <div className="p-2 rounded-lg bg-primary/10">
+            <Card className="border-2 shadow-lg">
+                <CardHeader className="border-b bg-muted/30">
+                    <div className="flex items-center gap-6">
+                        <div className="p-3 rounded-xl bg-primary/10 shadow-sm">
                             {analysisType === AnalysisType.TABLE_DETECTION ? (
-                                <TableIcon className="h-6 w-6 text-primary" />
+                                <TableIcon className="h-8 w-8 text-primary" />
                             ) : analysisType === AnalysisType.TEXT_EXTRACTION ? (
-                                <FileText className="h-6 w-6 text-primary" />
+                                <FileText className="h-8 w-8 text-primary" />
                             ) : analysisType === AnalysisType.TEXT_SUMMARIZATION ? (
-                                <FileSearch className="h-6 w-6 text-primary" />
+                                <FileSearch className="h-8 w-8 text-primary" />
                             ) : (
-                                <FileStack className="h-6 w-6 text-primary" />
+                                <FileStack className="h-8 w-8 text-primary" />
                             )}
                         </div>
-                        <div>
-                            <CardTitle>{typeConfig.name}</CardTitle>
-                            <CardDescription>{typeConfig.description}</CardDescription>
+                        <div className="space-y-1">
+                            <CardTitle className="text-2xl font-semibold">{typeConfig.name}</CardTitle>
+                            <CardDescription className="text-base">{typeConfig.description}</CardDescription>
                         </div>
                     </div>
                 </CardHeader>
-                <CardContent className="space-y-6">
-                    <div className="grid gap-6">
+                <CardContent className="p-8">
+                    <div className="grid gap-8">
                         {Object.entries(typeConfig.parameters).map(([key, param]) => (
-                            <div key={key} className="space-y-2">
-                                <Label className="capitalize">
+                            <div key={key} className="space-y-3 bg-muted/10 p-6 rounded-lg border">
+                                <Label className="text-lg font-medium">
                                     {key.split('_').map(word =>
                                         word.charAt(0).toUpperCase() + word.slice(1)
                                     ).join(' ')}
                                 </Label>
-                                {param.type === 'boolean' ? (
-                                    <Switch
-                                        checked={!!parameters[key]}
-                                        onCheckedChange={(checked) => handleParameterChange(key, checked)}
-                                    />
-                                ) : param.type === 'number' ? (
-                                    <div className="space-y-2">
-                                        <Slider
-                                            value={[Number(parameters[key] || param.default)]}
-                                            min={param.min}
-                                            max={param.max}
-                                            step={param.step || 1}
-                                            onValueChange={([value]) => handleParameterChange(key, value)}
-                                        />
-                                        <div className="flex justify-between text-xs text-muted-foreground">
-                                            <span>Min: {param.min}</span>
-                                            <span>Current: {String(parameters[key])}</span>
-                                            <span>Max: {param.max}</span>
+                                <div className="pt-2">
+                                    {param.type === 'boolean' ? (
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-sm text-muted-foreground">{param.description}</span>
+                                            <Switch
+                                                checked={!!parameters[key]}
+                                                onCheckedChange={(checked) => handleParameterChange(key, checked)}
+                                                className="data-[state=checked]:bg-primary"
+                                            />
                                         </div>
-                                    </div>
-                                ) : param.options ? (
-                                    <Select
-                                        value={String(parameters[key] || '')}
-                                        onValueChange={(value) => handleParameterChange(key, value)}
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Select an option" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {param.options.map((option: string) => (
-                                                <SelectItem key={option} value={option}>
-                                                    {option}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                ) : (
-                                    <Input
-                                        type={param.type}
-                                        value={String(parameters[key] || '')}
-                                        onChange={(e) => handleParameterChange(key, e.target.value)}
-                                        placeholder={`Enter ${key.split('_').join(' ')}`}
-                                    />
-                                )}
-                                <p className="text-sm text-muted-foreground">
-                                    {param.description}
-                                </p>
+                                    ) : param.type === 'number' ? (
+                                        <div className="space-y-4">
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-sm text-muted-foreground">{param.description}</span>
+                                                <div className="px-2 py-1 rounded-md bg-muted">
+                                                    <span className="text-sm font-medium">
+                                                        {parameters[key] !== undefined
+                                                            ? Number(parameters[key]).toFixed(2)
+                                                            : Number(param.default).toFixed(2)
+                                                        }
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div className="pt-2">
+                                                <Slider
+                                                    min={param.min}
+                                                    max={param.max}
+                                                    step={param.step || 0.01}
+                                                    value={[
+                                                        parameters[key] !== undefined
+                                                            ? Number(parameters[key])
+                                                            : Number(param.default)
+                                                    ]}
+                                                    onValueChange={([value]) => {
+                                                        handleParameterChange(key, Number(value));
+                                                    }}
+                                                    className="w-full"
+                                                />
+                                                <div className="flex justify-between mt-2">
+                                                    <span className="text-xs text-muted-foreground">Min: {param.min}</span>
+                                                    <span className="text-xs text-muted-foreground">Max: {param.max}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ) : param.options ? (
+                                        <div className="space-y-3">
+                                            <Select
+                                                value={String(parameters[key] || '')}
+                                                onValueChange={(value) => handleParameterChange(key, value)}
+                                            >
+                                                <SelectTrigger className="w-full">
+                                                    <SelectValue placeholder="Select an option" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {param.options.map((option: string) => (
+                                                        <SelectItem key={option} value={option}>
+                                                            {option}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                            <p className="text-sm text-muted-foreground">
+                                                {param.description}
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-3">
+                                            <Input
+                                                type={param.type}
+                                                value={String(parameters[key] || '')}
+                                                onChange={(e) => handleParameterChange(key, e.target.value)}
+                                                placeholder={`Enter ${key.split('_').join(' ')}`}
+                                                className="w-full"
+                                            />
+                                            <p className="text-sm text-muted-foreground">
+                                                {param.description}
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         ))}
                     </div>
                 </CardContent>
-                <CardFooter className="flex justify-end">
+                <CardFooter className="flex justify-end gap-4 border-t p-6 bg-muted/30">
+                    <Button
+                        variant="outline"
+                        onClick={() => router.back()}
+                        className="gap-2"
+                    >
+                        Cancel
+                    </Button>
                     <Button
                         size="lg"
                         onClick={handleStartAnalysis}
                         disabled={isAnalyzing}
+                        className="gap-2 min-w-[150px]"
                     >
                         {isAnalyzing ? (
                             <>
                                 <motion.div
                                     animate={{ rotate: 360 }}
                                     transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                                    className="mr-2"
                                 >
                                     <Clock className="h-4 w-4" />
                                 </motion.div>
-                                Starting Analysis...
+                                Processing...
                             </>
                         ) : (
                             <>
                                 Start Analysis
-                                <PlayCircle className="ml-2 h-4 w-4" />
+                                <PlayCircle className="h-4 w-4" />
                             </>
                         )}
                     </Button>
