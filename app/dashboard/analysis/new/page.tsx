@@ -26,13 +26,33 @@ export default function AnalysisSetupPage() {
     const [selectedAnalysisType, setSelectedAnalysisType] = useState<AnalysisType | null>(null);
     const [selectedMode, setSelectedMode] = useState<'automatic' | 'step_by_step' | null>(null);
 
-    const handleNext = () => {
+    const handleNext = async () => {
         if (currentStep === steps.length - 1) {
-            // Navigate to the appropriate page based on selected mode
-            const path = selectedMode === 'automatic'
-                ? `/dashboard/analysis/${selectedDocument?.id}/automatic`
-                : `/dashboard/analysis/${selectedDocument?.id}/step-by-step`;
-            router.push(path);
+            try {
+                if (!selectedDocument || !selectedAnalysisType || !selectedMode) {
+                    return;
+                }
+
+                // Save setup data to sessionStorage
+                const setupData = {
+                    selectedDocument,
+                    selectedAnalysisType,
+                    selectedMode
+                };
+                sessionStorage.setItem('analysis_setup', JSON.stringify(setupData));
+
+                // Navigate to the appropriate page based on selected mode
+                const path = selectedMode === 'automatic'
+                    ? `/dashboard/analysis/${selectedDocument.id}/automatic`
+                    : `/dashboard/analysis/${selectedDocument.id}/step-by-step`;
+                router.push(path);
+            } catch (error) {
+                toast({
+                    title: 'Error',
+                    description: error instanceof Error ? error.message : 'Failed to proceed with setup',
+                    variant: 'destructive'
+                });
+            }
             return;
         }
         setCurrentStep((prev) => prev + 1);
