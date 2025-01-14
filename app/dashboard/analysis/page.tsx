@@ -153,7 +153,7 @@ const RecentAnalysisCard = ({ document, analyses }: RecentAnalysisProps) => {
                                     <div
                                         key={analysis.id}
                                         className="flex items-center justify-between p-2 rounded-md bg-muted/50 hover:bg-muted cursor-pointer"
-                                        onClick={() => router.push(`/dashboard/analysis/${document.id}/results/${analysis.id}`)}
+                                        onClick={() => router.push(`/dashboard/analysis/${document.id}/${analysis.id}/results`)}
                                     >
                                         <div className="flex items-center gap-2">
                                             {analysis.status === AnalysisStatus.COMPLETED ? (

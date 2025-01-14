@@ -147,7 +147,8 @@ export default function AutomaticModePage({ params }: AutomaticModePageProps) {
             // Clear the setup data after successful start
             sessionStorage.removeItem('analysis_setup');
 
-            router.push(`/dashboard/analysis/${documentId}`);
+            // Navigate to results page with both documentId and analysisId
+            router.push(`/dashboard/analysis/${documentId}/${currentAnalysis?.id}/results`);
             toast({
                 title: 'Analysis Started',
                 description: 'Your analysis has been started successfully.',

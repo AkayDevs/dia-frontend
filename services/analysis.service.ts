@@ -9,6 +9,7 @@ import {
     Algorithm,
     AnalysisListParams
 } from '@/types/analysis';
+import { fetchWithAuth } from '@/lib/fetch';
 
 class AnalysisService {
     private baseUrl = `${API_URL}${API_VERSION}/analysis`;
@@ -175,6 +176,34 @@ class AnalysisService {
         });
 
         return this.handleResponse<Analysis[]>(response);
+    }
+
+    async exportResults(analysisId: string, format: 'json' | 'csv'): Promise<Blob> {
+        const response = await fetchWithAuth(
+            `${API_URL}/analysis/${analysisId}/export?format=${format}`,
+            {
+                method: 'GET',
+            }
+        );
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to export results');
+        }
+
+        return response.blob();
+    }
+
+    async downloadExport(analysisId: string, format: 'json' | 'csv'): Promise<void> {
+        const blob = await this.exportResults(analysisId, format);
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `analysis_${analysisId}_results.${format}`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
     }
 }
 
