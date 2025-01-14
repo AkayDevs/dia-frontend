@@ -1,17 +1,17 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { useToast } from '@/hooks/use-toast';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useDocumentStore } from '@/store/useDocumentStore';
-import { AnalysisStatus } from '@/types/document';
+import { AnalysisStatus, Analysis } from '@/types/analysis';
+import { Document } from '@/types/document';
 import {
     DocumentIcon,
     ChartBarIcon,
@@ -33,6 +33,7 @@ interface NavItem {
     icon: React.ElementType;
     badge?: string;
     description?: string;
+    showProcessingCount?: boolean;
 }
 
 const navItems: NavItem[] = [
@@ -46,7 +47,8 @@ const navItems: NavItem[] = [
         title: 'Documents',
         href: '/dashboard/documents',
         icon: DocumentTextIcon,
-        description: 'Manage your documents'
+        description: 'Manage your documents',
+        showProcessingCount: true
     },
     {
         title: 'Analysis',
@@ -78,7 +80,7 @@ const navItems: NavItem[] = [
         icon: Cog6ToothIcon,
         description: 'Configure your preferences'
     }
-];
+] as const;
 
 interface SidebarProps {
     className?: string;
@@ -90,72 +92,71 @@ export function Sidebar({ className }: SidebarProps) {
     const { toast } = useToast();
     const { user, logout } = useAuthStore();
     const {
-        documents = [],
+        documents,
+        isLoading,
+        error,
         fetchDocuments,
-        setFilters,
-        getProcessingDocuments
     } = useDocumentStore();
+
     const [isMobile, setIsMobile] = useState(false);
     const [isOpen, setIsOpen] = useState(false);
-    const [processingCount, setProcessingCount] = useState(0);
     const [isMounted, setIsMounted] = useState(false);
 
+    // Calculate processing documents count
+    const processingCount = useMemo(() => {
+        if (!documents) return 0;
+        return (documents as Array<Document & { analyses?: Analysis[] }>).filter(doc =>
+            doc.analyses?.some(analysis => analysis.status === AnalysisStatus.PROCESSING)
+        ).length;
+    }, [documents]);
+
+    // Handle window resize
+    useEffect(() => {
+        const checkMobile = () => setIsMobile(window.innerWidth < 768);
+        checkMobile();
+
+        const debouncedResize = debounce(checkMobile, 100);
+        window.addEventListener('resize', debouncedResize);
+        return () => window.removeEventListener('resize', debouncedResize);
+    }, []);
+
+    // Component mount handling
     useEffect(() => {
         setIsMounted(true);
         return () => setIsMounted(false);
     }, []);
 
-    useEffect(() => {
-        const checkMobile = () => {
-            setIsMobile(window.innerWidth < 768);
-        };
-
-        checkMobile();
-        window.addEventListener('resize', checkMobile);
-
-        return () => window.removeEventListener('resize', checkMobile);
-    }, []);
-
-    useEffect(() => {
-        const updateProcessingCount = async () => {
-            try {
-                await fetchDocuments();
-                const processingDocs = getProcessingDocuments();
-                setProcessingCount(processingDocs.length);
-            } catch (error) {
-                console.error('Error fetching processing documents:', error);
-                // Handle rate limiting specifically
-                if (error instanceof Error && error.message.includes('Too many requests')) {
+    // Fetch documents and handle errors
+    const updateDocuments = useCallback(async () => {
+        try {
+            await fetchDocuments();
+        } catch (error) {
+            if (error instanceof Error) {
+                if (error.message.includes('Too many requests')) {
                     toast({
                         title: "Rate Limited",
                         description: "Please wait a moment before refreshing",
                         variant: "destructive",
                     });
-                    return;
-                }
-                // Handle authentication errors
-                if (error instanceof Error &&
-                    (error.message.includes('Could not validate credentials') ||
-                        error.message.includes('No authentication token found'))) {
+                } else if (error.message.includes('authentication')) {
                     handleLogout();
                 }
-                setProcessingCount(0);
             }
-        };
-
-        if (isMounted) {
-            updateProcessingCount();
-            // Refresh processing count every 2 minutes
-            const interval = setInterval(() => {
-                updateProcessingCount();
-            }, 120000);
-            return () => clearInterval(interval);
         }
-    }, [isMounted]);
+    }, [fetchDocuments, toast]);
+
+    // Periodic document updates
+    useEffect(() => {
+        if (!isMounted) return;
+
+        updateDocuments();
+        const interval = setInterval(updateDocuments, 120000); // 2 minutes
+        return () => clearInterval(interval);
+    }, [isMounted, updateDocuments]);
 
     const handleLogout = async () => {
         try {
-            logout();
+            await logout();
             toast({
                 description: "Logged out successfully",
                 duration: 2000,
@@ -168,6 +169,61 @@ export function Sidebar({ className }: SidebarProps) {
                 variant: "destructive",
             });
         }
+    };
+
+    // Debounce helper function
+    function debounce(fn: Function, ms: number) {
+        let timer: NodeJS.Timeout;
+        return function (this: any, ...args: any[]) {
+            clearTimeout(timer);
+            timer = setTimeout(() => fn.apply(this, args), ms);
+        };
+    }
+
+    const NavLink = ({ item }: { item: NavItem }) => {
+        const isActive = pathname === item.href;
+        const Icon = item.icon;
+
+        return (
+            <Link
+                href={item.href}
+                className={cn(
+                    'group flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium',
+                    'transition-all duration-200 ease-in-out',
+                    'hover:bg-muted/80 hover:shadow-sm',
+                    isActive
+                        ? 'bg-primary text-primary-foreground shadow-sm shadow-primary/20'
+                        : 'text-muted-foreground hover:text-foreground'
+                )}
+                onClick={() => setIsOpen(false)}
+            >
+                <div className={cn(
+                    'p-1 rounded-md transition-colors duration-200',
+                    isActive ? 'bg-primary-foreground/10' : 'bg-background/50 group-hover:bg-background'
+                )}>
+                    <Icon className="h-4 w-4" />
+                </div>
+                <div className="flex-1">
+                    <div>{item.title}</div>
+                    {item.description && (
+                        <div className="text-xs text-muted-foreground/70 font-normal">
+                            {item.description}
+                        </div>
+                    )}
+                </div>
+                {item.showProcessingCount && processingCount > 0 && (
+                    <Badge
+                        variant="secondary"
+                        className="ml-auto px-2 py-0.5 bg-primary/10 text-primary hover:bg-primary/15"
+                    >
+                        {processingCount}
+                    </Badge>
+                )}
+                {isActive && (
+                    <ChevronRightIcon className="ml-auto h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />
+                )}
+            </Link>
+        );
     };
 
     const SidebarContent = () => (
@@ -186,53 +242,9 @@ export function Sidebar({ className }: SidebarProps) {
 
             <ScrollArea className="flex-1 h-[calc(100vh-5rem)] w-full">
                 <div className="space-y-1 p-4">
-                    {navItems.map((item) => {
-                        const isActive = pathname === item.href;
-                        const Icon = item.icon;
-
-                        return (
-                            <Link
-                                key={item.href}
-                                href={item.href}
-                                className={`
-                                    group flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium
-                                    transition-all duration-200 ease-in-out
-                                    hover:bg-muted/80 hover:shadow-sm
-                                    ${isActive
-                                        ? 'bg-primary text-primary-foreground shadow-sm shadow-primary/20'
-                                        : 'text-muted-foreground hover:text-foreground'
-                                    }
-                                `}
-                                onClick={() => setIsOpen(false)}
-                            >
-                                <div className={`
-                                    p-1 rounded-md transition-colors duration-200
-                                    ${isActive ? 'bg-primary-foreground/10' : 'bg-background/50 group-hover:bg-background'}
-                                `}>
-                                    <Icon className="h-4 w-4" />
-                                </div>
-                                <div className="flex-1">
-                                    <div>{item.title}</div>
-                                    {item.description && (
-                                        <div className="text-xs text-muted-foreground/70 font-normal">
-                                            {item.description}
-                                        </div>
-                                    )}
-                                </div>
-                                {(item.title === 'Documents') && processingCount > 0 && (
-                                    <Badge
-                                        variant="secondary"
-                                        className="ml-auto px-2 py-0.5 bg-primary/10 text-primary hover:bg-primary/15"
-                                    >
-                                        {processingCount}
-                                    </Badge>
-                                )}
-                                {isActive && (
-                                    <ChevronRightIcon className="ml-auto h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                )}
-                            </Link>
-                        );
-                    })}
+                    {navItems.map((item) => (
+                        <NavLink key={item.href} item={item} />
+                    ))}
                 </div>
             </ScrollArea>
 
