@@ -193,7 +193,7 @@ class DocumentService {
         const response = await fetch(`${this.baseUrl}/${documentId}/tags`, {
             method: 'PUT',
             headers: this.getHeaders(),
-            body: JSON.stringify({ tag_ids: tagIds }),
+            body: JSON.stringify(tagIds)
         });
 
         return this.handleResponse<Document>(response);

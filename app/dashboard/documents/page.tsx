@@ -50,10 +50,24 @@ import {
     ArrowUpTrayIcon,
     ChartBarIcon,
     FolderIcon,
+    TagIcon,
+    PlusIcon,
+    XMarkIcon,
+    CheckIcon,
 } from '@heroicons/react/24/outline';
 import { CalendarIcon } from 'lucide-react';
 import { format, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
 import { cn } from '@/lib/utils';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -123,6 +137,11 @@ export default function DocumentsPage() {
         from: undefined,
         to: undefined
     });
+    const [tagFilter, setTagFilter] = useState<number | 'ALL'>('ALL');
+    const [isTagDialogOpen, setIsTagDialogOpen] = useState(false);
+    const [newTagName, setNewTagName] = useState('');
+    const [selectedDocumentForTags, setSelectedDocumentForTags] = useState<string | null>(null);
+    const [selectedTags, setSelectedTags] = useState<Set<number>>(new Set());
 
     const {
         documents = [],
@@ -130,7 +149,13 @@ export default function DocumentsPage() {
         error: documentError,
         fetchDocuments,
         deleteDocument,
-        setFilters
+        setFilters,
+        tags = [],
+        isLoadingTags,
+        tagError,
+        fetchTags,
+        createTag,
+        updateDocumentTags,
     } = useDocumentStore();
 
     const {
@@ -169,6 +194,13 @@ export default function DocumentsPage() {
         }
     }, [isAuthenticated, currentPage, statusFilter, typeFilter]);
 
+    // Add tag initialization
+    useEffect(() => {
+        if (isAuthenticated) {
+            fetchTags();
+        }
+    }, [isAuthenticated]);
+
     // Filter documents based on search, filters, and date range
     const filteredDocuments = useMemo(() => {
         return documents.filter(doc => {
@@ -176,16 +208,16 @@ export default function DocumentsPage() {
             const documentStatus = documentAnalysisStatus.get(doc.id) || AnalysisStatus.PENDING;
             const matchesStatus = statusFilter === 'ALL' || documentStatus === statusFilter;
             const matchesType = typeFilter === 'ALL' || doc.type === typeFilter;
+            const matchesTag = tagFilter === 'ALL' || doc.tags.some(tag => tag.id === tagFilter);
 
-            // Date range filter
             const matchesDateRange = !dateRange.from || !dateRange.to || isWithinInterval(
                 new Date(doc.uploaded_at),
                 { start: startOfDay(dateRange.from), end: endOfDay(dateRange.to) }
             );
 
-            return matchesSearch && matchesStatus && matchesType && matchesDateRange;
+            return matchesSearch && matchesStatus && matchesType && matchesTag && matchesDateRange;
         });
-    }, [documents, searchQuery, statusFilter, typeFilter, dateRange, documentAnalysisStatus]);
+    }, [documents, searchQuery, statusFilter, typeFilter, tagFilter, dateRange, documentAnalysisStatus]);
 
     const handleError = (error: any) => {
         const message = error instanceof Error ? error.message : 'An error occurred';
@@ -252,6 +284,33 @@ export default function DocumentsPage() {
             setSelectedDocuments(new Set());
         } else {
             setSelectedDocuments(new Set(filteredDocuments.map(d => d.id)));
+        }
+    };
+
+    const handleCreateTag = async () => {
+        if (!newTagName.trim()) return;
+
+        try {
+            await createTag({ name: newTagName.trim() });
+            setNewTagName('');
+            toast({
+                description: "Tag created successfully",
+                duration: 3000,
+            });
+        } catch (error) {
+            handleError(error);
+        }
+    };
+
+    const handleUpdateDocumentTags = async (documentId: string, tagIds: number[]) => {
+        try {
+            await updateDocumentTags(documentId, tagIds);
+            toast({
+                description: "Document tags updated successfully",
+                duration: 3000,
+            });
+        } catch (error) {
+            handleError(error);
         }
     };
 
@@ -325,6 +384,22 @@ export default function DocumentsPage() {
                                 <SelectItem value={DocumentType.DOCX}>DOCX</SelectItem>
                                 <SelectItem value={DocumentType.XLSX}>XLSX</SelectItem>
                                 <SelectItem value={DocumentType.IMAGE}>Image</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <Select
+                            value={tagFilter.toString()}
+                            onValueChange={(value) => setTagFilter(value === 'ALL' ? 'ALL' : parseInt(value))}
+                        >
+                            <SelectTrigger className="w-full md:w-[200px]">
+                                <SelectValue placeholder="Filter by tag" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="ALL">All Tags</SelectItem>
+                                {tags.map((tag) => (
+                                    <SelectItem key={tag.id} value={tag.id.toString()}>
+                                        {tag.name}
+                                    </SelectItem>
+                                ))}
                             </SelectContent>
                         </Select>
                         <Popover>
@@ -402,6 +477,48 @@ export default function DocumentsPage() {
                                 </div>
                             </PopoverContent>
                         </Popover>
+
+                        {/* Tag Management Dialog */}
+                        <Dialog open={isTagDialogOpen} onOpenChange={setIsTagDialogOpen}>
+                            <DialogTrigger asChild>
+                                <Button variant="outline" size="icon">
+                                    <TagIcon className="h-4 w-4" />
+                                </Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                                <DialogHeader>
+                                    <DialogTitle>Manage Tags</DialogTitle>
+                                    <DialogDescription>
+                                        Create and manage tags for your documents.
+                                    </DialogDescription>
+                                </DialogHeader>
+                                <div className="space-y-4">
+                                    <div className="flex items-center gap-2">
+                                        <Input
+                                            placeholder="New tag name..."
+                                            value={newTagName}
+                                            onChange={(e) => setNewTagName(e.target.value)}
+                                        />
+                                        <Button onClick={handleCreateTag} disabled={!newTagName.trim()}>
+                                            <PlusIcon className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                    <div className="space-y-2">
+                                        {tags.map((tag) => (
+                                            <div
+                                                key={tag.id}
+                                                className="flex items-center justify-between p-2 bg-muted rounded-md"
+                                            >
+                                                <span>{tag.name}</span>
+                                                <span className="text-xs text-muted-foreground">
+                                                    Created {formatDistanceToNow(new Date(tag.created_at), { addSuffix: true })}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </DialogContent>
+                        </Dialog>
                     </div>
 
                     {/* Batch Actions */}
@@ -465,6 +582,7 @@ export default function DocumentsPage() {
                                         <TableHead>Type</TableHead>
                                         <TableHead>Status</TableHead>
                                         <TableHead>Last Updated</TableHead>
+                                        <TableHead>Tags</TableHead>
                                         <TableHead className="text-right">Actions</TableHead>
                                     </TableRow>
                                 </TableHeader>
@@ -501,6 +619,19 @@ export default function DocumentsPage() {
                                                     ? formatDistanceToNow(new Date(document.updated_at), { addSuffix: true })
                                                     : 'Never'}
                                             </TableCell>
+                                            <TableCell>
+                                                <div className="flex flex-wrap gap-1">
+                                                    {document.tags.map((tag) => (
+                                                        <Badge
+                                                            key={tag.id}
+                                                            variant="secondary"
+                                                            className="text-xs"
+                                                        >
+                                                            {tag.name}
+                                                        </Badge>
+                                                    ))}
+                                                </div>
+                                            </TableCell>
                                             <TableCell className="text-right">
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild>
@@ -530,6 +661,15 @@ export default function DocumentsPage() {
                                                         >
                                                             <TrashIcon className="mr-2 h-4 w-4" />
                                                             Delete
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem
+                                                            onClick={() => {
+                                                                setSelectedDocumentForTags(document.id);
+                                                                setSelectedTags(new Set(document.tags.map(t => t.id)));
+                                                            }}
+                                                        >
+                                                            <TagIcon className="mr-2 h-4 w-4" />
+                                                            Manage Tags
                                                         </DropdownMenuItem>
                                                     </DropdownMenuContent>
                                                 </DropdownMenu>
@@ -567,6 +707,65 @@ export default function DocumentsPage() {
                             </div>
                         </div>
                     )}
+
+                    {/* Document Tags Dialog */}
+                    <Dialog
+                        open={!!selectedDocumentForTags}
+                        onOpenChange={(open) => !open && setSelectedDocumentForTags(null)}
+                    >
+                        <DialogContent>
+                            <DialogHeader>
+                                <DialogTitle>Manage Document Tags</DialogTitle>
+                                <DialogDescription>
+                                    Select tags for this document
+                                </DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-4">
+                                <div className="grid grid-cols-2 gap-2">
+                                    {tags.map((tag) => (
+                                        <div
+                                            key={tag.id}
+                                            className={cn(
+                                                "flex items-center justify-between p-2 rounded-md cursor-pointer transition-colors",
+                                                selectedTags.has(tag.id)
+                                                    ? "bg-primary text-primary-foreground"
+                                                    : "bg-muted hover:bg-muted/80"
+                                            )}
+                                            onClick={() => {
+                                                const newSelectedTags = new Set(selectedTags);
+                                                if (newSelectedTags.has(tag.id)) {
+                                                    newSelectedTags.delete(tag.id);
+                                                } else {
+                                                    newSelectedTags.add(tag.id);
+                                                }
+                                                setSelectedTags(newSelectedTags);
+                                            }}
+                                        >
+                                            <span>{tag.name}</span>
+                                            {selectedTags.has(tag.id) && (
+                                                <CheckIcon className="h-4 w-4" />
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                            <DialogFooter>
+                                <Button
+                                    onClick={() => {
+                                        if (selectedDocumentForTags) {
+                                            handleUpdateDocumentTags(
+                                                selectedDocumentForTags,
+                                                Array.from(selectedTags)
+                                            );
+                                            setSelectedDocumentForTags(null);
+                                        }
+                                    }}
+                                >
+                                    Save Changes
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
                 </div>
             </Card>
         </>
