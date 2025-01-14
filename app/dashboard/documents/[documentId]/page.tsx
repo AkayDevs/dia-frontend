@@ -406,24 +406,47 @@ export default function DocumentPage({ params }: DocumentPageProps) {
                         <TabsContent value="overview" className="space-y-6">
                             <div className="grid gap-4 md:grid-cols-3">
                                 <Card className="p-4">
-                                    <h4 className="text-sm font-medium text-muted-foreground mb-2">Word Count</h4>
-                                    <p className="text-2xl font-bold">{currentDocument.metadata?.wordCount || 'N/A'}</p>
+                                    <h4 className="text-sm font-medium text-muted-foreground mb-2">File Size</h4>
+                                    <p className="text-2xl font-bold">{(currentDocument.size / 1024 / 1024).toFixed(2)} MB</p>
                                 </Card>
                                 <Card className="p-4">
                                     <h4 className="text-sm font-medium text-muted-foreground mb-2">Pages</h4>
-                                    <p className="text-2xl font-bold">{currentDocument.metadata?.pageCount || 'N/A'}</p>
+                                    <p className="text-2xl font-bold">
+                                        {currentDocument.type === DocumentType.PDF || currentDocument.type === DocumentType.DOCX ?
+                                            currentDocument.metadata?.pageCount || '1' :
+                                            '1'
+                                        }
+                                    </p>
                                 </Card>
                                 <Card className="p-4">
-                                    <h4 className="text-sm font-medium text-muted-foreground mb-2">Characters</h4>
-                                    <p className="text-2xl font-bold">{currentDocument.metadata?.characterCount || 'N/A'}</p>
+                                    <h4 className="text-sm font-medium text-muted-foreground mb-2">Last Modified</h4>
+                                    <p className="text-2xl font-bold">
+                                        {currentDocument.updated_at ?
+                                            formatDistanceToNow(new Date(currentDocument.updated_at), { addSuffix: true }) :
+                                            'Recently'
+                                        }
+                                    </p>
                                 </Card>
                             </div>
 
                             <Card className="p-4">
-                                <h4 className="text-sm font-medium text-muted-foreground mb-4">Quick Summary</h4>
-                                <p className="text-sm text-muted-foreground">
-                                    {currentDocument.metadata?.summary || 'No summary available. Start an analysis to generate insights about this document.'}
-                                </p>
+                                <h4 className="text-sm font-medium text-muted-foreground mb-4">Document Details</h4>
+                                <div className="space-y-4">
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-sm text-muted-foreground">File Type</span>
+                                        <span className="text-sm font-medium">{currentDocument.type}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-sm text-muted-foreground">Upload Date</span>
+                                        <span className="text-sm font-medium">{formatDate(currentDocument.uploaded_at)}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-sm text-muted-foreground">Status</span>
+                                        <span className="text-sm font-medium">
+                                            {currentDocument.is_archived ? 'Archived' : 'Active'}
+                                        </span>
+                                    </div>
+                                </div>
                             </Card>
                         </TabsContent>
 
