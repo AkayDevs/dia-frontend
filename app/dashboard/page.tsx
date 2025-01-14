@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,7 +11,8 @@ import { UploadHandler } from '@/components/ui/upload-handler';
 import { useDocumentStore } from '@/store/useDocumentStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useAnalysisStore } from '@/store/useAnalysisStore';
-import { AnalysisType, AnalysisStatus } from '@/types/analysis';
+import { AnalysisTypeEnum, AnalysisStatus, Analysis, AnalysisType } from '@/types/analysis';
+import { Document, DocumentWithAnalysis } from '@/types/document';
 import { motion } from 'framer-motion';
 import {
     DocumentIcon,
@@ -24,6 +25,16 @@ import {
 import { formatDistanceToNow } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 
+interface OngoingAnalysis {
+    documentName: string;
+    type: string;
+    startedAt: string;
+}
+
+interface DashboardAnalysis extends Analysis {
+    type: string;
+}
+
 interface DashboardStats {
     // Document stats
     totalDocuments: number;
@@ -35,24 +46,14 @@ interface DashboardStats {
     analysisSuccessRate: number;
     ongoingAnalyses: {
         count: number;
-        items: Array<{
-            documentName: string;
-            type: string;
-            startedAt: string;
-        }>;
+        items: OngoingAnalysis[];
     };
     mostUsedAnalysisType: {
         type: string;
         count: number;
     };
     averageAnalysisTime: number;
-    analyses: Array<{
-        document_id: string;
-        type: string;
-        status: string;
-        created_at: string;
-        completed_at?: string;
-    }>;
+    analyses: DashboardAnalysis[];
 }
 
 const initialStats: DashboardStats = {
@@ -78,60 +79,63 @@ export default function DashboardPage() {
     const { toast } = useToast();
     const { isAuthenticated, user, logout } = useAuthStore();
     const {
-        documents = [],
+        documents,
         isLoading: isLoadingDocs,
         error: docError,
         fetchDocuments,
         uploadDocument,
         uploadDocuments,
         deleteDocument,
-        setFilters: setDocFilters,
+        setFilters,
         clearError: clearDocError
     } = useDocumentStore();
 
     const {
-        analyses = [],
-        availableTypes = [],
+        analyses,
         isLoading: isLoadingAnalyses,
         error: analysisError,
-        fetchAnalyses,
-        loadAvailableTypes
+        fetchUserAnalyses,
+        analysisTypes,
+        fetchAnalysisTypes
     } = useAnalysisStore();
 
     // Initialize dashboard with recent documents and analyses
     useEffect(() => {
-        if (isAuthenticated) {
-            setDocFilters({ limit: 5 }); // Show only 5 recent documents
-            const loadData = async () => {
-                try {
-                    await Promise.all([
-                        fetchDocuments(),
-                        fetchAnalyses(),
-                        loadAvailableTypes()
-                    ]);
-                } catch (error) {
-                    if (error instanceof Error && error.message.includes('authentication')) {
-                        logout();
-                        router.push('/login');
-                    }
+        if (!isAuthenticated) return;
+
+        setFilters({ limit: 5 }); // Show only 5 recent documents
+        const loadData = async () => {
+            try {
+                await Promise.all([
+                    fetchDocuments(),
+                    fetchUserAnalyses({ limit: 100 }), // Fetch recent analyses
+                    fetchAnalysisTypes()
+                ]);
+            } catch (error) {
+                if (error instanceof Error && error.message.includes('authentication')) {
+                    logout();
+                    router.push('/login');
                 }
-            };
-            loadData();
-        }
-    }, [isAuthenticated, setDocFilters, fetchDocuments, fetchAnalyses, loadAvailableTypes, logout, router]);
+            }
+        };
+        loadData();
+    }, [isAuthenticated, setFilters, fetchDocuments, fetchUserAnalyses, fetchAnalysisTypes, logout, router]);
 
     // Calculate dashboard stats from documents and analyses
-    const calculateStats = (): DashboardStats => {
+    const stats = useMemo((): DashboardStats => {
         if (!Array.isArray(documents) || !Array.isArray(analyses)) {
             return initialStats;
         }
 
+        const typedDocuments = documents as Array<DocumentWithAnalysis>;
+
         // Calculate document-related stats
-        const docStats = documents.reduce((stats, doc) => {
+        const docStats = typedDocuments.reduce((stats, doc) => {
             stats.totalDocuments += 1;
-            if (doc.status === 'completed') {
+            if (doc.analyses?.some(a => a.status === AnalysisStatus.COMPLETED)) {
                 stats.analyzedDocuments += 1;
-            } else if (doc.status === 'failed') {
+            }
+            if (doc.analyses?.some(a => a.status === AnalysisStatus.FAILED)) {
                 stats.failedAnalyses += 1;
             }
             return stats;
@@ -140,7 +144,15 @@ export default function DashboardPage() {
         // Calculate analysis-related stats
         const analysisStats = analyses.reduce((stats, analysis) => {
             stats.totalAnalyses += 1;
-            stats.analyses = analyses;
+            const analysisType = analysisTypes?.find(type => type.id === analysis.analysis_type_id);
+
+            // Add analysis with type information
+            if (analysisType) {
+                stats.analyses.push({
+                    ...analysis,
+                    type: analysisType.name
+                });
+            }
 
             // Calculate success rate
             if (analysis.status === AnalysisStatus.COMPLETED) {
@@ -148,11 +160,11 @@ export default function DashboardPage() {
             } else if (analysis.status === AnalysisStatus.FAILED) {
                 stats.failedAnalyses += 1;
             } else if (analysis.status === AnalysisStatus.PROCESSING) {
-                const document = documents.find(doc => doc.id === analysis.document_id);
-                if (document) {
+                const document = typedDocuments.find(doc => doc.id === analysis.document_id);
+                if (document && analysisType) {
                     stats.ongoingAnalyses.items.push({
                         documentName: document.name,
-                        type: analysis.type,
+                        type: analysisType.name,
                         startedAt: analysis.created_at
                     });
                 }
@@ -160,18 +172,20 @@ export default function DashboardPage() {
             }
 
             // Track analysis types usage
-            const currentTypeCount = analyses.filter(a => a.type === analysis.type).length;
-            if (currentTypeCount > stats.mostUsedAnalysisType.count) {
-                stats.mostUsedAnalysisType = {
-                    type: analysis.type,
-                    count: currentTypeCount
-                };
+            if (analysisType) {
+                const currentTypeCount = analyses.filter(a => a.analysis_type_id === analysis.analysis_type_id).length;
+                if (currentTypeCount > stats.mostUsedAnalysisType.count) {
+                    stats.mostUsedAnalysisType = {
+                        type: analysisType.name,
+                        count: currentTypeCount
+                    };
+                }
             }
 
             return stats;
         }, docStats);
 
-        // Calculate average duration separately for better clarity
+        // Calculate average duration for completed analyses
         const completedAnalyses = analyses.filter(a =>
             a.status === AnalysisStatus.COMPLETED &&
             a.completed_at &&
@@ -185,8 +199,6 @@ export default function DashboardPage() {
                 return total + ((endTime - startTime) / (1000 * 60)); // Convert to minutes
             }, 0);
             analysisStats.averageAnalysisTime = totalDuration / completedAnalyses.length;
-        } else {
-            analysisStats.averageAnalysisTime = -1; // Use -1 to indicate no completed analyses
         }
 
         // Finalize success rate calculation
@@ -195,9 +207,9 @@ export default function DashboardPage() {
         }
 
         return analysisStats;
-    };
+    }, [documents, analyses, analysisTypes]);
 
-    const handleUploadSuccess = async (file: File) => {
+    const handleUploadSuccess = useCallback(async (file: File) => {
         try {
             await uploadDocument(file);
             toast({
@@ -207,9 +219,9 @@ export default function DashboardPage() {
         } catch (error) {
             handleError(error);
         }
-    };
+    }, [uploadDocument, toast]);
 
-    const handleBatchUpload = async (files: File[]) => {
+    const handleBatchUpload = useCallback(async (files: File[]) => {
         try {
             await uploadDocuments(files);
             toast({
@@ -219,9 +231,9 @@ export default function DashboardPage() {
         } catch (error) {
             handleError(error);
         }
-    };
+    }, [uploadDocuments, toast]);
 
-    const handleDeleteDocument = async (documentId: string) => {
+    const handleDeleteDocument = useCallback(async (documentId: string) => {
         try {
             await deleteDocument(documentId);
             toast({
@@ -231,9 +243,9 @@ export default function DashboardPage() {
         } catch (error) {
             handleError(error);
         }
-    };
+    }, [deleteDocument, toast]);
 
-    const handleError = (error: any) => {
+    const handleError = useCallback((error: unknown) => {
         const message = error instanceof Error ? error.message : 'An error occurred';
 
         if (message.includes('authentication')) {
@@ -252,7 +264,7 @@ export default function DashboardPage() {
             description: message,
             variant: "destructive",
         });
-    };
+    }, [logout, router, toast]);
 
     if (isLoadingDocs || isLoadingAnalyses) {
         return (
@@ -267,7 +279,6 @@ export default function DashboardPage() {
     }
 
     const error = docError || analysisError;
-    const stats = calculateStats();
 
     return (
         <div className="space-y-8">

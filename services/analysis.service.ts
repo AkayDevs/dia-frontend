@@ -6,7 +6,8 @@ import {
     AnalysisRequest,
     AnalysisStepResult,
     StepExecutionRequest,
-    Algorithm
+    Algorithm,
+    AnalysisListParams
 } from '@/types/analysis';
 
 class AnalysisService {
@@ -99,7 +100,6 @@ class AnalysisService {
         const response = await fetch(`${this.baseUrl}/documents/${documentId}/analyses`, {
             headers: this.getHeaders(),
         });
-
         return this.handleResponse<Analysis[]>(response);
     }
 
@@ -152,6 +152,29 @@ class AnalysisService {
         );
 
         return this.handleResponse<AnalysisStepResult>(response);
+    }
+
+    /**
+     * Get all analyses for the current user with optional filters
+     */
+    async getUserAnalyses(params?: AnalysisListParams): Promise<Analysis[]> {
+        const queryParams = new URLSearchParams();
+        if (params) {
+            if (params.status) queryParams.append('status', params.status);
+            if (params.analysis_type_id) queryParams.append('analysis_type_id', params.analysis_type_id);
+            if (params.document_type) queryParams.append('document_type', params.document_type);
+            if (params.start_date) queryParams.append('start_date', params.start_date.toISOString());
+            if (params.end_date) queryParams.append('end_date', params.end_date.toISOString());
+            if (params.skip) queryParams.append('skip', params.skip.toString());
+            if (params.limit) queryParams.append('limit', params.limit.toString());
+        }
+
+        const url = `${this.baseUrl}/user/analyses${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+        const response = await fetch(url, {
+            headers: this.getHeaders(),
+        });
+
+        return this.handleResponse<Analysis[]>(response);
     }
 }
 

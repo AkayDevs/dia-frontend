@@ -148,8 +148,11 @@ export interface StepExecutionRequest {
  * Analysis list parameters
  */
 export interface AnalysisListParams {
-    document_id?: string;
     status?: AnalysisStatus;
+    analysis_type_id?: string;
+    document_type?: DocumentType;
+    start_date?: Date;
+    end_date?: Date;
     skip?: number;
     limit?: number;
 }

@@ -7,7 +7,8 @@ import {
     AnalysisStepResult,
     StepExecutionRequest,
     Algorithm,
-    AnalysisStatus
+    AnalysisStatus,
+    AnalysisListParams
 } from '@/types/analysis';
 
 interface AnalysisState {
@@ -32,6 +33,7 @@ interface AnalysisState {
     // Methods for analysis operations
     startAnalysis: (documentId: string, request: AnalysisRequest) => Promise<void>;
     fetchDocumentAnalyses: (documentId: string) => Promise<void>;
+    fetchUserAnalyses: (params?: AnalysisListParams) => Promise<void>;
     fetchAnalysis: (analysisId: string) => Promise<void>;
     executeStep: (analysisId: string, stepId: string, request: StepExecutionRequest) => Promise<void>;
     updateStepCorrections: (analysisId: string, stepId: string, corrections: Record<string, any>) => Promise<void>;
@@ -128,6 +130,7 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
     fetchDocumentAnalyses: async (documentId: string) => {
         try {
             set({ isLoading: true, error: null });
+            console.log('fetchDocumentAnalyses', documentId);
             const analyses = await analysisService.getDocumentAnalyses(documentId);
             set({
                 analyses,
@@ -136,6 +139,23 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
         } catch (error) {
             set({
                 error: error instanceof Error ? error.message : 'Failed to fetch document analyses',
+                isLoading: false
+            });
+            throw error;
+        }
+    },
+
+    fetchUserAnalyses: async (params?: AnalysisListParams) => {
+        try {
+            set({ isLoading: true, error: null });
+            const analyses = await analysisService.getUserAnalyses(params);
+            set({
+                analyses,
+                isLoading: false
+            });
+        } catch (error) {
+            set({
+                error: error instanceof Error ? error.message : 'Failed to fetch user analyses',
                 isLoading: false
             });
             throw error;
