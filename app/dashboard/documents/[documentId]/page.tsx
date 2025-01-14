@@ -118,6 +118,7 @@ export default function DocumentPage({ params }: DocumentPageProps) {
     const [isEditing, setIsEditing] = useState(false);
     const [isTagDialogOpen, setIsTagDialogOpen] = useState(false);
     const [selectedTags, setSelectedTags] = useState<Set<number>>(new Set());
+    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
     // Unwrap the params promise
     const { documentId } = use(params);
@@ -179,7 +180,7 @@ export default function DocumentPage({ params }: DocumentPageProps) {
     };
 
     // Handle document deletion
-    const handleDelete = async () => {
+    const handleDeleteConfirm = async () => {
         if (!currentDocument) return;
 
         try {
@@ -194,6 +195,8 @@ export default function DocumentPage({ params }: DocumentPageProps) {
                 description: "Failed to delete document",
                 variant: "destructive",
             });
+        } finally {
+            setIsDeleteDialogOpen(false);
         }
     };
 
@@ -375,7 +378,7 @@ export default function DocumentPage({ params }: DocumentPageProps) {
                         <PencilIcon className="w-4 h-4 mr-2" />
                         Edit
                     </Button>
-                    <Button variant="destructive" size="sm" onClick={handleDelete}>
+                    <Button variant="destructive" size="sm" onClick={() => setIsDeleteDialogOpen(true)}>
                         <TrashIcon className="w-4 h-4 mr-2" />
                         Delete
                     </Button>
@@ -620,6 +623,32 @@ export default function DocumentPage({ params }: DocumentPageProps) {
                                 Save Changes
                             </Button>
                         </div>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Delete Confirmation Dialog */}
+            <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Delete Document</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to delete "{currentDocument.name}"? This action cannot be undone.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter className="flex justify-end gap-2">
+                        <Button
+                            variant="outline"
+                            onClick={() => setIsDeleteDialogOpen(false)}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            onClick={handleDeleteConfirm}
+                        >
+                            Delete
+                        </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
