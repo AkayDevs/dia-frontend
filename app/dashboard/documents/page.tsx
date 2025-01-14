@@ -1,9 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { DocumentType, AnalysisStatus } from '@/types/document';
+import { DocumentType } from '@/types/document';
+import { AnalysisStatus } from '@/types/analysis';
 import { useDocumentStore } from '@/store/useDocumentStore';
+import { useAnalysisStore } from '@/store/useAnalysisStore';
 import { useToast } from '@/hooks/use-toast';
 import { useAuthStore } from '@/store/useAuthStore';
 import { Card } from '@/components/ui/card';
@@ -124,19 +126,41 @@ export default function DocumentsPage() {
 
     const {
         documents = [],
-        isLoading,
-        error,
+        isLoading: isLoadingDocuments,
+        error: documentError,
         fetchDocuments,
         deleteDocument,
         setFilters
     } = useDocumentStore();
 
-    // Initialize page with documents
+    const {
+        analyses = [],
+        isLoading: isLoadingAnalyses,
+        fetchUserAnalyses
+    } = useAnalysisStore();
+
+    // Create a map of document IDs to their latest analysis status
+    const documentAnalysisStatus = useMemo(() => {
+        const statusMap = new Map<string, AnalysisStatus>();
+        analyses.forEach(analysis => {
+            const currentStatus = statusMap.get(analysis.document_id);
+            // Only update if there's no status yet or if this analysis is more recent
+            if (!currentStatus || new Date(analysis.created_at) > new Date(analysis.created_at)) {
+                statusMap.set(analysis.document_id, analysis.status as AnalysisStatus);
+            }
+        });
+        return statusMap;
+    }, [analyses]);
+
+    // Initialize page with documents and analyses
     useEffect(() => {
         if (isAuthenticated) {
             const loadData = async () => {
                 try {
-                    await fetchDocuments();
+                    await Promise.all([
+                        fetchDocuments(),
+                        fetchUserAnalyses()
+                    ]);
                 } catch (error) {
                     handleError(error);
                 }
@@ -146,19 +170,22 @@ export default function DocumentsPage() {
     }, [isAuthenticated, currentPage, statusFilter, typeFilter]);
 
     // Filter documents based on search, filters, and date range
-    const filteredDocuments = documents.filter(doc => {
-        const matchesSearch = doc.name.toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesStatus = statusFilter === 'ALL' || doc.status === statusFilter;
-        const matchesType = typeFilter === 'ALL' || doc.type === typeFilter;
+    const filteredDocuments = useMemo(() => {
+        return documents.filter(doc => {
+            const matchesSearch = doc.name.toLowerCase().includes(searchQuery.toLowerCase());
+            const documentStatus = documentAnalysisStatus.get(doc.id) || AnalysisStatus.PENDING;
+            const matchesStatus = statusFilter === 'ALL' || documentStatus === statusFilter;
+            const matchesType = typeFilter === 'ALL' || doc.type === typeFilter;
 
-        // Date range filter
-        const matchesDateRange = !dateRange.from || !dateRange.to || isWithinInterval(
-            new Date(doc.uploaded_at),
-            { start: startOfDay(dateRange.from), end: endOfDay(dateRange.to) }
-        );
+            // Date range filter
+            const matchesDateRange = !dateRange.from || !dateRange.to || isWithinInterval(
+                new Date(doc.uploaded_at),
+                { start: startOfDay(dateRange.from), end: endOfDay(dateRange.to) }
+            );
 
-        return matchesSearch && matchesStatus && matchesType && matchesDateRange;
-    });
+            return matchesSearch && matchesStatus && matchesType && matchesDateRange;
+        });
+    }, [documents, searchQuery, statusFilter, typeFilter, dateRange, documentAnalysisStatus]);
 
     const handleError = (error: any) => {
         const message = error instanceof Error ? error.message : 'An error occurred';
@@ -228,7 +255,7 @@ export default function DocumentsPage() {
         }
     };
 
-    if (isLoading) {
+    if (isLoadingDocuments || isLoadingAnalyses) {
         return (
             <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
                 <motion.div
@@ -405,11 +432,11 @@ export default function DocumentsPage() {
                     )}
 
                     {/* Documents Table */}
-                    {error ? (
+                    {documentError ? (
                         <div className="text-center py-8">
                             <FolderIcon className="mx-auto h-12 w-12 text-destructive" />
                             <h3 className="mt-2 text-lg font-semibold">Error loading documents</h3>
-                            <p className="text-muted-foreground">{error}</p>
+                            <p className="text-muted-foreground">{documentError}</p>
                         </div>
                     ) : filteredDocuments.length === 0 ? (
                         <div className="text-center py-8">
@@ -467,7 +494,7 @@ export default function DocumentsPage() {
                                             </TableCell>
                                             <TableCell>{document.type}</TableCell>
                                             <TableCell>
-                                                <StatusBadge status={document.status} />
+                                                <StatusBadge status={documentAnalysisStatus.get(document.id) || AnalysisStatus.PENDING} />
                                             </TableCell>
                                             <TableCell>
                                                 {document.updated_at
@@ -488,7 +515,7 @@ export default function DocumentsPage() {
                                                             <EyeIcon className="mr-2 h-4 w-4" />
                                                             View Details
                                                         </DropdownMenuItem>
-                                                        {document.status !== AnalysisStatus.PROCESSING && (
+                                                        {documentAnalysisStatus.get(document.id) !== AnalysisStatus.PROCESSING && (
                                                             <DropdownMenuItem
                                                                 onClick={() => handleAnalyze(document.id)}
                                                             >
