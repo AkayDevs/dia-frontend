@@ -5,9 +5,10 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Document } from '@/types/document';
 import {
     AnalysisType,
-    AnalysisConfig,
-    AnalysisResponse,
-    AnalysisStatus
+    AnalysisTypeEnum,
+    Analysis,
+    AnalysisStatus,
+    AnalysisListParams
 } from '@/types/analysis';
 import { useDocumentStore } from '@/store/useDocumentStore';
 import { useAnalysisStore } from '@/store/useAnalysisStore';
@@ -20,10 +21,9 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
 import { motion } from 'framer-motion';
-import { format } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
 import {
     FileText,
-    Upload,
     Table as TableIcon,
     FileSearch,
     FileStack,
@@ -37,7 +37,8 @@ import {
     File,
     BarChart,
     History,
-    Layers
+    Layers,
+    Loader2
 } from 'lucide-react';
 import {
     Accordion,
@@ -47,43 +48,45 @@ import {
 } from "@/components/ui/accordion";
 
 // Analysis type icon mapping
-const AnalysisTypeIcon = ({ type, className = "h-5 w-5" }: { type: AnalysisType; className?: string }) => {
+const AnalysisTypeIcon = ({ type, className = "h-5 w-5" }: { type: AnalysisTypeEnum; className?: string }) => {
     const icons = {
-        [AnalysisType.TABLE_DETECTION]: <TableIcon className={className} />,
-        [AnalysisType.TEXT_EXTRACTION]: <FileText className={className} />,
-        [AnalysisType.TEXT_SUMMARIZATION]: <FileSearch className={className} />,
-        [AnalysisType.TEMPLATE_CONVERSION]: <FileStack className={className} />
+        [AnalysisTypeEnum.TABLE_DETECTION]: <TableIcon className={className} />,
+        [AnalysisTypeEnum.TEXT_EXTRACTION]: <FileText className={className} />,
+        [AnalysisTypeEnum.TEXT_SUMMARIZATION]: <FileSearch className={className} />,
+        [AnalysisTypeEnum.TEMPLATE_CONVERSION]: <FileStack className={className} />
     };
     return icons[type] || <FileText className={className} />;
 };
 
 // Analysis card component
 interface AnalysisCardProps {
-    config: AnalysisConfig;
+    analysisType: AnalysisType;
     onSelect?: () => void;
     selected?: boolean;
 }
 
-const AnalysisCard = ({ config, onSelect, selected }: AnalysisCardProps) => (
+const AnalysisCard = ({ analysisType, onSelect, selected }: AnalysisCardProps) => (
     <Card
         className={`overflow-hidden transition-colors hover:bg-muted/50 cursor-pointer ${selected ? 'border-primary' : ''}`}
         onClick={onSelect}
     >
         <CardHeader className="border-b bg-muted/50">
             <CardTitle className="flex items-center gap-2 text-lg">
-                <AnalysisTypeIcon type={config.type} className="text-primary" />
-                {config.name}
+                <AnalysisTypeIcon type={analysisType.name} className="text-primary" />
+                {analysisType.name.split('_').map(word =>
+                    word.charAt(0).toUpperCase() + word.slice(1)
+                ).join(' ')}
             </CardTitle>
             <CardDescription>
-                {config.description}
+                {analysisType.description}
             </CardDescription>
         </CardHeader>
         <CardContent className="p-6">
             <div className="space-y-4">
                 <div>
-                    <h4 className="text-sm font-medium mb-2">Supported Formats</h4>
+                    <h4 className="text-sm font-medium mb-2">Supported Document Types</h4>
                     <div className="flex flex-wrap gap-2">
-                        {config.supported_formats.map((format: string) => (
+                        {analysisType.supported_document_types.map((format) => (
                             <Badge key={format} variant="secondary">
                                 {format.toUpperCase()}
                             </Badge>
@@ -98,17 +101,17 @@ const AnalysisCard = ({ config, onSelect, selected }: AnalysisCardProps) => (
 // Recent analysis card component
 interface RecentAnalysisProps {
     document: Document;
-    analyses: AnalysisResponse[];
+    analyses: Analysis[];
 }
 
 const RecentAnalysisCard = ({ document, analyses }: RecentAnalysisProps) => {
     const router = useRouter();
     const documentAnalyses = analyses.filter(analysis => analysis.document_id === document.id);
-    const analysesByType = documentAnalyses.reduce<Record<string, AnalysisResponse[]>>((acc, analysis) => {
-        if (!acc[analysis.type]) {
-            acc[analysis.type] = [];
+    const analysesByType = documentAnalyses.reduce<Record<string, Analysis[]>>((acc, analysis) => {
+        if (!acc[analysis.analysis_type_id]) {
+            acc[analysis.analysis_type_id] = [];
         }
-        acc[analysis.type].push(analysis);
+        acc[analysis.analysis_type_id].push(analysis);
         return acc;
     }, {});
 
@@ -122,20 +125,20 @@ const RecentAnalysisCard = ({ document, analyses }: RecentAnalysisProps) => {
                     <div>
                         <h4 className="font-medium text-lg">{document.name}</h4>
                         <p className="text-sm text-muted-foreground">
-                            Last analyzed {format(new Date(documentAnalyses[0].created_at), 'PPp')}
+                            Last analyzed {formatDistanceToNow(new Date(documentAnalyses[0].created_at), { addSuffix: true })}
                         </p>
                     </div>
                 </div>
                 <Badge variant="secondary">{document.type.toUpperCase()}</Badge>
             </div>
             <Accordion type="single" collapsible className="w-full">
-                {Object.entries(analysesByType).map(([type, typeAnalyses]) => (
-                    <AccordionItem value={type} key={type}>
+                {Object.entries(analysesByType).map(([typeId, typeAnalyses]) => (
+                    <AccordionItem value={typeId} key={typeId}>
                         <AccordionTrigger className="px-4 hover:no-underline hover:bg-muted/50">
                             <div className="flex items-center gap-2">
-                                <AnalysisTypeIcon type={type as AnalysisType} />
+                                <AnalysisTypeIcon type={typeId as AnalysisTypeEnum} />
                                 <span className="font-medium">
-                                    {type.split('_').map(word =>
+                                    {typeId.split('_').map(word =>
                                         word.charAt(0).toUpperCase() + word.slice(1)
                                     ).join(' ')}
                                 </span>
@@ -146,7 +149,7 @@ const RecentAnalysisCard = ({ document, analyses }: RecentAnalysisProps) => {
                         </AccordionTrigger>
                         <AccordionContent>
                             <div className="px-4 py-2 space-y-2">
-                                {typeAnalyses.map((analysis: AnalysisResponse) => (
+                                {typeAnalyses.map((analysis) => (
                                     <div
                                         key={analysis.id}
                                         className="flex items-center justify-between p-2 rounded-md bg-muted/50 hover:bg-muted cursor-pointer"
@@ -194,11 +197,11 @@ export default function AnalysisPage() {
     } = useDocumentStore();
 
     const {
-        availableTypes = [],
+        analysisTypes = [],
         analyses = [],
         isLoading: isLoadingAnalysis,
-        loadAvailableTypes,
-        fetchAnalyses
+        fetchAnalysisTypes,
+        fetchUserAnalyses
     } = useAnalysisStore();
 
     // Check for batch analysis documents from URL
@@ -210,8 +213,8 @@ export default function AnalysisPage() {
             try {
                 await Promise.all([
                     fetchDocuments(),
-                    loadAvailableTypes(),
-                    fetchAnalyses()
+                    fetchAnalysisTypes(),
+                    fetchUserAnalyses()
                 ]);
             } catch (error) {
                 toast({
@@ -222,7 +225,7 @@ export default function AnalysisPage() {
             }
         };
         loadData();
-    }, [fetchDocuments, loadAvailableTypes, fetchAnalyses, toast]);
+    }, [fetchDocuments, fetchAnalysisTypes, fetchUserAnalyses, toast]);
 
     // Get recently analyzed documents
     const recentDocuments = documents
@@ -255,11 +258,7 @@ export default function AnalysisPage() {
     if (isLoading) {
         return (
             <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
-                <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                    className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full"
-                />
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
         );
     }
@@ -380,12 +379,12 @@ export default function AnalysisPage() {
                 {/* Analyze Tab */}
                 <TabsContent value="analyze">
                     <div className="grid gap-6 lg:grid-cols-2">
-                        {availableTypes.map((config) => (
+                        {analysisTypes.map((analysisType) => (
                             <AnalysisCard
-                                key={config.type}
-                                config={config}
-                                selected={selectedAnalysisType === config.type}
-                                onSelect={() => setSelectedAnalysisType(config.type)}
+                                key={analysisType.id}
+                                analysisType={analysisType}
+                                selected={selectedAnalysisType === analysisType.id}
+                                onSelect={() => setSelectedAnalysisType(analysisType.id)}
                             />
                         ))}
                     </div>
@@ -416,23 +415,27 @@ export default function AnalysisPage() {
                         </CardHeader>
                         <CardContent className="p-6">
                             <div className="space-y-8">
-                                {availableTypes.map((config, index) => (
-                                    <div key={config.type}>
+                                {analysisTypes.map((analysisType, index) => (
+                                    <div key={analysisType.id}>
                                         <div className="flex items-center gap-4 mb-4">
                                             <div className="p-3 rounded-lg bg-primary/10">
-                                                <AnalysisTypeIcon type={config.type} className="h-6 w-6 text-primary" />
+                                                <AnalysisTypeIcon type={analysisType.name} className="h-6 w-6 text-primary" />
                                             </div>
                                             <div>
-                                                <h3 className="text-xl font-semibold">{config.name}</h3>
-                                                <p className="text-muted-foreground">{config.description}</p>
+                                                <h3 className="text-xl font-semibold">
+                                                    {analysisType.name.split('_').map(word =>
+                                                        word.charAt(0).toUpperCase() + word.slice(1)
+                                                    ).join(' ')}
+                                                </h3>
+                                                <p className="text-muted-foreground">{analysisType.description}</p>
                                             </div>
                                         </div>
 
                                         <div className="grid gap-6 md:grid-cols-2 pl-14">
                                             <div>
-                                                <h4 className="text-sm font-medium mb-3">Supported Formats</h4>
+                                                <h4 className="text-sm font-medium mb-3">Supported Document Types</h4>
                                                 <div className="flex flex-wrap gap-2">
-                                                    {config.supported_formats.map((format: string) => (
+                                                    {analysisType.supported_document_types.map((format) => (
                                                         <Badge key={format} variant="secondary">
                                                             {format.toUpperCase()}
                                                         </Badge>
@@ -441,13 +444,13 @@ export default function AnalysisPage() {
                                             </div>
 
                                             <div>
-                                                <h4 className="text-sm font-medium mb-3">Parameters</h4>
+                                                <h4 className="text-sm font-medium mb-3">Analysis Steps</h4>
                                                 <div className="space-y-2">
-                                                    {Object.entries(config.parameters).map(([key, param]) => (
-                                                        <div key={key} className="flex items-center gap-2">
+                                                    {analysisType.steps.map((step) => (
+                                                        <div key={step.id} className="flex items-center gap-2">
                                                             <CheckCircle className="h-4 w-4 text-green-500" />
                                                             <span className="text-sm">
-                                                                {key.split('_').map(word =>
+                                                                {step.name.split('_').map(word =>
                                                                     word.charAt(0).toUpperCase() + word.slice(1)
                                                                 ).join(' ')}
                                                             </span>
@@ -457,7 +460,7 @@ export default function AnalysisPage() {
                                             </div>
                                         </div>
 
-                                        {index < availableTypes.length - 1 && (
+                                        {index < analysisTypes.length - 1 && (
                                             <Separator className="my-8" />
                                         )}
                                     </div>
