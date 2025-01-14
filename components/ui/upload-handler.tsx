@@ -138,10 +138,10 @@ export function UploadHandler({
         <div
             {...getRootProps()}
             className={cn(
-                "relative border-2 border-dashed rounded-lg",
+                "relative min-h-[200px] border-2 border-dashed rounded-xl p-4",
                 isDragActive ? "border-primary bg-primary/5" : "border-muted-foreground/25",
                 isUploading ? "pointer-events-none" : "hover:border-primary hover:bg-primary/5",
-                "transition-colors cursor-pointer",
+                "transition-all duration-200 ease-in-out",
                 className
             )}
         >
@@ -164,44 +164,46 @@ export function UploadHandler({
                             initial={{ opacity: 0, scale: 0.95 }}
                             animate={{ opacity: 1, scale: 1 }}
                             exit={{ opacity: 0, scale: 0.95 }}
-                            className="flex flex-col items-center gap-4"
+                            className="flex flex-col items-center gap-6"
                         >
                             {multiple ? (
                                 <DocumentDuplicateIcon
                                     className={cn(
-                                        "w-10 h-10",
-                                        isDragActive ? "text-primary" : "text-muted-foreground"
+                                        "w-12 h-12",
+                                        isDragActive ? "text-primary" : "text-muted-foreground/60"
                                     )}
                                 />
                             ) : (
                                 <ArrowUpTrayIcon
                                     className={cn(
-                                        "w-10 h-10",
-                                        isDragActive ? "text-primary" : "text-muted-foreground"
+                                        "w-12 h-12",
+                                        isDragActive ? "text-primary" : "text-muted-foreground/60"
                                     )}
                                 />
                             )}
-                            <div className="text-center">
-                                <p className="text-sm text-muted-foreground">
+                            <div className="text-center space-y-2">
+                                <p className="text-base font-medium text-foreground">
                                     {isDragActive ? (
                                         multiple ? "Drop your files here" : "Drop your file here"
                                     ) : (
                                         <>
                                             Drag & drop {multiple ? 'files' : 'a file'} here, or{' '}
-                                            <span className="text-primary">click to select</span>
+                                            <span className="text-primary hover:underline cursor-pointer">browse</span>
                                         </>
                                     )}
                                 </p>
-                                <p className="text-xs text-muted-foreground mt-2">
-                                    {multiple ? (
-                                        `Upload up to ${maxFiles} files (max ${maxSize / (1024 * 1024)}MB each)`
-                                    ) : (
-                                        `Max file size: ${maxSize / (1024 * 1024)}MB`
-                                    )}
-                                </p>
-                                <p className="text-xs text-muted-foreground mt-1">
-                                    Supports PDF, DOCX, XLSX, and images
-                                </p>
+                                <div className="space-y-1">
+                                    <p className="text-sm text-muted-foreground">
+                                        {multiple ? (
+                                            `Upload up to ${maxFiles} files (max ${maxSize / (1024 * 1024)}MB each)`
+                                        ) : (
+                                            `Max file size: ${maxSize / (1024 * 1024)}MB`
+                                        )}
+                                    </p>
+                                    <p className="text-sm text-muted-foreground">
+                                        Supports PDF, DOCX, XLSX, and images
+                                    </p>
+                                </div>
                             </div>
                         </motion.div>
                     )}

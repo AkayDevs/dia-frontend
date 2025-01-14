@@ -275,6 +275,13 @@ export default function AnalysisPage() {
                 </div>
                 <div className="flex gap-2">
                     <Button
+                        onClick={() => router.push('/dashboard/analysis/new')}
+                        className="gap-2"
+                    >
+                        <Zap className="h-4 w-4" />
+                        New Analysis
+                    </Button>
+                    <Button
                         variant="outline"
                         onClick={() => router.push('/dashboard/documents')}
                         className="gap-2"
