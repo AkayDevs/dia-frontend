@@ -167,10 +167,23 @@ const RecentAnalysisCard = ({ document, analyses }: RecentAnalysisProps) => {
                                                 {format(new Date(analysis.created_at), 'MMM d, h:mm a')}
                                             </span>
                                         </div>
-                                        <Button variant="ghost" size="sm">
-                                            View Results
-                                            <ArrowRight className="ml-2 h-3 w-3" />
-                                        </Button>
+                                        <div className="flex items-center gap-2">
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    router.push(`/dashboard/analysis/${document.id}/${analysis.id}/step/${analysis.step_results[0].step_id}`);
+                                                }}
+                                            >
+                                                Step-wise View
+                                                <Settings className="ml-2 h-3 w-3" />
+                                            </Button>
+                                            <Button variant="ghost" size="sm">
+                                                View Results
+                                                <ArrowRight className="ml-2 h-3 w-3" />
+                                            </Button>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
