@@ -49,8 +49,13 @@ import {
     XMarkIcon,
     PlusIcon,
     CheckIcon,
+    ArrowPathIcon,
+    XCircleIcon,
+    ArrowLeftIcon,
 } from '@heroicons/react/24/outline';
 import { DocumentEditor } from '@/components/editors/document-editor';
+import Link from 'next/link';
+import { Loader2 } from 'lucide-react';
 
 interface DocumentPageProps {
     params: Promise<{
@@ -92,34 +97,30 @@ export default function DocumentPage({ params }: DocumentPageProps) {
     const router = useRouter();
     const { toast } = useToast();
     const {
+        currentDocument,
+        isLoading,
+        error,
         fetchDocument,
-        updateDocument,
+        clearError,
         deleteDocument,
+        updateDocument,
         fetchDocumentVersions,
         documentVersions,
         updateDocumentTags,
         tags,
-        fetchTags,
-        currentDocument,
+        fetchTags
     } = useDocumentStore();
     const {
         analyses,
         fetchDocumentAnalyses,
-        isLoading: isLoadingAnalyses,
     } = useAnalysisStore();
-
-    const [isLoading, setIsLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState('overview');
+    const [activeTab, setActiveTab] = useState<string>('overview');
     const [isEditing, setIsEditing] = useState(false);
     const [isTagDialogOpen, setIsTagDialogOpen] = useState(false);
     const [selectedTags, setSelectedTags] = useState<Set<number>>(new Set());
 
     // Unwrap the params promise
     const { documentId } = use(params);
-
-    // Latest analysis for the document
-    const latestAnalysis = getLatestAnalysis(analyses);
-    const analysisStatus = latestAnalysis?.status || AnalysisStatus.PENDING;
 
     // Initialize selectedTags when document changes
     useEffect(() => {
@@ -128,10 +129,17 @@ export default function DocumentPage({ params }: DocumentPageProps) {
         }
     }, [currentDocument]);
 
+    // Reset state when documentId changes
+    useEffect(() => {
+        setActiveTab('overview');
+        setIsEditing(false);
+        clearError();
+    }, [documentId, clearError]);
+
+    // Fetch document and related data when documentId changes
     useEffect(() => {
         const loadData = async () => {
             try {
-                setIsLoading(true);
                 await Promise.all([
                     fetchDocument(documentId),
                     fetchDocumentAnalyses(documentId),
@@ -139,60 +147,19 @@ export default function DocumentPage({ params }: DocumentPageProps) {
                     fetchDocumentVersions(documentId)
                 ]);
             } catch (error) {
-                toast({
-                    title: "Error",
-                    description: "Failed to load document details",
-                    variant: "destructive",
-                });
-                router.push('/dashboard/documents');
-            } finally {
-                setIsLoading(false);
+                console.error('Error loading document details:', error);
             }
         };
 
         loadData();
-    }, [documentId, fetchDocument, fetchDocumentAnalyses, fetchTags, fetchDocumentVersions, toast, router]);
 
-    const handleDelete = async () => {
-        if (!currentDocument) return;
+        // Cleanup function
+        return () => {
+            clearError();
+        };
+    }, [documentId, fetchDocument, fetchDocumentAnalyses, fetchTags, fetchDocumentVersions, clearError]);
 
-        try {
-            await deleteDocument(currentDocument.id);
-            toast({
-                description: "Document deleted successfully",
-            });
-            router.push('/dashboard/documents');
-        } catch (error) {
-            toast({
-                title: "Error",
-                description: "Failed to delete document",
-                variant: "destructive",
-            });
-        }
-    };
-
-    const handleEdit = () => {
-        setIsEditing(true);
-    };
-
-    const handleSaveEdit = async (data: DocumentUpdate) => {
-        if (!currentDocument) return;
-
-        try {
-            await updateDocument(currentDocument.id, data);
-            toast({
-                description: "Document updated successfully",
-            });
-            setIsEditing(false);
-        } catch (error) {
-            toast({
-                title: "Error",
-                description: "Failed to update document",
-                variant: "destructive",
-            });
-        }
-    };
-
+    // Handle tag updates
     const handleUpdateTags = async () => {
         if (!currentDocument) return;
 
@@ -211,63 +178,200 @@ export default function DocumentPage({ params }: DocumentPageProps) {
         }
     };
 
+    // Handle document deletion
+    const handleDelete = async () => {
+        if (!currentDocument) return;
+
+        try {
+            await deleteDocument(currentDocument.id);
+            toast({
+                description: "Document deleted successfully",
+            });
+            router.push('/dashboard/documents');
+        } catch (error) {
+            toast({
+                title: "Error",
+                description: "Failed to delete document",
+                variant: "destructive",
+            });
+        }
+    };
+
+    // Handle document edit save
+    const handleSaveEdit = async (data: DocumentUpdate) => {
+        if (!currentDocument) return;
+
+        try {
+            await updateDocument(currentDocument.id, data);
+            toast({
+                description: "Document updated successfully",
+            });
+            setIsEditing(false);
+        } catch (error) {
+            toast({
+                title: "Error",
+                description: "Failed to update document",
+                variant: "destructive",
+            });
+        }
+    };
+
+    // Loading state
     if (isLoading) {
         return (
-            <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
-                <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                    className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full"
-                />
+            <div className="flex items-center justify-center min-h-[400px]">
+                <Loader2 className="w-8 h-8 animate-spin" />
             </div>
         );
     }
 
-    if (!currentDocument) {
+    // Error state
+    if (error) {
         return (
-            <div className="flex flex-col items-center justify-center min-h-[calc(100vh-4rem)]">
-                <DocumentIcon className="w-12 h-12 text-muted-foreground/50" />
-                <h2 className="mt-4 text-lg font-semibold">Document not found</h2>
-                <p className="text-muted-foreground">This document may have been deleted or moved</p>
-                <Button
-                    variant="outline"
-                    className="mt-4"
-                    onClick={() => router.push('/dashboard/documents')}
-                >
-                    Back to Documents
+            <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
+                <XCircleIcon className="w-12 h-12 text-destructive" />
+                <h2 className="text-lg font-semibold">Error Loading Document</h2>
+                <p className="text-muted-foreground">{error}</p>
+                <Button variant="outline" onClick={() => fetchDocument(documentId)}>
+                    <ArrowPathIcon className="w-4 h-4 mr-2" />
+                    Retry
                 </Button>
             </div>
         );
     }
 
+    // Not found state
+    if (!currentDocument) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
+                <DocumentIcon className="w-12 h-12 text-muted-foreground" />
+                <h2 className="text-lg font-semibold">Document Not Found</h2>
+                <p className="text-muted-foreground">The document you're looking for doesn't exist or has been deleted.</p>
+                <Button variant="outline" asChild>
+                    <Link href="/dashboard/documents">
+                        <ArrowLeftIcon className="w-4 h-4 mr-2" />
+                        Back to Documents
+                    </Link>
+                </Button>
+            </div>
+        );
+    }
+
+    // Document preview section
+    const renderDocumentPreview = () => {
+        const previewContainerClass = "h-full flex items-center justify-center p-4 bg-muted/50 rounded-lg";
+
+        switch (currentDocument.type) {
+            case DocumentType.PDF:
+                return (
+                    <div className={previewContainerClass}>
+                        <object
+                            data={`${currentDocument.url}#toolbar=0`}
+                            type="application/pdf"
+                            className="w-full h-full rounded-lg"
+                        >
+                            <div className="flex items-center justify-center h-full">
+                                <div className="text-center">
+                                    <DocumentIcon className="h-16 w-16 text-muted-foreground/50 mx-auto mb-2" />
+                                    <p className="text-sm text-muted-foreground">PDF preview not available</p>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="mt-2"
+                                        onClick={() => window.open(currentDocument.url, '_blank')}
+                                    >
+                                        Open PDF
+                                    </Button>
+                                </div>
+                            </div>
+                        </object>
+                    </div>
+                );
+
+            case DocumentType.IMAGE:
+                return (
+                    <div className={previewContainerClass}>
+                        <img
+                            src={currentDocument.url}
+                            alt={currentDocument.name}
+                            className="max-w-full max-h-full object-contain rounded-lg"
+                            loading="lazy"
+                        />
+                    </div>
+                );
+
+            case DocumentType.DOCX:
+                return (
+                    <div className={previewContainerClass}>
+                        <div className="text-center">
+                            <DocumentTextIcon className="h-16 w-16 text-indigo-500 mx-auto mb-2" />
+                            <p className="text-sm text-muted-foreground">Word document preview</p>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="mt-2"
+                                onClick={() => window.open(currentDocument.url, '_blank')}
+                            >
+                                Open Document
+                            </Button>
+                        </div>
+                    </div>
+                );
+
+            case DocumentType.XLSX:
+                return (
+                    <div className={previewContainerClass}>
+                        <div className="text-center">
+                            <DocumentChartBarIcon className="h-16 w-16 text-green-500 mx-auto mb-2" />
+                            <p className="text-sm text-muted-foreground">Excel file preview</p>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="mt-2"
+                                onClick={() => window.open(currentDocument.url, '_blank')}
+                            >
+                                Open Spreadsheet
+                            </Button>
+                        </div>
+                    </div>
+                );
+
+            default:
+                return (
+                    <div className={previewContainerClass}>
+                        <div className="text-center">
+                            <DocumentIcon className="h-16 w-16 text-muted-foreground/50 mx-auto mb-2" />
+                            <p className="text-sm text-muted-foreground">Preview not available</p>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="mt-2"
+                                onClick={() => window.open(currentDocument.url, '_blank')}
+                            >
+                                Open File
+                            </Button>
+                        </div>
+                    </div>
+                );
+        }
+    };
+
     return (
         <div className="space-y-6">
-            {/* Header */}
+            {/* Document Header */}
             <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-primary/10">
-                        <DocumentTypeIcon type={currentDocument.type} className="h-6 w-6" />
-                    </div>
-                    <div>
-                        <h1 className="text-2xl font-bold tracking-tight">{currentDocument.name}</h1>
-                        <p className="text-sm text-muted-foreground">
-                            {currentDocument.uploaded_at ?
-                                `Uploaded ${formatDistanceToNow(new Date(currentDocument.uploaded_at), { addSuffix: true })}` :
-                                'Recently uploaded'
-                            }
-                        </p>
-                    </div>
+                <div className="space-y-1">
+                    <h2 className="text-2xl font-semibold tracking-tight">{currentDocument.name}</h2>
+                    <p className="text-sm text-muted-foreground">
+                        Uploaded {formatDistanceToNow(new Date(currentDocument.uploaded_at))} ago
+                    </p>
                 </div>
                 <div className="flex items-center gap-2">
                     <Button variant="outline" size="sm" onClick={() => window.open(currentDocument.url, '_blank')}>
                         <ArrowDownTrayIcon className="w-4 h-4 mr-2" />
                         Download
                     </Button>
-                    <Button variant="outline" size="sm">
-                        <ShareIcon className="w-4 h-4 mr-2" />
-                        Share
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={handleEdit}>
+                    <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
                         <PencilIcon className="w-4 h-4 mr-2" />
                         Edit
                     </Button>
@@ -278,126 +382,19 @@ export default function DocumentPage({ params }: DocumentPageProps) {
                 </div>
             </div>
 
+            {/* Document Preview and Details */}
             <div className="grid gap-6 md:grid-cols-[300px_1fr]">
-                {/* Left Panel - Summary */}
-                <div className="space-y-6">
-                    <Card className="p-6">
-                        <div className="aspect-[3/4] rounded-lg border bg-muted/50 mb-6">
-                            {/* Document Preview/Thumbnail */}
-                            <div className="flex items-center justify-center h-full">
-                                <DocumentTypeIcon type={currentDocument.type} className="h-16 w-16 text-muted-foreground/50" />
-                            </div>
-                        </div>
-
-                        <div className="space-y-4">
-                            <div>
-                                <h3 className="text-sm font-medium text-muted-foreground mb-2">Document Info</h3>
-                                <dl className="space-y-2 text-sm">
-                                    <div className="flex justify-between">
-                                        <dt className="text-muted-foreground">Type</dt>
-                                        <dd className="font-medium">{currentDocument.type}</dd>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <dt className="text-muted-foreground">Size</dt>
-                                        <dd className="font-medium">{(currentDocument.size / 1024 / 1024).toFixed(2)} MB</dd>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <dt className="text-muted-foreground">Uploaded</dt>
-                                        <dd className="font-medium">{formatDate(currentDocument.uploaded_at)}</dd>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <dt className="text-muted-foreground">Last Modified</dt>
-                                        <dd className="font-medium">{formatDate(currentDocument.updated_at)}</dd>
-                                    </div>
-                                    {currentDocument.is_archived && (
-                                        <>
-                                            <div className="flex justify-between">
-                                                <dt className="text-muted-foreground">Archived</dt>
-                                                <dd className="font-medium">{formatDate(currentDocument.archived_at)}</dd>
-                                            </div>
-                                            <div className="flex justify-between">
-                                                <dt className="text-muted-foreground">Retention Until</dt>
-                                                <dd className="font-medium">{formatDate(currentDocument.retention_until)}</dd>
-                                            </div>
-                                        </>
-                                    )}
-                                </dl>
-                            </div>
-
-                            <div className="pt-4 border-t">
-                                <h3 className="text-sm font-medium text-muted-foreground mb-2">Analysis Status</h3>
-                                <div className="space-y-3">
-                                    <Badge
-                                        variant={analysisStatus === AnalysisStatus.COMPLETED ? 'default' : 'secondary'}
-                                        className="w-full justify-center"
-                                    >
-                                        {analysisStatus}
-                                    </Badge>
-                                    {analysisStatus === AnalysisStatus.PROCESSING && (
-                                        <Progress value={33} className="h-2" />
-                                    )}
-                                </div>
-                            </div>
-
-                            {analysisStatus === AnalysisStatus.PENDING && (
-                                <Button className="w-full" onClick={() => router.push(`/dashboard/analysis/${currentDocument.id}`)}>
-                                    <ChartBarIcon className="w-4 h-4 mr-2" />
-                                    Start Analysis
-                                </Button>
-                            )}
-
-                            <div className="pt-4 border-t">
-                                <div className="flex items-center justify-between mb-2">
-                                    <h3 className="text-sm font-medium text-muted-foreground">Tags</h3>
-                                    <Button variant="ghost" size="sm" onClick={() => setIsTagDialogOpen(true)}>
-                                        <TagIcon className="w-4 h-4" />
-                                    </Button>
-                                </div>
-                                <div className="flex flex-wrap gap-2">
-                                    {currentDocument.tags.map((tag) => (
-                                        <Badge key={tag.id} variant="secondary">
-                                            {tag.name}
-                                        </Badge>
-                                    ))}
-                                    {currentDocument.tags.length === 0 && (
-                                        <p className="text-sm text-muted-foreground">No tags added</p>
-                                    )}
-                                </div>
-                            </div>
-
-                            {documentVersions.length > 0 && (
-                                <div className="pt-4 border-t">
-                                    <h3 className="text-sm font-medium text-muted-foreground mb-2">Version History</h3>
-                                    <div className="space-y-2">
-                                        {documentVersions.map((version) => (
-                                            <div
-                                                key={version.id}
-                                                className="flex items-center justify-between text-sm"
-                                            >
-                                                <div className="flex items-center gap-2">
-                                                    <ClockIcon className="w-4 h-4 text-muted-foreground" />
-                                                    <span>{formatDistanceToNow(new Date(version.uploaded_at), { addSuffix: true })}</span>
-                                                </div>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() => router.push(`/dashboard/documents/${version.id}`)}
-                                                >
-                                                    View
-                                                </Button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </Card>
-                </div>
-
-                {/* Right Panel - Tabs */}
+                {/* Left Panel - Preview */}
                 <Card className="p-6">
+                    <div className="aspect-[3/4] rounded-lg">
+                        {renderDocumentPreview()}
+                    </div>
+                </Card>
+
+                {/* Right Panel - Details and Actions */}
+                <div className="space-y-6">
                     <Tabs value={activeTab} onValueChange={setActiveTab}>
-                        <TabsList className="mb-4">
+                        <TabsList>
                             <TabsTrigger value="overview">Overview</TabsTrigger>
                             <TabsTrigger value="analysis">Analysis</TabsTrigger>
                             <TabsTrigger value="annotations">Annotations</TabsTrigger>
@@ -434,7 +431,7 @@ export default function DocumentPage({ params }: DocumentPageProps) {
                                 <div className="space-y-4">
                                     <div className="flex justify-between items-center">
                                         <span className="text-sm text-muted-foreground">File Type</span>
-                                        <span className="text-sm font-medium">{currentDocument.type}</span>
+                                        <span className="text-sm font-medium">{currentDocument.type.toUpperCase()}</span>
                                     </div>
                                     <div className="flex justify-between items-center">
                                         <span className="text-sm text-muted-foreground">Upload Date</span>
@@ -448,10 +445,56 @@ export default function DocumentPage({ params }: DocumentPageProps) {
                                     </div>
                                 </div>
                             </Card>
+
+                            <Card className="p-4">
+                                <div className="flex items-center justify-between mb-4">
+                                    <h4 className="text-sm font-medium text-muted-foreground">Tags</h4>
+                                    <Button variant="outline" size="sm" onClick={() => setIsTagDialogOpen(true)}>
+                                        <TagIcon className="w-4 h-4 mr-2" />
+                                        Manage Tags
+                                    </Button>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                    {currentDocument.tags.map((tag) => (
+                                        <Badge key={tag.id} variant="secondary">
+                                            {tag.name}
+                                        </Badge>
+                                    ))}
+                                    {currentDocument.tags.length === 0 && (
+                                        <p className="text-sm text-muted-foreground">No tags added</p>
+                                    )}
+                                </div>
+                            </Card>
+
+                            {documentVersions.length > 0 && (
+                                <Card className="p-4">
+                                    <h4 className="text-sm font-medium text-muted-foreground mb-4">Version History</h4>
+                                    <div className="space-y-3">
+                                        {documentVersions.map((version) => (
+                                            <div
+                                                key={version.id}
+                                                className="flex items-center justify-between text-sm"
+                                            >
+                                                <div className="flex items-center gap-2">
+                                                    <ClockIcon className="w-4 h-4 text-muted-foreground" />
+                                                    <span>{formatDistanceToNow(new Date(version.uploaded_at), { addSuffix: true })}</span>
+                                                </div>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => router.push(`/dashboard/documents/${version.id}`)}
+                                                >
+                                                    View
+                                                </Button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </Card>
+                            )}
                         </TabsContent>
 
                         <TabsContent value="analysis" className="space-y-6">
-                            {analysisStatus === AnalysisStatus.COMPLETED ? (
+                            {analyses.length > 0 ? (
                                 <div className="space-y-6">
                                     {analyses.map((analysis) => (
                                         <Card key={analysis.id} className="p-4">
@@ -473,7 +516,10 @@ export default function DocumentPage({ params }: DocumentPageProps) {
                                                         )}
                                                     </h4>
                                                     <p className="text-xs text-muted-foreground">
-                                                        Completed {formatDistanceToNow(new Date(analysis.completed_at!), { addSuffix: true })}
+                                                        {analysis.status === AnalysisStatus.COMPLETED && analysis.completed_at ?
+                                                            `Completed ${formatDistanceToNow(new Date(analysis.completed_at), { addSuffix: true })}` :
+                                                            `Status: ${analysis.status}`
+                                                        }
                                                     </p>
                                                 </div>
                                                 <Button
@@ -484,23 +530,9 @@ export default function DocumentPage({ params }: DocumentPageProps) {
                                                     View Details
                                                 </Button>
                                             </div>
-                                            <div className="space-y-4">
-                                                {analysis.step_results.map((step) => (
-                                                    <div key={step.id} className="border rounded-lg p-3">
-                                                        <div className="flex items-center justify-between mb-2">
-                                                            <h5 className="text-sm font-medium">{step.step_id}</h5>
-                                                            <Badge variant={step.status === 'completed' ? 'default' : 'secondary'}>
-                                                                {step.status}
-                                                            </Badge>
-                                                        </div>
-                                                        {step.result && (
-                                                            <pre className="text-xs bg-muted p-2 rounded-md overflow-x-auto">
-                                                                {JSON.stringify(step.result, null, 2)}
-                                                            </pre>
-                                                        )}
-                                                    </div>
-                                                ))}
-                                            </div>
+                                            {analysis.status === AnalysisStatus.PROCESSING && (
+                                                <Progress value={33} className="h-2 mt-2" />
+                                            )}
                                         </Card>
                                     ))}
                                 </div>
@@ -524,43 +556,14 @@ export default function DocumentPage({ params }: DocumentPageProps) {
                                     Add Comment
                                 </Button>
                             </div>
-
-                            <div className="space-y-4">
-                                {currentDocument.analyses.length > 0 ? (
-                                    currentDocument.analyses.map((analysis) => (
-                                        <Card key={analysis.id} className="p-4">
-                                            <div className="flex items-start gap-3">
-                                                <UserCircleIcon className="w-8 h-8 text-muted-foreground/50" />
-                                                <div className="flex-1">
-                                                    <div className="flex items-center justify-between">
-                                                        <div>
-                                                            <p className="font-medium">Analysis Result</p>
-                                                            <p className="text-xs text-muted-foreground">
-                                                                {formatDistanceToNow(new Date(analysis.created_at), { addSuffix: true })}
-                                                            </p>
-                                                        </div>
-                                                        <Button variant="ghost" size="icon">
-                                                            <TagIcon className="w-4 h-4" />
-                                                        </Button>
-                                                    </div>
-                                                    <p className="mt-2 text-sm">
-                                                        Analysis type: {analysis.analysis_type_id}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        </Card>
-                                    ))
-                                ) : (
-                                    <div className="text-center py-8">
-                                        <ChatBubbleLeftIcon className="mx-auto h-12 w-12 text-muted-foreground/50" />
-                                        <h3 className="mt-4 text-lg font-semibold">No Annotations Yet</h3>
-                                        <p className="text-muted-foreground">Add comments or annotations to collaborate with others</p>
-                                    </div>
-                                )}
+                            <div className="text-center py-8">
+                                <ChatBubbleLeftIcon className="mx-auto h-12 w-12 text-muted-foreground/50" />
+                                <h3 className="mt-4 text-lg font-semibold">No Annotations Yet</h3>
+                                <p className="text-muted-foreground">Add comments or annotations to collaborate with others</p>
                             </div>
                         </TabsContent>
                     </Tabs>
-                </Card>
+                </div>
             </div>
 
             {/* Tag Management Dialog */}
@@ -621,7 +624,8 @@ export default function DocumentPage({ params }: DocumentPageProps) {
                 </DialogContent>
             </Dialog>
 
-            {isEditing && currentDocument && (
+            {/* Document Editor Dialog */}
+            {isEditing && (
                 <DocumentEditor
                     documentId={currentDocument.id}
                     documentType={currentDocument.type}
