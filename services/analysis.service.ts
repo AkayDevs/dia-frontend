@@ -2,13 +2,11 @@ import { API_URL, API_VERSION } from '@/lib/constants';
 import { AUTH_TOKEN_KEY } from '@/lib/constants';
 import {
     AnalysisType,
-    AnalysisConfig,
+    Analysis,
     AnalysisRequest,
-    AnalysisResponse,
-    AnalysisListParams,
-    AnalysisProgress,
-    BatchAnalysisRequest,
-    BatchAnalysisResponse
+    AnalysisStepResult,
+    StepExecutionRequest,
+    Algorithm
 } from '@/types/analysis';
 
 class AnalysisService {
@@ -51,92 +49,109 @@ class AnalysisService {
     /**
      * Get available analysis types
      */
-    async getAvailableTypes(): Promise<AnalysisConfig[]> {
+    async getAnalysisTypes(): Promise<AnalysisType[]> {
         const response = await fetch(`${this.baseUrl}/types`, {
             headers: this.getHeaders(),
         });
 
-        return await this.handleResponse<AnalysisConfig[]>(response);
+        return this.handleResponse<AnalysisType[]>(response);
+    }
+
+    /**
+     * Get specific analysis type details
+     */
+    async getAnalysisType(analysisTypeId: string): Promise<AnalysisType> {
+        const response = await fetch(`${this.baseUrl}/types/${analysisTypeId}`, {
+            headers: this.getHeaders(),
+        });
+
+        return this.handleResponse<AnalysisType>(response);
+    }
+
+    /**
+     * Get algorithms for a specific step
+     */
+    async getStepAlgorithms(stepId: string): Promise<Algorithm[]> {
+        const response = await fetch(`${this.baseUrl}/steps/${stepId}/algorithms`, {
+            headers: this.getHeaders(),
+        });
+
+        return this.handleResponse<Algorithm[]>(response);
     }
 
     /**
      * Start a new analysis
      */
-    async startAnalysis(documentId: string, request: AnalysisRequest): Promise<AnalysisResponse> {
-        const response = await fetch(`${this.baseUrl}/${documentId}`, {
+    async startAnalysis(documentId: string, request: AnalysisRequest): Promise<Analysis> {
+        const response = await fetch(`${this.baseUrl}/documents/${documentId}/analyze`, {
             method: 'POST',
             headers: this.getHeaders(),
             body: JSON.stringify(request),
         });
 
-        return this.handleResponse<AnalysisResponse>(response);
+        return this.handleResponse<Analysis>(response);
     }
 
     /**
-     * Cancel an ongoing analysis
+     * Get list of analyses for a document
      */
-    async cancelAnalysis(analysisId: string): Promise<void> {
-        const response = await fetch(`${this.baseUrl}/${analysisId}/cancel`, {
-            method: 'POST',
+    async getDocumentAnalyses(documentId: string): Promise<Analysis[]> {
+        const response = await fetch(`${this.baseUrl}/documents/${documentId}/analyses`, {
             headers: this.getHeaders(),
         });
 
-        await this.handleResponse<void>(response);
-    }
-
-    /**
-     * Retry a failed analysis
-     */
-    async retryAnalysis(analysisId: string): Promise<AnalysisResponse> {
-        const response = await fetch(`${this.baseUrl}/${analysisId}/retry`, {
-            method: 'POST',
-            headers: this.getHeaders(),
-        });
-
-        return this.handleResponse<AnalysisResponse>(response);
-    }
-
-    /**
-     * Get list of analyses with optional filtering
-     */
-    async getAnalyses(params: AnalysisListParams = {}): Promise<AnalysisResponse[]> {
-        const queryParams = new URLSearchParams();
-
-        if (params.skip !== undefined) queryParams.append('skip', params.skip.toString());
-        if (params.limit !== undefined) queryParams.append('limit', params.limit.toString());
-        if (params.status) queryParams.append('status', params.status);
-        if (params.analysis_type) queryParams.append('analysis_type', params.analysis_type);
-        if (params.document_id) queryParams.append('document_id', params.document_id);
-        if (params.start_date) queryParams.append('start_date', params.start_date);
-        if (params.end_date) queryParams.append('end_date', params.end_date);
-
-        const response = await fetch(`${this.baseUrl}?${queryParams.toString()}`, {
-            headers: this.getHeaders(),
-        });
-
-        return this.handleResponse<AnalysisResponse[]>(response);
+        return this.handleResponse<Analysis[]>(response);
     }
 
     /**
      * Get analysis by ID
      */
-    async getAnalysis(analysisId: string): Promise<AnalysisResponse> {
-        const response = await fetch(`${this.baseUrl}/${analysisId}`, {
+    async getAnalysis(analysisId: string): Promise<Analysis> {
+        const response = await fetch(`${this.baseUrl}/analyses/${analysisId}`, {
             headers: this.getHeaders(),
         });
 
-        return this.handleResponse<AnalysisResponse>(response);
+        return this.handleResponse<Analysis>(response);
     }
 
     /**
-     * Get analysis progress
+     * Execute a specific step in step-by-step mode
      */
-    async getAnalysisProgress(analysisId: string): Promise<AnalysisProgress> {
-        const response = await fetch(`${this.baseUrl}/${analysisId}/progress`, {
-            headers: this.getHeaders(),
-        });
+    async executeStep(
+        analysisId: string,
+        stepId: string,
+        request: StepExecutionRequest
+    ): Promise<AnalysisStepResult> {
+        const response = await fetch(
+            `${this.baseUrl}/analyses/${analysisId}/steps/${stepId}/execute`,
+            {
+                method: 'POST',
+                headers: this.getHeaders(),
+                body: JSON.stringify(request),
+            }
+        );
 
-        return this.handleResponse<AnalysisProgress>(response);
+        return this.handleResponse<AnalysisStepResult>(response);
+    }
+
+    /**
+     * Update user corrections for a step
+     */
+    async updateStepCorrections(
+        analysisId: string,
+        stepId: string,
+        corrections: Record<string, any>
+    ): Promise<AnalysisStepResult> {
+        const response = await fetch(
+            `${this.baseUrl}/analyses/${analysisId}/steps/${stepId}/corrections`,
+            {
+                method: 'PUT',
+                headers: this.getHeaders(),
+                body: JSON.stringify(corrections),
+            }
+        );
+
+        return this.handleResponse<AnalysisStepResult>(response);
     }
 }
 

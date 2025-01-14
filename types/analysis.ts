@@ -1,11 +1,25 @@
+import { DocumentType } from './document';
+
 /**
  * Analysis types supported by the system
  */
-export enum AnalysisType {
+export enum AnalysisTypeEnum {
     TABLE_DETECTION = 'table_detection',
     TEXT_EXTRACTION = 'text_extraction',
     TEXT_SUMMARIZATION = 'text_summarization',
     TEMPLATE_CONVERSION = 'template_conversion'
+}
+
+/**
+ * Analysis step types
+ */
+export enum AnalysisStepEnum {
+    TABLE_DETECTION = 'table_detection',
+    TABLE_STRUCTURE = 'table_structure',
+    TABLE_EXTRACTION = 'table_extraction',
+    TEXT_EXTRACTION = 'text_extraction',
+    TEXT_ANALYSIS = 'text_analysis',
+    TEMPLATE_PROCESSING = 'template_processing'
 }
 
 /**
@@ -19,75 +33,125 @@ export enum AnalysisStatus {
 }
 
 /**
- * Base analysis configuration
+ * Parameter definition
  */
-export interface AnalysisConfig {
-    type: AnalysisType;
+export interface Parameter {
     name: string;
     description: string;
-    supported_formats: string[];
-    parameters: TableDetectionParameters | TextExtractionParameters | TextSummarizationParameters | TemplateConversionParameters;
+    type: string;
+    required: boolean;
+    default?: any;
+    min_value?: number;
+    max_value?: number;
+    allowed_values?: any[];
 }
 
 /**
- * Analysis task request
+ * Algorithm interface
  */
-export interface AnalysisRequest {
-    analysis_type: AnalysisType;
-    parameters?: TableDetectionParameters | TextExtractionParameters | TextSummarizationParameters | TemplateConversionParameters;
+export interface Algorithm {
+    id: string;
+    name: string;
+    description?: string;
+    version: string;
+    supported_document_types: DocumentType[];
+    parameters: Parameter[];
+    is_active: boolean;
+    step_id: string;
+    created_at: string;
+    updated_at?: string;
 }
 
 /**
- * Analysis task response
+ * Analysis step interface
  */
-export interface AnalysisResponse {
+export interface AnalysisStep {
+    id: string;
+    name: AnalysisStepEnum;
+    description?: string;
+    order: number;
+    base_parameters: Parameter[];
+    analysis_type_id: string;
+    created_at: string;
+    updated_at?: string;
+    algorithms: Algorithm[];
+}
+
+/**
+ * Analysis type interface
+ */
+export interface AnalysisType {
+    id: string;
+    name: AnalysisTypeEnum;
+    description?: string;
+    supported_document_types: DocumentType[];
+    created_at: string;
+    updated_at?: string;
+    steps: AnalysisStep[];
+}
+
+/**
+ * Analysis step result interface
+ */
+export interface AnalysisStepResult {
+    id: string;
+    analysis_id: string;
+    step_id: string;
+    algorithm_id: string;
+    parameters: Record<string, any>;
+    result?: Record<string, any>;
+    user_corrections?: Record<string, any>;
+    status: string;
+    error_message?: string;
+    created_at: string;
+    updated_at?: string;
+    completed_at?: string;
+}
+
+/**
+ * Analysis interface
+ */
+export interface Analysis {
     id: string;
     document_id: string;
-    type: AnalysisType;
-    status: AnalysisStatus;
-    result?: TableDetectionResult | TextExtractionResult | TextSummarizationResult | TemplateConversionResult;
-    error?: string;
+    analysis_type_id: string;
+    mode: 'automatic' | 'step_by_step';
+    status: string;
+    error_message?: string;
     created_at: string;
+    updated_at?: string;
     completed_at?: string;
-    progress: number;
-    parameters: TableDetectionParameters | TextExtractionParameters | TextSummarizationParameters | TemplateConversionParameters;
+    step_results: AnalysisStepResult[];
 }
-
-export interface BatchAnalysisDocument {
-    document_id: string;
-    analysis_type: AnalysisType;
-    parameters: TableDetectionParameters | TextExtractionParameters | TextSummarizationParameters | TemplateConversionParameters;
-}
-
-export interface BatchAnalysisRequest {
-    documents: BatchAnalysisDocument[];
-}
-
-export interface BatchAnalysisResponse {
-    batch_id: string;
-    results: AnalysisResponse[];
-    errors: BatchAnalysisError[];
-    total_submitted: number;
-    total_failed: number;
-}
-
-export interface BatchAnalysisError {
-    document_id: string;
-    error: string;
-}
-
 
 /**
- * Analysis task list parameters
+ * Analysis request interface
+ */
+export interface AnalysisRequest {
+    analysis_type_id: string;
+    mode: 'automatic' | 'step_by_step';
+    algorithm_configs: Record<string, {
+        algorithm_id: string;
+        parameters: Record<string, any>;
+    }>;
+}
+
+/**
+ * Step execution request
+ */
+export interface StepExecutionRequest {
+    algorithm_id: string;
+    parameters: Record<string, any>;
+}
+
+/**
+ * Analysis list parameters
  */
 export interface AnalysisListParams {
     document_id?: string;
     status?: AnalysisStatus;
-    analysis_type?: AnalysisType;
     skip?: number;
     limit?: number;
-    start_date?: string;
-    end_date?: string;
 }
 
 /**
@@ -97,122 +161,4 @@ export interface AnalysisProgress {
     status: AnalysisStatus;
     progress: number;
     message?: string;
-}
-
-/**
- * Analysis result with metadata
- */
-export interface AnalysisResultWithMetadata {
-    id: string;
-    type: AnalysisType;
-    result: TableDetectionResult | TextExtractionResult | TextSummarizationResult | TemplateConversionResult;
-    metadata: {
-        processing_time: number;
-        confidence_score?: number;
-        version: string;
-    };
-    created_at: string;
-}
-
-
-/**
- * Analysis result interface
- */
-export interface AnalysisResult {
-    id: string;
-    type: string;
-    result: TableDetectionResult | TextExtractionResult | TextSummarizationResult | TemplateConversionResult;
-    created_at: string;
-}
-
-
-export interface TableDetectionResult {
-    pages: PageTableInfo[];
-    total_tables: number;
-    average_confidence: number;
-    processing_metadata: Record<string, any>;
-}
-
-export interface PageTableInfo {
-    page_number: number;
-    page_dimensions: Record<string, number>;
-    tables: DetectedTable[];
-}
-
-export interface DetectedTable {
-    bbox: BoundingBox;
-    confidence_score: number;
-    rows: number;
-    columns: number;
-    cells: TableCell[];
-    has_headers: boolean;
-    header_rows: number[];
-}
-
-export interface TableCell {
-    content: string;
-    row_index: number;
-    col_index: number;
-    row_span: number;
-    col_span: number;
-    is_header: boolean;
-    confidence: number;
-}
-
-export interface BoundingBox {
-    x1: number;
-    y1: number;
-    x2: number;
-    y2: number;
-}
-
-export interface TextExtractionResult {
-    text: string;
-    pages: PageTextInfo[];
-    metadata: Record<string, any>;
-}
-
-export interface PageTextInfo {
-    page_number: number;
-    page_dimensions: Record<string, number>;
-    text: string;
-}
-
-export interface TextSummarizationResult {
-    summary: string;
-    original_length: number;
-    summary_length: number;
-    key_points: string[];
-}
-
-export interface TemplateConversionResult {
-    converted_file_url: string;
-    original_format: string;
-    target_format: string;
-    conversion_metadata: Record<string, any>;
-}
-
-export interface AnalysisParameters {
-    confidence_threshold: number;
-    max_results: number;
-}
-
-export interface TableDetectionParameters extends AnalysisParameters {
-    min_row_count: number;
-    detect_headers: boolean;
-}
-
-export interface TextExtractionParameters extends AnalysisParameters {
-    extract_layout: boolean;
-    detect_lists: boolean;
-}
-
-export interface TextSummarizationParameters extends AnalysisParameters {
-    max_length: number;
-    min_length: number;
-}
-
-export interface TemplateConversionParameters extends AnalysisParameters {
-    target_format: string;
-    preserve_styles: boolean;
 }

@@ -41,7 +41,8 @@ export default function AnalysisPage({ params }: AnalysisPageProps) {
     const {
         documents,
         isLoading: isLoadingDocs,
-        fetchDocuments
+        fetchDocument,
+        currentDocument
     } = useDocumentStore();
 
     const {
@@ -51,19 +52,16 @@ export default function AnalysisPage({ params }: AnalysisPageProps) {
         startAnalysis
     } = useAnalysisStore();
 
-    // Get the current document
-    const document = documents.find(doc => doc.id === documentId);
-
     // Get supported analysis types for this document type
     const supportedAnalysisTypes = availableTypes.filter(type =>
-        type.supported_formats.includes(document?.type.toLowerCase() || '')
+        type.supported_formats.includes(currentDocument?.type.toLowerCase() || '')
     );
 
     useEffect(() => {
         const loadData = async () => {
             try {
                 await Promise.all([
-                    fetchDocuments(),
+                    fetchDocument(documentId),
                     loadAvailableTypes()
                 ]);
             } catch (error) {
@@ -77,7 +75,7 @@ export default function AnalysisPage({ params }: AnalysisPageProps) {
         };
 
         loadData();
-    }, [fetchDocuments, loadAvailableTypes, router, toast]);
+    }, [documentId, fetchDocument, loadAvailableTypes, router, toast]);
 
     const handleRedirectToConfigure = async () => {
         if (!selectedType) {
@@ -106,7 +104,7 @@ export default function AnalysisPage({ params }: AnalysisPageProps) {
         );
     }
 
-    if (!document) {
+    if (!currentDocument) {
         return (
             <div className="space-y-6">
                 <Button
@@ -158,20 +156,20 @@ export default function AnalysisPage({ params }: AnalysisPageProps) {
                 <CardContent className="space-y-6">
                     <div className="grid gap-4 md:grid-cols-2">
                         <div className="space-y-2">
-                            <h3 className="font-medium text-lg">{document.name}</h3>
+                            <h3 className="font-medium text-lg">{currentDocument.name}</h3>
                             <div className="flex items-center gap-2 text-muted-foreground">
-                                <Badge variant="secondary">{document.type.toUpperCase()}</Badge>
+                                <Badge variant="secondary">{currentDocument.type.toUpperCase()}</Badge>
                                 <span>•</span>
-                                <span>{(document.size / 1024 / 1024).toFixed(2)} MB</span>
+                                <span>{(currentDocument.size / 1024 / 1024).toFixed(2)} MB</span>
                             </div>
                         </div>
                         <div className="space-y-2">
                             <p className="text-sm text-muted-foreground">
-                                Uploaded on {new Date(document.uploaded_at).toLocaleDateString()}
+                                Uploaded on {new Date(currentDocument.uploaded_at).toLocaleDateString()}
                             </p>
-                            {document.updated_at && (
+                            {currentDocument.updated_at && (
                                 <p className="text-sm text-muted-foreground">
-                                    Last analyzed on {new Date(document.updated_at).toLocaleDateString()}
+                                    Last analyzed on {new Date(currentDocument.updated_at).toLocaleDateString()}
                                 </p>
                             )}
                         </div>
@@ -184,7 +182,7 @@ export default function AnalysisPage({ params }: AnalysisPageProps) {
                 <CardHeader>
                     <CardTitle>Available Analysis Types</CardTitle>
                     <CardDescription>
-                        Select an analysis type to process your {document.type.toUpperCase()} document
+                        Select an analysis type to process your {currentDocument.type.toUpperCase()} document
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="grid gap-6 md:grid-cols-2">

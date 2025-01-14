@@ -2,75 +2,104 @@ import { create } from 'zustand';
 import { analysisService } from '@/services/analysis.service';
 import {
     AnalysisType,
-    AnalysisConfig,
+    Analysis,
     AnalysisRequest,
-    AnalysisResponse,
-    AnalysisListParams,
-    AnalysisProgress,
+    AnalysisStepResult,
+    StepExecutionRequest,
+    Algorithm,
     AnalysisStatus
 } from '@/types/analysis';
 
 interface AnalysisState {
-    // Analysis configurations
-    availableTypes: AnalysisConfig[];
-    currentConfig: AnalysisConfig | null;
+    // Analysis types and configurations
+    analysisTypes: AnalysisType[];
+    currentAnalysisType: AnalysisType | null;
+    availableAlgorithms: Record<string, Algorithm[]>;
 
-    // Analysis tasks state
-    analyses: AnalysisResponse[];
-    currentAnalysis: AnalysisResponse | null;
+    // Analysis state
+    analyses: Analysis[];
+    currentAnalysis: Analysis | null;
+    currentStepResult: AnalysisStepResult | null;
     isLoading: boolean;
     error: string | null;
-    filters: AnalysisListParams;
-    lastFetched: number | null;
-    isFetching: boolean;
 
-    // Analysis progress tracking
-    processingAnalyses: Map<string, AnalysisProgress>;
-
-    // Methods for configuration
-    setCurrentConfig: (config: AnalysisConfig | null) => void;
-    loadAvailableTypes: () => Promise<void>;
+    // Methods for analysis types
+    fetchAnalysisTypes: () => Promise<void>;
+    fetchAnalysisType: (analysisTypeId: string) => Promise<void>;
+    setCurrentAnalysisType: (analysisType: AnalysisType | null) => void;
+    fetchStepAlgorithms: (stepId: string) => Promise<void>;
 
     // Methods for analysis operations
-    startAnalysis: (documentId: string, request: AnalysisRequest) => Promise<AnalysisResponse>;
-    cancelAnalysis: (analysisId: string) => Promise<void>;
-    retryAnalysis: (analysisId: string) => Promise<void>;
-
-    // Methods for fetching and managing analyses
-    fetchAnalyses: (forceRefresh?: boolean) => Promise<void>;
+    startAnalysis: (documentId: string, request: AnalysisRequest) => Promise<void>;
+    fetchDocumentAnalyses: (documentId: string) => Promise<void>;
     fetchAnalysis: (analysisId: string) => Promise<void>;
-    setFilters: (filters: Partial<AnalysisListParams>) => void;
-    clearError: () => void;
+    executeStep: (analysisId: string, stepId: string, request: StepExecutionRequest) => Promise<void>;
+    updateStepCorrections: (analysisId: string, stepId: string, corrections: Record<string, any>) => Promise<void>;
 
-    // Methods for progress tracking
-    updateAnalysisProgress: (analysisId: string, progress: AnalysisProgress) => void;
-    clearAnalysisProgress: (analysisId: string) => void;
+    // Utility methods
+    clearError: () => void;
+    reset: () => void;
 }
 
 export const useAnalysisStore = create<AnalysisState>((set, get) => ({
     // Initial state
-    availableTypes: [],
-    currentConfig: null,
+    analysisTypes: [],
+    currentAnalysisType: null,
+    availableAlgorithms: {},
     analyses: [],
     currentAnalysis: null,
+    currentStepResult: null,
     isLoading: false,
     error: null,
-    filters: {},
-    lastFetched: null,
-    isFetching: false,
-    processingAnalyses: new Map(),
 
-    // Configuration methods
-    setCurrentConfig: (config) => set({ currentConfig: config }),
-
-    loadAvailableTypes: async () => {
+    // Analysis types methods
+    fetchAnalysisTypes: async () => {
         try {
             set({ isLoading: true, error: null });
-            const types = await analysisService.getAvailableTypes();
-            set({ availableTypes: types, isLoading: false });
+            const types = await analysisService.getAnalysisTypes();
+            set({ analysisTypes: types, isLoading: false });
         } catch (error) {
             set({
-                error: error instanceof Error ? error.message : 'Failed to load analysis types',
+                error: error instanceof Error ? error.message : 'Failed to fetch analysis types',
+                isLoading: false
+            });
+            throw error;
+        }
+    },
+
+    fetchAnalysisType: async (analysisTypeId: string) => {
+        try {
+            set({ isLoading: true, error: null });
+            const analysisType = await analysisService.getAnalysisType(analysisTypeId);
+            set({
+                currentAnalysisType: analysisType,
+                isLoading: false
+            });
+        } catch (error) {
+            set({
+                error: error instanceof Error ? error.message : 'Failed to fetch analysis type',
+                isLoading: false
+            });
+            throw error;
+        }
+    },
+
+    setCurrentAnalysisType: (analysisType) => set({ currentAnalysisType: analysisType }),
+
+    fetchStepAlgorithms: async (stepId: string) => {
+        try {
+            set({ isLoading: true, error: null });
+            const algorithms = await analysisService.getStepAlgorithms(stepId);
+            set((state) => ({
+                availableAlgorithms: {
+                    ...state.availableAlgorithms,
+                    [stepId]: algorithms
+                },
+                isLoading: false
+            }));
+        } catch (error) {
+            set({
+                error: error instanceof Error ? error.message : 'Failed to fetch step algorithms',
                 isLoading: false
             });
             throw error;
@@ -82,19 +111,11 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
         try {
             set({ isLoading: true, error: null });
             const analysis = await analysisService.startAnalysis(documentId, request);
-
-            // Update analyses list and track progress
             set((state) => ({
                 analyses: [analysis, ...state.analyses],
-                processingAnalyses: new Map(state.processingAnalyses).set(analysis.id, {
-                    status: analysis.status,
-                    progress: 0
-                }),
-                isLoading: false,
-                lastFetched: Date.now()
+                currentAnalysis: analysis,
+                isLoading: false
             }));
-
-            return analysis;
         } catch (error) {
             set({
                 error: error instanceof Error ? error.message : 'Failed to start analysis',
@@ -104,93 +125,18 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
         }
     },
 
-    cancelAnalysis: async (analysisId: string) => {
+    fetchDocumentAnalyses: async (documentId: string) => {
         try {
             set({ isLoading: true, error: null });
-            await analysisService.cancelAnalysis(analysisId);
-
-            // Update analysis status in the list
-            set((state) => ({
-                analyses: state.analyses.map(analysis =>
-                    analysis.id === analysisId
-                        ? { ...analysis, status: AnalysisStatus.FAILED }
-                        : analysis
-                ),
-                processingAnalyses: (() => {
-                    const newMap = new Map(state.processingAnalyses);
-                    newMap.delete(analysisId);
-                    return newMap;
-                })(),
-                isLoading: false,
-                lastFetched: Date.now()
-            }));
-        } catch (error) {
+            const analyses = await analysisService.getDocumentAnalyses(documentId);
             set({
-                error: error instanceof Error ? error.message : 'Failed to cancel analysis',
+                analyses,
                 isLoading: false
             });
-            throw error;
-        }
-    },
-
-    retryAnalysis: async (analysisId: string) => {
-        try {
-            set({ isLoading: true, error: null });
-            const analysis = await analysisService.retryAnalysis(analysisId);
-
-            // Update analysis in the list
-            set((state) => ({
-                analyses: state.analyses.map(a => a.id === analysisId ? analysis : a),
-                processingAnalyses: new Map(state.processingAnalyses).set(analysis.id, {
-                    status: AnalysisStatus.PENDING,
-                    progress: 0
-                }),
-                isLoading: false,
-                lastFetched: Date.now()
-            }));
         } catch (error) {
             set({
-                error: error instanceof Error ? error.message : 'Failed to retry analysis',
+                error: error instanceof Error ? error.message : 'Failed to fetch document analyses',
                 isLoading: false
-            });
-            throw error;
-        }
-    },
-
-    // Fetching and managing analyses
-    fetchAnalyses: async (forceRefresh = false) => {
-        const state = get();
-        const now = Date.now();
-        const CACHE_DURATION = 30000; // 30 seconds cache
-
-        // Return cached data if available and not forced refresh
-        if (!forceRefresh &&
-            state.lastFetched &&
-            now - state.lastFetched < CACHE_DURATION &&
-            !state.isFetching) {
-            return;
-        }
-
-        // Prevent concurrent fetches
-        if (state.isFetching) {
-            return;
-        }
-
-        set({ isLoading: true, isFetching: true, error: null });
-
-        try {
-            const response = await analysisService.getAnalyses(state.filters);
-            set({
-                analyses: response,
-                lastFetched: now,
-                isLoading: false,
-                isFetching: false
-            });
-        } catch (error) {
-            set({
-                error: error instanceof Error ? error.message : 'Failed to fetch analyses',
-                isLoading: false,
-                isFetching: false
             });
             throw error;
         }
@@ -213,32 +159,63 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
         }
     },
 
-    setFilters: (newFilters) => {
-        set((state) => ({
-            filters: { ...state.filters, ...newFilters },
-            lastFetched: null // Reset lastFetched when filters change
-        }));
+    executeStep: async (analysisId: string, stepId: string, request: StepExecutionRequest) => {
+        try {
+            set({ isLoading: true, error: null });
+            const stepResult = await analysisService.executeStep(analysisId, stepId, request);
+            set((state) => ({
+                currentStepResult: stepResult,
+                currentAnalysis: state.currentAnalysis ? {
+                    ...state.currentAnalysis,
+                    step_results: state.currentAnalysis.step_results.map(r =>
+                        r.step_id === stepId ? stepResult : r
+                    )
+                } : null,
+                isLoading: false
+            }));
+        } catch (error) {
+            set({
+                error: error instanceof Error ? error.message : 'Failed to execute step',
+                isLoading: false
+            });
+            throw error;
+        }
     },
 
+    updateStepCorrections: async (analysisId: string, stepId: string, corrections: Record<string, any>) => {
+        try {
+            set({ isLoading: true, error: null });
+            const stepResult = await analysisService.updateStepCorrections(analysisId, stepId, corrections);
+            set((state) => ({
+                currentStepResult: stepResult,
+                currentAnalysis: state.currentAnalysis ? {
+                    ...state.currentAnalysis,
+                    step_results: state.currentAnalysis.step_results.map(r =>
+                        r.step_id === stepId ? stepResult : r
+                    )
+                } : null,
+                isLoading: false
+            }));
+        } catch (error) {
+            set({
+                error: error instanceof Error ? error.message : 'Failed to update corrections',
+                isLoading: false
+            });
+            throw error;
+        }
+    },
+
+    // Utility methods
     clearError: () => set({ error: null }),
 
-    // Progress tracking methods
-    updateAnalysisProgress: (analysisId: string, progress: AnalysisProgress) => {
-        set((state) => ({
-            processingAnalyses: new Map(state.processingAnalyses).set(analysisId, progress),
-            analyses: state.analyses.map(analysis =>
-                analysis.id === analysisId
-                    ? { ...analysis, status: progress.status, progress: progress.progress }
-                    : analysis
-            )
-        }));
-    },
-
-    clearAnalysisProgress: (analysisId: string) => {
-        set((state) => {
-            const newMap = new Map(state.processingAnalyses);
-            newMap.delete(analysisId);
-            return { processingAnalyses: newMap };
-        });
-    }
+    reset: () => set({
+        analysisTypes: [],
+        currentAnalysisType: null,
+        availableAlgorithms: {},
+        analyses: [],
+        currentAnalysis: null,
+        currentStepResult: null,
+        isLoading: false,
+        error: null
+    })
 })); 

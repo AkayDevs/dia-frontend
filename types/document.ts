@@ -1,7 +1,7 @@
 /**
  * Supported document types
  */
-import { AnalysisResult } from './analysis';
+import { Analysis } from './analysis';
 
 export enum DocumentType {
     PDF = 'pdf',
@@ -21,6 +21,32 @@ export enum AnalysisStatus {
 }
 
 /**
+ * Tag interface
+ */
+export interface Tag {
+    id: number;
+    name: string;
+    created_at: string;
+}
+
+/**
+ * Tag creation interface
+ */
+export interface TagCreate {
+    name: string;
+}
+
+/**
+ * Document metadata interface
+ */
+export interface DocumentMetadata {
+    wordCount?: number;
+    pageCount?: number;
+    characterCount?: number;
+    summary?: string;
+}
+
+/**
  * Base document interface
  */
 export interface DocumentBase {
@@ -35,43 +61,46 @@ export interface DocumentBase {
  */
 export interface Document extends DocumentBase {
     id: string;
-    status: AnalysisStatus;
     uploaded_at: string;
     updated_at?: string;
     user_id: string;
-    error_message?: string;
+    tags: Tag[];
+    previous_version_id?: string;
+    is_archived: boolean;
+    archived_at?: string;
+    retention_until?: string;
+    metadata?: DocumentMetadata;
 }
 
 /**
  * Document with analysis results
  */
 export interface DocumentWithAnalysis extends Document {
-    analysis_results: AnalysisResult[];
+    analyses: Analysis[];
 }
 
 /**
  * Query parameters for document list
  */
 export interface DocumentListParams {
-    status?: AnalysisStatus;
+    tag_id?: number;
     doc_type?: DocumentType;
     skip?: number;
     limit?: number;
 }
 
-
 /**
- * Analysis parameters for document analysis
+ * Document update parameters
  */
-export interface AnalysisParameters {
-    type: string;
-    parameters: Record<string, any>;
+export interface DocumentUpdate {
+    name?: string;
+    tag_ids?: number[];
+    file?: File;
 }
 
 /**
- * Response for analysis request
+ * Base response type
  */
-export interface AnalysisRequestResponse {
+export interface BaseResponse {
     message: string;
-    analysis_id: string;
 } 

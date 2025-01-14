@@ -1,37 +1,61 @@
 import { create } from 'zustand';
 import { documentService } from '@/services/document.service';
-import { Document, DocumentListParams, AnalysisStatus } from '@/types/document';
+import { Document, DocumentListParams, DocumentWithAnalysis, Tag, TagCreate, DocumentUpdate } from '@/types/document';
 
 interface DocumentState {
+    // Document state
     documents: Document[];
+    currentDocument: DocumentWithAnalysis | null;
+    documentVersions: Document[];
     isLoading: boolean;
     error: string | null;
     filters: DocumentListParams;
     lastFetched: number | null;
     isFetching: boolean;
 
-    // Methods
+    // Tag state
+    tags: Tag[];
+    isLoadingTags: boolean;
+    tagError: string | null;
+
+    // Document methods
     setFilters: (filters: Partial<DocumentListParams>) => void;
     clearError: () => void;
     fetchDocuments: (forceRefresh?: boolean) => Promise<void>;
-    uploadDocument: (file: File) => Promise<Document>;
+    fetchDocument: (documentId: string) => Promise<void>;
+    uploadDocument: (file: File, tagIds?: number[]) => Promise<Document>;
     uploadDocuments: (files: File[]) => Promise<Document[]>;
+    updateDocument: (documentId: string, updates: DocumentUpdate) => Promise<void>;
     deleteDocument: (documentId: string) => Promise<void>;
-    getProcessingDocuments: () => Document[];
+    fetchDocumentVersions: (documentId: string) => Promise<void>;
+
+    // Tag methods
+    fetchTags: (documentId?: string, nameFilter?: string) => Promise<void>;
+    createTag: (tag: TagCreate) => Promise<Tag>;
+    updateTag: (tagId: number, tag: TagCreate) => Promise<void>;
+    deleteTag: (tagId: number) => Promise<void>;
+    updateDocumentTags: (documentId: string, tagIds: number[]) => Promise<void>;
+    clearTagError: () => void;
 }
 
 export const useDocumentStore = create<DocumentState>((set, get) => ({
+    // Initial state
     documents: [],
+    currentDocument: null,
+    documentVersions: [],
     isLoading: false,
     error: null,
     filters: {},
     lastFetched: null,
     isFetching: false,
+    tags: [],
+    isLoadingTags: false,
+    tagError: null,
 
+    // Document methods
     setFilters: (newFilters) => {
         set((state) => ({
             filters: { ...state.filters, ...newFilters },
-            // Reset lastFetched when filters change to force a new fetch
             lastFetched: null
         }));
     },
@@ -43,7 +67,6 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         const now = Date.now();
         const CACHE_DURATION = 30000; // 30 seconds cache
 
-        // Return cached data if available and not forced refresh
         if (!forceRefresh &&
             state.lastFetched &&
             now - state.lastFetched < CACHE_DURATION &&
@@ -51,7 +74,6 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
             return;
         }
 
-        // Prevent concurrent fetches
         if (state.isFetching) {
             return;
         }
@@ -60,7 +82,6 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
 
         try {
             const response = await documentService.getDocuments(state.filters);
-
             set({
                 documents: response,
                 lastFetched: now,
@@ -73,18 +94,33 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
                 isLoading: false,
                 isFetching: false
             });
-            throw error;
         }
     },
 
-    uploadDocument: async (file: File) => {
+    fetchDocument: async (documentId: string) => {
         set({ isLoading: true, error: null });
         try {
-            const document = await documentService.uploadDocument(file);
+            const document = await documentService.getDocument(documentId);
+            set({
+                currentDocument: document,
+                isLoading: false
+            });
+        } catch (error) {
+            set({
+                error: error instanceof Error ? error.message : 'Failed to fetch document',
+                isLoading: false
+            });
+        }
+    },
+
+    uploadDocument: async (file: File, tagIds?: number[]) => {
+        set({ isLoading: true, error: null });
+        try {
+            const document = await documentService.uploadDocument(file, tagIds);
             set((state) => ({
                 documents: [document, ...state.documents],
                 isLoading: false,
-                lastFetched: Date.now() // Update lastFetched to reflect new data
+                lastFetched: Date.now()
             }));
             return document;
         } catch (error) {
@@ -103,12 +139,35 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
             set((state) => ({
                 documents: [...documents, ...state.documents],
                 isLoading: false,
-                lastFetched: Date.now() // Update lastFetched to reflect new data
+                lastFetched: Date.now()
             }));
             return documents;
         } catch (error) {
             set({
                 error: error instanceof Error ? error.message : 'Failed to upload documents',
+                isLoading: false
+            });
+            throw error;
+        }
+    },
+
+    updateDocument: async (documentId: string, updates: DocumentUpdate) => {
+        set({ isLoading: true, error: null });
+        try {
+            const updatedDoc = await documentService.updateDocument(documentId, updates);
+            set((state) => ({
+                documents: state.documents.map(doc =>
+                    doc.id === documentId ? updatedDoc : doc
+                ),
+                currentDocument: state.currentDocument?.id === documentId ?
+                    { ...state.currentDocument, ...updatedDoc } :
+                    state.currentDocument,
+                isLoading: false,
+                lastFetched: Date.now()
+            }));
+        } catch (error) {
+            set({
+                error: error instanceof Error ? error.message : 'Failed to update document',
                 isLoading: false
             });
             throw error;
@@ -121,8 +180,9 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
             await documentService.deleteDocument(documentId);
             set((state) => ({
                 documents: state.documents.filter(doc => doc.id !== documentId),
+                currentDocument: state.currentDocument?.id === documentId ? null : state.currentDocument,
                 isLoading: false,
-                lastFetched: Date.now() // Update lastFetched to reflect new data
+                lastFetched: Date.now()
             }));
         } catch (error) {
             set({
@@ -133,11 +193,114 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         }
     },
 
-    getProcessingDocuments: () => {
-        const state = get();
-        return state.documents.filter(
-            doc => doc.status === AnalysisStatus.PROCESSING ||
-                doc.status === AnalysisStatus.PENDING
-        );
-    }
+    fetchDocumentVersions: async (documentId: string) => {
+        set({ isLoading: true, error: null });
+        try {
+            const versions = await documentService.getDocumentVersions(documentId);
+            set({
+                documentVersions: versions,
+                isLoading: false
+            });
+        } catch (error) {
+            set({
+                error: error instanceof Error ? error.message : 'Failed to fetch document versions',
+                isLoading: false
+            });
+            throw error;
+        }
+    },
+
+    // Tag methods
+    fetchTags: async (documentId?: string, nameFilter?: string) => {
+        set({ isLoadingTags: true, tagError: null });
+        try {
+            const tags = await documentService.getTags(documentId, nameFilter);
+            set({
+                tags,
+                isLoadingTags: false
+            });
+        } catch (error) {
+            set({
+                tagError: error instanceof Error ? error.message : 'Failed to fetch tags',
+                isLoadingTags: false
+            });
+            throw error;
+        }
+    },
+
+    createTag: async (tag: TagCreate) => {
+        set({ isLoadingTags: true, tagError: null });
+        try {
+            const newTag = await documentService.createTag(tag);
+            set((state) => ({
+                tags: [...state.tags, newTag],
+                isLoadingTags: false
+            }));
+            return newTag;
+        } catch (error) {
+            set({
+                tagError: error instanceof Error ? error.message : 'Failed to create tag',
+                isLoadingTags: false
+            });
+            throw error;
+        }
+    },
+
+    updateTag: async (tagId: number, tag: TagCreate) => {
+        set({ isLoadingTags: true, tagError: null });
+        try {
+            const updatedTag = await documentService.updateTag(tagId, tag);
+            set((state) => ({
+                tags: state.tags.map(t => t.id === tagId ? updatedTag : t),
+                isLoadingTags: false
+            }));
+        } catch (error) {
+            set({
+                tagError: error instanceof Error ? error.message : 'Failed to update tag',
+                isLoadingTags: false
+            });
+            throw error;
+        }
+    },
+
+    deleteTag: async (tagId: number) => {
+        set({ isLoadingTags: true, tagError: null });
+        try {
+            await documentService.deleteTag(tagId);
+            set((state) => ({
+                tags: state.tags.filter(t => t.id !== tagId),
+                isLoadingTags: false
+            }));
+        } catch (error) {
+            set({
+                tagError: error instanceof Error ? error.message : 'Failed to delete tag',
+                isLoadingTags: false
+            });
+            throw error;
+        }
+    },
+
+    updateDocumentTags: async (documentId: string, tagIds: number[]) => {
+        set({ isLoading: true, error: null });
+        try {
+            const updatedDoc = await documentService.updateDocumentTags(documentId, tagIds);
+            set((state) => ({
+                documents: state.documents.map(doc =>
+                    doc.id === documentId ? updatedDoc : doc
+                ),
+                currentDocument: state.currentDocument?.id === documentId ?
+                    { ...state.currentDocument, ...updatedDoc } :
+                    state.currentDocument,
+                isLoading: false
+            }));
+        } catch (error) {
+            set({
+                error: error instanceof Error ? error.message : 'Failed to update document tags',
+                isLoading: false
+            });
+            throw error;
+        }
+    },
+
+    clearTagError: () => set({ tagError: null })
 })); 

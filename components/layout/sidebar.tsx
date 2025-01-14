@@ -219,7 +219,7 @@ export function Sidebar({ className }: SidebarProps) {
                                         </div>
                                     )}
                                 </div>
-                                {(item.title === 'Documents' || item.title === 'Analysis') && processingCount > 0 && (
+                                {(item.title === 'Documents') && processingCount > 0 && (
                                     <Badge
                                         variant="secondary"
                                         className="ml-auto px-2 py-0.5 bg-primary/10 text-primary hover:bg-primary/15"

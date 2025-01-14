@@ -5,6 +5,9 @@ import {
     Document,
     DocumentWithAnalysis,
     DocumentListParams,
+    Tag,
+    TagCreate,
+    DocumentUpdate,
 } from '@/types/document';
 
 class DocumentService {
@@ -42,13 +45,16 @@ class DocumentService {
     }
 
     /**
-     * Upload a single document
+     * Upload a single document with optional tags
      */
-    async uploadDocument(file: File): Promise<Document> {
+    async uploadDocument(file: File, tagIds?: number[]): Promise<Document> {
         const formData = new FormData();
         formData.append('file', file);
+        if (tagIds?.length) {
+            formData.append('tag_ids', tagIds.join(','));
+        }
 
-        const response = await fetch(`${this.baseUrl}`, {
+        const response = await fetch(this.baseUrl, {
             method: 'POST',
             headers: this.getHeaders(true),
             body: formData,
@@ -83,8 +89,8 @@ class DocumentService {
 
         if (params.skip !== undefined) queryParams.append('skip', params.skip.toString());
         if (params.limit !== undefined) queryParams.append('limit', params.limit.toString());
-        if (params.status) queryParams.append('status', params.status);
         if (params.doc_type) queryParams.append('doc_type', params.doc_type);
+        if (params.tag_id !== undefined) queryParams.append('tag_id', params.tag_id.toString());
 
         const response = await fetch(`${this.baseUrl}?${queryParams.toString()}`, {
             headers: this.getHeaders(),
@@ -104,6 +110,31 @@ class DocumentService {
     }
 
     /**
+     * Update document metadata and/or content
+     */
+    async updateDocument(documentId: string, updates: DocumentUpdate): Promise<Document> {
+        const formData = new FormData();
+
+        if (updates.file) {
+            formData.append('file', updates.file);
+        }
+        if (updates.name) {
+            formData.append('name', updates.name);
+        }
+        if (updates.tag_ids?.length) {
+            formData.append('tag_ids', updates.tag_ids.join(','));
+        }
+
+        const response = await fetch(`${this.baseUrl}/${documentId}`, {
+            method: 'PATCH',
+            headers: this.getHeaders(true),
+            body: formData,
+        });
+
+        return this.handleResponse<Document>(response);
+    }
+
+    /**
      * Delete a document
      */
     async deleteDocument(documentId: string): Promise<BaseResponse> {
@@ -113,6 +144,84 @@ class DocumentService {
         });
 
         return this.handleResponse<BaseResponse>(response);
+    }
+
+    /**
+     * Get document versions
+     */
+    async getDocumentVersions(documentId: string): Promise<Document[]> {
+        const response = await fetch(`${this.baseUrl}/${documentId}/versions`, {
+            headers: this.getHeaders(),
+        });
+
+        return this.handleResponse<Document[]>(response);
+    }
+
+    /**
+     * Get list of tags
+     */
+    async getTags(documentId?: string, nameFilter?: string): Promise<Tag[]> {
+        const queryParams = new URLSearchParams();
+
+        if (documentId) queryParams.append('document_id', documentId);
+        if (nameFilter) queryParams.append('name_filter', nameFilter);
+
+        const response = await fetch(`${this.baseUrl}/tag-list?${queryParams.toString()}`, {
+            headers: this.getHeaders(),
+        });
+
+        return this.handleResponse<Tag[]>(response);
+    }
+
+    /**
+     * Create a new tag
+     */
+    async createTag(tag: TagCreate): Promise<Tag> {
+        const response = await fetch(`${this.baseUrl}/tag-list`, {
+            method: 'POST',
+            headers: this.getHeaders(),
+            body: JSON.stringify(tag),
+        });
+
+        return this.handleResponse<Tag>(response);
+    }
+
+    /**
+     * Update document tags
+     */
+    async updateDocumentTags(documentId: string, tagIds: number[]): Promise<Document> {
+        const response = await fetch(`${this.baseUrl}/${documentId}/tags`, {
+            method: 'PUT',
+            headers: this.getHeaders(),
+            body: JSON.stringify({ tag_ids: tagIds }),
+        });
+
+        return this.handleResponse<Document>(response);
+    }
+
+    /**
+     * Delete a tag
+     */
+    async deleteTag(tagId: number): Promise<BaseResponse> {
+        const response = await fetch(`${this.baseUrl}/tag-list/${tagId}`, {
+            method: 'DELETE',
+            headers: this.getHeaders(),
+        });
+
+        return this.handleResponse<BaseResponse>(response);
+    }
+
+    /**
+     * Update a tag
+     */
+    async updateTag(tagId: number, tag: TagCreate): Promise<Tag> {
+        const response = await fetch(`${this.baseUrl}/tag-list/${tagId}`, {
+            method: 'PATCH',
+            headers: this.getHeaders(),
+            body: JSON.stringify(tag),
+        });
+
+        return this.handleResponse<Tag>(response);
     }
 }
 

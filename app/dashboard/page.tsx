@@ -18,38 +18,59 @@ import {
     ChartBarIcon,
     ExclamationCircleIcon,
     ArrowPathIcon,
-    DocumentDuplicateIcon
+    DocumentDuplicateIcon,
+    DocumentTextIcon as FileText
 } from '@heroicons/react/24/outline';
+import { formatDistanceToNow } from 'date-fns';
+import { Badge } from '@/components/ui/badge';
 
 interface DashboardStats {
     // Document stats
     totalDocuments: number;
     analyzedDocuments: number;
-    pendingAnalyses: number;
     failedAnalyses: number;
 
     // Analysis stats
     totalAnalyses: number;
     analysisSuccessRate: number;
+    ongoingAnalyses: {
+        count: number;
+        items: Array<{
+            documentName: string;
+            type: string;
+            startedAt: string;
+        }>;
+    };
     mostUsedAnalysisType: {
         type: string;
         count: number;
     };
-    averageAnalysisTime: number; // in minutes
+    averageAnalysisTime: number;
+    analyses: Array<{
+        document_id: string;
+        type: string;
+        status: string;
+        created_at: string;
+        completed_at?: string;
+    }>;
 }
 
 const initialStats: DashboardStats = {
     totalDocuments: 0,
     analyzedDocuments: 0,
-    pendingAnalyses: 0,
     failedAnalyses: 0,
     totalAnalyses: 0,
     analysisSuccessRate: 0,
+    ongoingAnalyses: {
+        count: 0,
+        items: []
+    },
     mostUsedAnalysisType: {
         type: '',
         count: 0
     },
-    averageAnalysisTime: 0
+    averageAnalysisTime: 0,
+    analyses: []
 };
 
 export default function DashboardPage() {
@@ -108,17 +129,10 @@ export default function DashboardPage() {
         // Calculate document-related stats
         const docStats = documents.reduce((stats, doc) => {
             stats.totalDocuments += 1;
-            switch (doc.status) {
-                case 'completed':
-                    stats.analyzedDocuments += 1;
-                    break;
-                case 'pending':
-                case 'processing':
-                    stats.pendingAnalyses += 1;
-                    break;
-                case 'failed':
-                    stats.failedAnalyses += 1;
-                    break;
+            if (doc.status === 'completed') {
+                stats.analyzedDocuments += 1;
+            } else if (doc.status === 'failed') {
+                stats.failedAnalyses += 1;
             }
             return stats;
         }, { ...initialStats });
@@ -126,14 +140,23 @@ export default function DashboardPage() {
         // Calculate analysis-related stats
         const analysisStats = analyses.reduce((stats, analysis) => {
             stats.totalAnalyses += 1;
+            stats.analyses = analyses;
 
             // Calculate success rate
             if (analysis.status === AnalysisStatus.COMPLETED) {
                 stats.analysisSuccessRate += 1;
             } else if (analysis.status === AnalysisStatus.FAILED) {
                 stats.failedAnalyses += 1;
-            } else if (analysis.status === AnalysisStatus.PENDING || analysis.status === AnalysisStatus.PROCESSING) {
-                stats.pendingAnalyses += 1;
+            } else if (analysis.status === AnalysisStatus.PROCESSING) {
+                const document = documents.find(doc => doc.id === analysis.document_id);
+                if (document) {
+                    stats.ongoingAnalyses.items.push({
+                        documentName: document.name,
+                        type: analysis.type,
+                        startedAt: analysis.created_at
+                    });
+                }
+                stats.ongoingAnalyses.count += 1;
             }
 
             // Track analysis types usage
@@ -326,22 +349,41 @@ export default function DashboardPage() {
                             <Card className="p-6 hover:shadow-lg transition-shadow">
                                 <div className="flex items-start gap-4">
                                     <div className="p-3 rounded-xl bg-primary/10">
-                                        <DocumentDuplicateIcon className="w-6 h-6 text-primary" />
+                                        <ArrowPathIcon className="w-6 h-6 text-primary animate-spin" />
                                     </div>
                                     <div className="space-y-1">
-                                        <h3 className="text-xl font-semibold">Batch Processing</h3>
+                                        <h3 className="text-xl font-semibold">Ongoing Analyses</h3>
                                         <p className="text-sm text-muted-foreground">
-                                            Process multiple documents
+                                            {stats.ongoingAnalyses.count > 0
+                                                ? `${stats.ongoingAnalyses.count} analysis${stats.ongoingAnalyses.count > 1 ? 'es' : ''} in progress`
+                                                : 'No ongoing analyses'}
                                         </p>
                                     </div>
                                 </div>
-                                <Button
-                                    className="w-full mt-4"
-                                    variant="outline"
-                                    onClick={() => router.push('/dashboard/batch')}
-                                >
-                                    Start Batch Process
-                                </Button>
+                                {stats.ongoingAnalyses.count > 0 && (
+                                    <div className="mt-4 space-y-2">
+                                        {stats.ongoingAnalyses.items.map((analysis, index) => (
+                                            <div key={index} className="flex items-center justify-between p-2 rounded-md bg-muted/50">
+                                                <div className="flex items-center gap-2">
+                                                    <FileText className="h-4 w-4 text-primary" />
+                                                    <span className="text-sm font-medium truncate max-w-[150px]">
+                                                        {analysis.documentName}
+                                                    </span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <Badge variant="outline">
+                                                        {analysis.type.split('_').map(word =>
+                                                            word.charAt(0).toUpperCase() + word.slice(1)
+                                                        ).join(' ')}
+                                                    </Badge>
+                                                    <span className="text-xs text-muted-foreground">
+                                                        {formatDistanceToNow(new Date(analysis.startedAt), { addSuffix: true })}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </Card>
                         </div>
                     </div>

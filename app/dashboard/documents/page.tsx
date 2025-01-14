@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Document, DocumentType, AnalysisStatus } from '@/types/document';
+import { DocumentType, AnalysisStatus } from '@/types/document';
 import { useDocumentStore } from '@/store/useDocumentStore';
 import { useToast } from '@/hooks/use-toast';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -10,6 +10,8 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
     Select,
     SelectContent,
@@ -47,6 +49,9 @@ import {
     ChartBarIcon,
     FolderIcon,
 } from '@heroicons/react/24/outline';
+import { CalendarIcon } from 'lucide-react';
+import { format, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 const ITEMS_PER_PAGE = 10;
 
@@ -91,6 +96,15 @@ const StatusBadge = ({ status }: { status: AnalysisStatus }) => {
     );
 };
 
+// Custom styles for the Calendar component
+const calendarStyles = {
+    day_today: "bg-muted text-muted-foreground hover:bg-muted hover:text-foreground focus:bg-muted focus:text-foreground",
+    day_range_start: "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground rounded-l-md",
+    day_range_end: "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground rounded-r-md",
+    day_range_middle: "bg-primary/15 text-foreground hover:bg-primary/20 focus:bg-primary/20 rounded-none",
+    day_selected: "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground rounded-md",
+};
+
 export default function DocumentsPage() {
     const router = useRouter();
     const { toast } = useToast();
@@ -100,6 +114,13 @@ export default function DocumentsPage() {
     const [typeFilter, setTypeFilter] = useState<DocumentType | 'ALL'>('ALL');
     const [currentPage, setCurrentPage] = useState(1);
     const [selectedDocuments, setSelectedDocuments] = useState<Set<string>>(new Set());
+    const [dateRange, setDateRange] = useState<{
+        from: Date | undefined;
+        to: Date | undefined;
+    }>({
+        from: undefined,
+        to: undefined
+    });
 
     const {
         documents = [],
@@ -124,12 +145,19 @@ export default function DocumentsPage() {
         }
     }, [isAuthenticated, currentPage, statusFilter, typeFilter]);
 
-    // Filter documents based on search and filters
+    // Filter documents based on search, filters, and date range
     const filteredDocuments = documents.filter(doc => {
         const matchesSearch = doc.name.toLowerCase().includes(searchQuery.toLowerCase());
         const matchesStatus = statusFilter === 'ALL' || doc.status === statusFilter;
         const matchesType = typeFilter === 'ALL' || doc.type === typeFilter;
-        return matchesSearch && matchesStatus && matchesType;
+
+        // Date range filter
+        const matchesDateRange = !dateRange.from || !dateRange.to || isWithinInterval(
+            new Date(doc.uploaded_at),
+            { start: startOfDay(dateRange.from), end: endOfDay(dateRange.to) }
+        );
+
+        return matchesSearch && matchesStatus && matchesType && matchesDateRange;
     });
 
     const handleError = (error: any) => {
@@ -213,7 +241,7 @@ export default function DocumentsPage() {
     }
 
     return (
-        <div className="container mx-auto p-6 max-w-7xl space-y-8">
+        <>
             {/* Header */}
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
@@ -222,22 +250,13 @@ export default function DocumentsPage() {
                         Manage your documents
                     </p>
                 </div>
-                <div className="flex gap-2">
-                    <Button
-                        variant="outline"
-                        onClick={() => router.push('/dashboard')}
-                    >
-                        <ArrowPathIcon className="w-4 h-4 mr-2" />
-                        Dashboard
-                    </Button>
-                    <Button
-                        onClick={() => router.push('/dashboard/upload')}
-                        className="gap-2"
-                    >
-                        <ArrowUpTrayIcon className="w-4 h-4" />
-                        Upload
-                    </Button>
-                </div>
+                <Button
+                    onClick={() => router.push('/dashboard/upload')}
+                    className="gap-2"
+                >
+                    <ArrowUpTrayIcon className="w-4 h-4" />
+                    Upload
+                </Button>
             </div>
 
             {/* Filters and Actions */}
@@ -281,6 +300,81 @@ export default function DocumentsPage() {
                                 <SelectItem value={DocumentType.IMAGE}>Image</SelectItem>
                             </SelectContent>
                         </Select>
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    className={cn(
+                                        "w-full justify-start text-left font-normal md:w-[300px]",
+                                        !dateRange.from && "text-muted-foreground"
+                                    )}
+                                >
+                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                    {dateRange.from ? (
+                                        dateRange.to ? (
+                                            <>
+                                                {format(dateRange.from, "LLL dd, y")} -{" "}
+                                                {format(dateRange.to, "LLL dd, y")}
+                                            </>
+                                        ) : (
+                                            format(dateRange.from, "LLL dd, y")
+                                        )
+                                    ) : (
+                                        <span>Filter by date range</span>
+                                    )}
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                                <div className="p-3 border-b">
+                                    <h4 className="text-sm font-medium">Select Date Range</h4>
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                        Choose start and end dates to filter documents
+                                    </p>
+                                </div>
+                                <Calendar
+                                    initialFocus
+                                    mode="range"
+                                    defaultMonth={dateRange.from}
+                                    selected={{
+                                        from: dateRange.from,
+                                        to: dateRange.to,
+                                    }}
+                                    onSelect={(range) => {
+                                        setDateRange({
+                                            from: range?.from,
+                                            to: range?.to
+                                        });
+                                    }}
+                                    numberOfMonths={2}
+                                    classNames={calendarStyles}
+                                />
+                                <div className="border-t p-3 flex justify-between items-center">
+                                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                        <div className="flex items-center gap-1">
+                                            <div className="w-2 h-2 rounded-full bg-muted" />
+                                            <span>Today</span>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                            <div className="w-2 h-2 rounded-full bg-primary" />
+                                            <span>Selected</span>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                            <div className="w-2 h-2 rounded-full bg-primary/15" />
+                                            <span>Range</span>
+                                        </div>
+                                    </div>
+                                    {(dateRange.from || dateRange.to) && (
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => setDateRange({ from: undefined, to: undefined })}
+                                        >
+                                            Clear
+                                        </Button>
+                                    )}
+                                </div>
+                            </PopoverContent>
+                        </Popover>
                     </div>
 
                     {/* Batch Actions */}
@@ -448,6 +542,6 @@ export default function DocumentsPage() {
                     )}
                 </div>
             </Card>
-        </div>
+        </>
     );
 } 
