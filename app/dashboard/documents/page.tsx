@@ -156,6 +156,7 @@ export default function DocumentsPage() {
         fetchTags,
         createTag,
         updateDocumentTags,
+        deleteTag,
     } = useDocumentStore();
 
     const {
@@ -307,6 +308,18 @@ export default function DocumentsPage() {
             await updateDocumentTags(documentId, tagIds);
             toast({
                 description: "Document tags updated successfully",
+                duration: 3000,
+            });
+        } catch (error) {
+            handleError(error);
+        }
+    };
+
+    const handleDeleteTag = async (tagId: number) => {
+        try {
+            await deleteTag(tagId);
+            toast({
+                description: "Tag deleted successfully",
                 duration: 3000,
             });
         } catch (error) {
@@ -509,10 +522,20 @@ export default function DocumentsPage() {
                                                 key={tag.id}
                                                 className="flex items-center justify-between p-2 bg-muted rounded-md"
                                             >
-                                                <span>{tag.name}</span>
-                                                <span className="text-xs text-muted-foreground">
-                                                    Created {formatDistanceToNow(new Date(tag.created_at), { addSuffix: true })}
-                                                </span>
+                                                <div className="flex items-center gap-2">
+                                                    <span>{tag.name}</span>
+                                                    <span className="text-xs text-muted-foreground">
+                                                        Created {formatDistanceToNow(new Date(tag.created_at), { addSuffix: true })}
+                                                    </span>
+                                                </div>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                                    onClick={() => handleDeleteTag(tag.id)}
+                                                >
+                                                    <TrashIcon className="h-4 w-4" />
+                                                </Button>
                                             </div>
                                         ))}
                                     </div>
@@ -717,7 +740,7 @@ export default function DocumentsPage() {
                             <DialogHeader>
                                 <DialogTitle>Manage Document Tags</DialogTitle>
                                 <DialogDescription>
-                                    Select tags for this document
+                                    Select or remove tags for this document
                                 </DialogDescription>
                             </DialogHeader>
                             <div className="space-y-4">
@@ -742,27 +765,43 @@ export default function DocumentsPage() {
                                             }}
                                         >
                                             <span>{tag.name}</span>
-                                            {selectedTags.has(tag.id) && (
-                                                <CheckIcon className="h-4 w-4" />
+                                            {selectedTags.has(tag.id) ? (
+                                                <XMarkIcon className="h-4 w-4" />
+                                            ) : (
+                                                <PlusIcon className="h-4 w-4" />
                                             )}
                                         </div>
                                     ))}
                                 </div>
                             </div>
-                            <DialogFooter>
+                            <DialogFooter className="flex justify-between items-center">
                                 <Button
-                                    onClick={() => {
-                                        if (selectedDocumentForTags) {
-                                            handleUpdateDocumentTags(
-                                                selectedDocumentForTags,
-                                                Array.from(selectedTags)
-                                            );
-                                            setSelectedDocumentForTags(null);
-                                        }
-                                    }}
+                                    variant="ghost"
+                                    onClick={() => setSelectedTags(new Set())}
                                 >
-                                    Save Changes
+                                    Clear All
                                 </Button>
+                                <div className="flex gap-2">
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => setSelectedDocumentForTags(null)}
+                                    >
+                                        Cancel
+                                    </Button>
+                                    <Button
+                                        onClick={() => {
+                                            if (selectedDocumentForTags) {
+                                                handleUpdateDocumentTags(
+                                                    selectedDocumentForTags,
+                                                    Array.from(selectedTags)
+                                                );
+                                                setSelectedDocumentForTags(null);
+                                            }
+                                        }}
+                                    >
+                                        Save Changes
+                                    </Button>
+                                </div>
                             </DialogFooter>
                         </DialogContent>
                     </Dialog>
