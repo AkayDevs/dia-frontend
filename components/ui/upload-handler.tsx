@@ -3,96 +3,147 @@
 import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Document } from '@/types/document';
-import { ArrowUpTrayIcon, DocumentDuplicateIcon } from '@heroicons/react/24/outline';
+import { Document, DocumentType } from '@/types/document';
+import { ArrowUpTrayIcon, DocumentDuplicateIcon, XCircleIcon } from '@heroicons/react/24/outline';
 import { Progress } from '@/components/ui/progress';
+import { cn } from '@/lib/utils';
 
 export interface UploadHandlerProps {
-    onSuccess?: (file: File) => void;
-    onBatchUpload?: (files: File[]) => void;
-    onError?: (error: any) => void;
+    onSuccess?: (file: File) => Promise<void>;
+    onBatchUpload?: (files: File[]) => Promise<void>;
+    onError?: (error: unknown) => void;
     className?: string;
-    accept?: string;
+    accept?: string | Record<string, string[]>;
     multiple?: boolean;
     maxFiles?: number;
     maxSize?: number;
+    showProgress?: boolean;
 }
 
-interface UploadProgress {
-    total: number;
-    current: number;
-    files: { [key: string]: number };
+interface FileProgress {
+    name: string;
+    progress: number;
+    status: 'pending' | 'uploading' | 'success' | 'error';
+    error?: string;
 }
+
+const DEFAULT_ACCEPT = {
+    'application/pdf': ['.pdf'],
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
+    'image/jpeg': ['.jpg', '.jpeg'],
+    'image/png': ['.png']
+};
+
+const DEFAULT_MAX_SIZE = 10 * 1024 * 1024; // 10MB
+const DEFAULT_MAX_FILES = 10;
 
 export function UploadHandler({
     onSuccess,
     onBatchUpload,
     onError,
     className = '',
-    accept,
+    accept = DEFAULT_ACCEPT,
     multiple = false,
-    maxFiles = 10,
-    maxSize = 10 * 1024 * 1024 // 10MB default
+    maxFiles = DEFAULT_MAX_FILES,
+    maxSize = DEFAULT_MAX_SIZE,
+    showProgress = true
 }: UploadHandlerProps) {
     const [isUploading, setIsUploading] = useState(false);
-    const [uploadProgress, setUploadProgress] = useState<UploadProgress>({
-        total: 0,
-        current: 0,
-        files: {}
-    });
+    const [fileProgress, setFileProgress] = useState<FileProgress[]>([]);
+
+    const updateFileProgress = useCallback((fileName: string, updates: Partial<FileProgress>) => {
+        setFileProgress(prev => prev.map(file =>
+            file.name === fileName ? { ...file, ...updates } : file
+        ));
+    }, []);
 
     const handleUpload = useCallback(async (acceptedFiles: File[]) => {
         if (acceptedFiles.length === 0) return;
 
         setIsUploading(true);
-        setUploadProgress({
-            total: acceptedFiles.length,
-            current: 0,
-            files: acceptedFiles.reduce((acc, file) => ({ ...acc, [file.name]: 0 }), {})
-        });
+        setFileProgress(acceptedFiles.map(file => ({
+            name: file.name,
+            progress: 0,
+            status: 'pending'
+        })));
 
         try {
             if (acceptedFiles.length === 1 && onSuccess) {
+                updateFileProgress(acceptedFiles[0].name, { status: 'uploading' });
                 await onSuccess(acceptedFiles[0]);
+                updateFileProgress(acceptedFiles[0].name, { progress: 100, status: 'success' });
             } else if (acceptedFiles.length > 0 && onBatchUpload) {
+                for (const file of acceptedFiles) {
+                    updateFileProgress(file.name, { status: 'uploading' });
+                }
                 await onBatchUpload(acceptedFiles);
+                for (const file of acceptedFiles) {
+                    updateFileProgress(file.name, { progress: 100, status: 'success' });
+                }
             }
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Upload failed';
+            for (const file of acceptedFiles) {
+                updateFileProgress(file.name, { status: 'error', error: errorMessage });
+            }
             onError?.(error);
         } finally {
-            setIsUploading(false);
-            setUploadProgress({ total: 0, current: 0, files: {} });
+            setTimeout(() => {
+                setIsUploading(false);
+                setFileProgress([]);
+            }, 2000); // Clear progress after 2 seconds
         }
-    }, [onSuccess, onBatchUpload, onError]);
+    }, [onSuccess, onBatchUpload, onError, updateFileProgress]);
 
     const { getRootProps, getInputProps, isDragActive } = useDropzone({
         onDrop: handleUpload,
-        accept: accept ? {
-            'application/pdf': ['.pdf'],
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
-            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
-            'image/*': ['.png', '.jpg', '.jpeg']
-        } : undefined,
+        accept: typeof accept === 'string' ? undefined : accept,
         multiple,
         maxFiles,
         maxSize,
         disabled: isUploading
     });
 
-    const totalProgress = uploadProgress.total > 0
-        ? (uploadProgress.current / uploadProgress.total) * 100
-        : 0;
+    const renderUploadStatus = () => {
+        if (!showProgress || fileProgress.length === 0) return null;
+
+        return (
+            <div className="space-y-2 w-full max-w-[300px]">
+                {fileProgress.map(file => (
+                    <div key={file.name} className="space-y-1">
+                        <div className="flex items-center justify-between text-sm">
+                            <span className="truncate max-w-[200px]">{file.name}</span>
+                            {file.status === 'error' && (
+                                <XCircleIcon className="w-4 h-4 text-destructive" />
+                            )}
+                        </div>
+                        <Progress
+                            value={file.progress}
+                            className={cn(
+                                "w-full",
+                                file.status === 'error' && "bg-destructive/20"
+                            )}
+                        />
+                        {file.error && (
+                            <p className="text-xs text-destructive">{file.error}</p>
+                        )}
+                    </div>
+                ))}
+            </div>
+        );
+    };
 
     return (
         <div
             {...getRootProps()}
-            className={`
-                relative border-2 border-dashed rounded-lg
-                ${isDragActive ? 'border-primary bg-primary/5' : 'border-muted-foreground/25'}
-                ${isUploading ? 'pointer-events-none' : 'hover:border-primary hover:bg-primary/5'}
-                transition-colors cursor-pointer
-                ${className}
-            `}
+            className={cn(
+                "relative border-2 border-dashed rounded-lg",
+                isDragActive ? "border-primary bg-primary/5" : "border-muted-foreground/25",
+                isUploading ? "pointer-events-none" : "hover:border-primary hover:bg-primary/5",
+                "transition-colors cursor-pointer",
+                className
+            )}
         >
             <input {...getInputProps()} />
             <div className="absolute inset-0 flex flex-col items-center justify-center p-6">
@@ -103,12 +154,9 @@ export function UploadHandler({
                             initial={{ opacity: 0, scale: 0.95 }}
                             animate={{ opacity: 1, scale: 1 }}
                             exit={{ opacity: 0, scale: 0.95 }}
-                            className="flex flex-col items-center gap-4 w-full max-w-[300px]"
+                            className="flex flex-col items-center gap-4 w-full"
                         >
-                            <Progress value={totalProgress} className="w-full" />
-                            <p className="text-sm text-muted-foreground">
-                                Uploading {uploadProgress.current} of {uploadProgress.total} files...
-                            </p>
+                            {renderUploadStatus()}
                         </motion.div>
                     ) : (
                         <motion.div
@@ -120,11 +168,17 @@ export function UploadHandler({
                         >
                             {multiple ? (
                                 <DocumentDuplicateIcon
-                                    className={`w-10 h-10 ${isDragActive ? 'text-primary' : 'text-muted-foreground'}`}
+                                    className={cn(
+                                        "w-10 h-10",
+                                        isDragActive ? "text-primary" : "text-muted-foreground"
+                                    )}
                                 />
                             ) : (
                                 <ArrowUpTrayIcon
-                                    className={`w-10 h-10 ${isDragActive ? 'text-primary' : 'text-muted-foreground'}`}
+                                    className={cn(
+                                        "w-10 h-10",
+                                        isDragActive ? "text-primary" : "text-muted-foreground"
+                                    )}
                                 />
                             )}
                             <div className="text-center">
