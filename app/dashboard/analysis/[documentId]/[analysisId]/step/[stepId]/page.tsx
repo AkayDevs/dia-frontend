@@ -211,6 +211,7 @@ export default function StepPage({ params }: StepPageProps) {
                             stepId={stepId}
                             result={currentStep.result || null}
                             corrections={currentStep.user_corrections}
+                            documentId={documentId}
                         />
                     </CardContent>
                 </Card>

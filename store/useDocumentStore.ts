@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { documentService } from '@/services/document.service';
 import { Document, DocumentListParams, DocumentWithAnalysis, Tag, TagCreate, DocumentUpdate } from '@/types/document';
 import { API_URL } from '@/lib/constants';
+import { analysisService } from '@/services/analysis.service';
 
 interface DocumentState {
     // Document state
@@ -105,11 +106,12 @@ const useDocumentStore = create<DocumentState>((set, get) => ({
         set({ isLoading: true });
         try {
             const document = await documentService.getDocument(documentId);
+            const analyses = await analysisService.getDocumentAnalyses(documentId);
             // Add API URL to document URL and ensure it's a DocumentWithAnalysis
             const documentWithFullUrl: DocumentWithAnalysis = {
                 ...document,
                 url: document.url.startsWith('http') ? document.url : `${API_URL}${document.url}`,
-                analyses: []
+                analyses: analyses
             };
             set({ currentDocument: documentWithFullUrl, error: null });
         } catch (error) {

@@ -99,14 +99,14 @@ class DocumentService {
     }
 
     /**
-     * Get document by ID with analysis results
+     * Get document by ID
      */
-    async getDocument(documentId: string): Promise<DocumentWithAnalysis> {
+    async getDocument(documentId: string): Promise<Document> {
         const response = await fetch(`${this.baseUrl}/${documentId}`, {
             headers: this.getHeaders(),
         });
 
-        return this.handleResponse<DocumentWithAnalysis>(response);
+        return this.handleResponse<Document>(response);
     }
 
     /**
