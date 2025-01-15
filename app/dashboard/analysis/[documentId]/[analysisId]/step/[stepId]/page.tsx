@@ -5,9 +5,9 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { useAnalysisStore } from '@/store/useAnalysisStore';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { ArrowLeft, ArrowRight, RefreshCw, Save, Settings } from 'lucide-react';
-import { Analysis, AnalysisStepResult, AnalysisStatus, AnalysisStepEnum } from '@/types/analysis';
+import { Analysis, AnalysisStepResult, AnalysisStatus } from '@/types/analysis';
 import { StepOutput, StepOutputType } from '@/types/results';
 import { Badge } from '@/components/ui/badge';
 import { use } from 'react';
@@ -209,11 +209,19 @@ export default function StepPage({ params }: StepPageProps) {
                     <CardContent>
                         <StepResultVisualizer
                             stepId={stepId}
-                            result={currentStep.result || null}
+                            result={currentStep.result as StepOutput | null}
                             corrections={currentStep.user_corrections}
                             documentId={documentId}
+                            stepName={stepName}
                         />
                     </CardContent>
+
+                    {/* <CardFooter>
+                        <Button variant="outline" onClick={handleRerunStep} disabled={isLoading} className="flex items-center gap-2">
+                            <RefreshCw className="h-4 w-4" />
+                            Re-run Step
+                        </Button>
+                    </CardFooter> */}
                 </Card>
 
                 {/* Corrections Editor */}

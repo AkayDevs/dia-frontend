@@ -4,22 +4,30 @@ import { DocumentType } from './document';
  * Analysis types supported by the system
  */
 export enum AnalysisTypeEnum {
-    TABLE_DETECTION = 'table_detection',
-    TEXT_EXTRACTION = 'text_extraction',
-    TEXT_SUMMARIZATION = 'text_summarization',
+    TABLE_ANALYSIS = 'table_analysis',
+    TEXT_ANALYSIS = 'text_analysis',
     TEMPLATE_CONVERSION = 'template_conversion'
 }
 
 /**
  * Analysis step types
  */
-export enum AnalysisStepEnum {
+export enum TableAnalysisStepEnum {
     TABLE_DETECTION = 'table_detection',
-    TABLE_STRUCTURE = 'table_structure',
-    TABLE_EXTRACTION = 'table_extraction',
-    TEXT_EXTRACTION = 'text_extraction',
-    TEXT_ANALYSIS = 'text_analysis',
-    TEMPLATE_PROCESSING = 'template_processing'
+    TABLE_STRUCTURE_RECOGNITION = 'table_structure_recognition',
+    TABLE_DATA_EXTRACTION = 'table_data_extraction'
+}
+
+export enum TextAnalysisStepEnum {
+    TEXT_DETECTION = 'text_detection',
+    TEXT_RECOGNITION = 'text_recognition',
+    TEXT_CLASSIFICATION = 'text_classification'
+}
+
+export enum TemplateConversionStepEnum {
+    TEMPLATE_DETECTION = 'template_detection',
+    TEMPLATE_MATCHING = 'template_matching',
+    TEMPLATE_EXTRACTION = 'template_extraction'
 }
 
 /**
@@ -67,7 +75,7 @@ export interface Algorithm {
  */
 export interface AnalysisStep {
     id: string;
-    name: AnalysisStepEnum;
+    name: TableAnalysisStepEnum | TextAnalysisStepEnum | TemplateConversionStepEnum;
     description?: string;
     order: number;
     base_parameters: Parameter[];

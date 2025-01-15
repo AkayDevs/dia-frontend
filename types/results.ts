@@ -1,5 +1,3 @@
-import { AnalysisTypeEnum } from './analysis';
-
 /**
  * Standard bounding box representation
  */

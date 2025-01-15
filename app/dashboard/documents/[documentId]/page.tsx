@@ -504,12 +504,12 @@ export default function DocumentPage({ params }: DocumentPageProps) {
                                             <div className="flex items-center justify-between mb-4">
                                                 <div>
                                                     <h4 className="text-sm font-medium">
-                                                        {analysis.analysis_type_id === AnalysisTypeEnum.TABLE_DETECTION ? (
+                                                        {analysis.analysis_type_id === AnalysisTypeEnum.TABLE_ANALYSIS ? (
                                                             <div className="flex items-center gap-2">
                                                                 <TableCellsIcon className="w-4 h-4" />
                                                                 Table Analysis
                                                             </div>
-                                                        ) : analysis.analysis_type_id === AnalysisTypeEnum.TEXT_EXTRACTION ? (
+                                                        ) : analysis.analysis_type_id === AnalysisTypeEnum.TEXT_ANALYSIS ? (
                                                             <div className="flex items-center gap-2">
                                                                 <DocumentTextIcon className="w-4 h-4" />
                                                                 Text Analysis

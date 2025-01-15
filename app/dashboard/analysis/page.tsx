@@ -50,9 +50,8 @@ import {
 // Analysis type icon mapping
 const AnalysisTypeIcon = ({ type, className = "h-5 w-5" }: { type: AnalysisTypeEnum; className?: string }) => {
     const icons = {
-        [AnalysisTypeEnum.TABLE_DETECTION]: <TableIcon className={className} />,
-        [AnalysisTypeEnum.TEXT_EXTRACTION]: <FileText className={className} />,
-        [AnalysisTypeEnum.TEXT_SUMMARIZATION]: <FileSearch className={className} />,
+        [AnalysisTypeEnum.TABLE_ANALYSIS]: <TableIcon className={className} />,
+        [AnalysisTypeEnum.TEXT_ANALYSIS]: <FileText className={className} />,
         [AnalysisTypeEnum.TEMPLATE_CONVERSION]: <FileStack className={className} />
     };
     return icons[type] || <FileText className={className} />;
