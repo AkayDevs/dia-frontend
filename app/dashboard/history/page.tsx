@@ -36,32 +36,27 @@ import {
     Clock,
     CheckCircle,
     XCircle,
-    Calendar
+    Calendar,
+    AlertCircle
 } from 'lucide-react';
 import { format } from 'date-fns';
-import { Document, AnalysisStatus, documentService } from '@/services/document.service';
-import { analysisService, AnalysisResult, AnalysisType } from '@/services/analysis.service';
+import { useAnalysisStore } from '@/store/useAnalysisStore';
+import { useDocumentStore } from '@/store/useDocumentStore';
 import { useAuthStore } from '@/store/useAuthStore';
-
-interface AnalysisHistoryItem {
-    id: string;
-    document: Document;
-    type: AnalysisType;
-    status: AnalysisStatus;
-    created_at: string;
-    results?: Record<string, any>;
-}
+import { analysisService } from '@/services/analysis.service';
+import { Analysis, AnalysisStatus, AnalysisTypeEnum, TableAnalysisStepEnum } from '@/types/analysis';
+import { Document } from '@/types/document';
 
 export default function HistoryPage() {
     const router = useRouter();
     const { toast } = useToast();
     const { logout } = useAuthStore();
-    const [analyses, setAnalyses] = useState<AnalysisHistoryItem[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
+    const { analyses, fetchUserAnalyses, isLoading } = useAnalysisStore();
+    const { currentDocument, fetchDocument } = useDocumentStore();
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState<AnalysisStatus | 'ALL'>('ALL');
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-    const [selectedAnalysis, setSelectedAnalysis] = useState<AnalysisHistoryItem | null>(null);
+    const [selectedAnalysis, setSelectedAnalysis] = useState<Analysis | null>(null);
 
     useEffect(() => {
         fetchAnalyses();
@@ -69,9 +64,9 @@ export default function HistoryPage() {
 
     const fetchAnalyses = async () => {
         try {
-            setIsLoading(true);
-            const data = await analysisService.getAnalysisHistory();
-            setAnalyses(data);
+            await fetchUserAnalyses({
+                status: statusFilter === 'ALL' ? undefined : statusFilter
+            });
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to fetch analysis history';
 
@@ -93,22 +88,32 @@ export default function HistoryPage() {
                 description: message,
                 variant: "destructive",
             });
-        } finally {
-            setIsLoading(false);
         }
     };
 
-    const handleViewResults = async (analysis: AnalysisHistoryItem) => {
-        router.push(`/dashboard/analysis/${analysis.document.id}/results`);
+    const handleViewResults = async (analysis: Analysis) => {
+        router.push(`/dashboard/analysis/${analysis.document_id}/${analysis.id}/results`);
     };
 
-    const handleRerunAnalysis = async (analysis: AnalysisHistoryItem) => {
+    const handleRerunAnalysis = async (analysis: Analysis) => {
         try {
-            await analysisService.startAnalysis(
-                analysis.document.id,
-                analysis.type,
-                {}
-            );
+            // Get the analysis type configuration
+            const analysisType = analysis.analysis_type_id;
+            const algorithmConfigs: Record<string, { algorithm_id: string; parameters: Record<string, any> }> = {};
+
+            // Extract algorithm configurations from the existing analysis
+            analysis.step_results.forEach(step => {
+                algorithmConfigs[step.step_id] = {
+                    algorithm_id: step.algorithm_id,
+                    parameters: step.parameters
+                };
+            });
+
+            await useAnalysisStore.getState().startAnalysis(analysis.document_id, {
+                analysis_type_id: analysisType,
+                mode: analysis.mode,
+                algorithm_configs: algorithmConfigs
+            });
 
             toast({
                 description: "Analysis restarted successfully",
@@ -126,13 +131,32 @@ export default function HistoryPage() {
         }
     };
 
-    const handleExportResults = async (analysis: AnalysisHistoryItem) => {
+    const handleExportResults = async (analysis: Analysis) => {
         try {
-            const blob = await analysisService.exportAnalysisResults(analysis.document.id, 'pdf');
+            // Get the current analysis results from the store
+            const currentAnalysis = await useAnalysisStore.getState().fetchAnalysis(analysis.id);
+
+            // Create a formatted export object
+            const exportData = {
+                id: analysis.id,
+                document_id: analysis.document_id,
+                type: analysis.analysis_type_id,
+                mode: analysis.mode,
+                status: analysis.status,
+                created_at: analysis.created_at,
+                completed_at: analysis.completed_at,
+                results: analysis.step_results.map(step => ({
+                    step_id: step.step_id,
+                    result: step.result,
+                    corrections: step.user_corrections
+                }))
+            };
+
+            const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `analysis-${analysis.document.id}.pdf`;
+            a.download = `analysis-${analysis.id}.json`;
             document.body.appendChild(a);
             a.click();
             window.URL.revokeObjectURL(url);
@@ -152,7 +176,7 @@ export default function HistoryPage() {
         }
     };
 
-    const handleDeleteAnalysis = (analysis: AnalysisHistoryItem) => {
+    const handleDeleteAnalysis = (analysis: Analysis) => {
         setSelectedAnalysis(analysis);
         setDeleteDialogOpen(true);
     };
@@ -161,13 +185,11 @@ export default function HistoryPage() {
         if (!selectedAnalysis) return;
 
         try {
-            await documentService.deleteDocument(selectedAnalysis.document.id);
-
+            await useDocumentStore.getState().deleteDocument(selectedAnalysis.document_id);
             toast({
-                description: "Analysis deleted successfully",
+                description: "Analysis and associated document deleted successfully",
                 duration: 3000,
             });
-
             fetchAnalyses();
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to delete analysis';
@@ -190,6 +212,8 @@ export default function HistoryPage() {
                 return <Clock className="h-4 w-4 text-blue-500" />;
             case AnalysisStatus.FAILED:
                 return <XCircle className="h-4 w-4 text-red-500" />;
+            case AnalysisStatus.PENDING:
+                return <AlertCircle className="h-4 w-4 text-yellow-500" />;
             default:
                 return <Clock className="h-4 w-4 text-yellow-500" />;
         }
@@ -203,13 +227,16 @@ export default function HistoryPage() {
                 return 'bg-blue-500/10 text-blue-500 hover:bg-blue-500/20';
             case AnalysisStatus.FAILED:
                 return 'bg-red-500/10 text-red-500 hover:bg-red-500/20';
+            case AnalysisStatus.PENDING:
+                return 'bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/20';
             default:
                 return 'bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/20';
         }
     };
 
     const filteredAnalyses = analyses.filter(analysis => {
-        const matchesSearch = analysis.document.name.toLowerCase().includes(searchQuery.toLowerCase());
+        const document = currentDocument;
+        const matchesSearch = document?.name.toLowerCase().includes(searchQuery.toLowerCase()) || false;
         const matchesStatus = statusFilter === 'ALL' || analysis.status === statusFilter;
         return matchesSearch && matchesStatus;
     });
@@ -316,7 +343,7 @@ export default function HistoryPage() {
                                                 </div>
                                                 <div>
                                                     <h3 className="font-medium">
-                                                        {analysis.document.name}
+                                                        {currentDocument?.name || 'Loading...'}
                                                     </h3>
                                                     <div className="flex items-center gap-2 mt-1">
                                                         <Calendar className="h-3 w-3 text-muted-foreground" />
@@ -328,16 +355,16 @@ export default function HistoryPage() {
                                                         variant="secondary"
                                                         className="mt-2 text-xs capitalize"
                                                     >
-                                                        {analysis.type.replace('_', ' ')}
+                                                        {analysis.mode}
                                                     </Badge>
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-4">
                                                 <Badge
                                                     variant="secondary"
-                                                    className={`gap-1 capitalize ${getStatusColor(analysis.status)}`}
+                                                    className={`gap-1 capitalize ${getStatusColor(analysis.status as AnalysisStatus)}`}
                                                 >
-                                                    {getStatusIcon(analysis.status)}
+                                                    {getStatusIcon(analysis.status as AnalysisStatus)}
                                                     {analysis.status.toLowerCase()}
                                                 </Badge>
                                                 <div className="flex items-center gap-2">

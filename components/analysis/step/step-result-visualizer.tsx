@@ -4,6 +4,7 @@ import { TableDetectionOutput, TableStructureOutput, TableDataOutput, StepOutput
 import { TableDetectionVisualizer } from './visualizers/table-detection-visualizer';
 import { TableStructureVisualizer } from './visualizers/table-structure-visualizer';
 import { TableDataVisualizer } from './visualizers/table-data-visualizer';
+import { TableAnalysisStepEnum } from '@/types/analysis';
 
 interface StepResultVisualizerProps {
     stepId: string;
@@ -21,11 +22,9 @@ export function StepResultVisualizer({
     stepName
 }: StepResultVisualizerProps) {
     if (!result) return null;
-    console.log('stepId', stepId);
+    console.log('Step Name', stepName);
     // Select the appropriate visualizer based on step type
-    if (stepName.includes('Table Detection')) {
-        console.log('result', result);
-
+    if (stepName === TableAnalysisStepEnum.TABLE_DETECTION) {
         return (
             <TableDetectionVisualizer
                 result={result as TableDetectionOutput}
@@ -35,7 +34,7 @@ export function StepResultVisualizer({
         );
     }
 
-    if (stepName.includes('Table Structure')) {
+    if (stepName === TableAnalysisStepEnum.TABLE_STRUCTURE_RECOGNITION) {
         return (
             <TableStructureVisualizer
                 result={result as TableStructureOutput}
@@ -45,7 +44,7 @@ export function StepResultVisualizer({
         );
     }
 
-    if (stepName.includes('Table Data')) {
+    if (stepName === TableAnalysisStepEnum.TABLE_DATA_EXTRACTION) {
         return (
             <TableDataVisualizer
                 result={result as TableDataOutput}
