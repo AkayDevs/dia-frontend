@@ -51,6 +51,7 @@ import {
 } from '@/types/analysis';
 import { Document, DocumentType } from '@/types/document';
 import { cn } from '@/lib/utils';
+import { BatchResultPreview } from '@/components/batch/batch-result-preview';
 
 interface BatchItem {
     id: string;
@@ -79,6 +80,7 @@ export default function BatchPage() {
     const [selectedAnalysisType, setSelectedAnalysisType] = useState<string>('');
     const [isProcessing, setIsProcessing] = useState(false);
     const [showClearDialog, setShowClearDialog] = useState(false);
+    const [selectedItem, setSelectedItem] = useState<BatchItem | null>(null);
 
     // Fetch analysis types on mount
     useEffect(() => {
@@ -304,96 +306,129 @@ export default function BatchPage() {
                 </CardContent>
             </Card>
 
-            <Card>
-                <CardHeader>
-                    <CardTitle>Document Queue</CardTitle>
-                    <CardDescription>
-                        Upload documents or drag and drop them here
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div
-                        onDrop={handleDrop}
-                        onDragOver={(e) => e.preventDefault()}
-                        className="border-2 border-dashed rounded-lg p-8 text-center mb-6"
-                    >
-                        <input
-                            type="file"
-                            id="file-upload"
-                            multiple
-                            className="hidden"
-                            onChange={handleFileSelect}
-                            accept=".pdf,.docx,.xlsx,.png,.jpg,.jpeg"
-                        />
-                        <label
-                            htmlFor="file-upload"
-                            className="cursor-pointer flex flex-col items-center gap-2"
+            <div className="grid gap-6 lg:grid-cols-2">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Document Queue</CardTitle>
+                        <CardDescription>
+                            Upload documents or drag and drop them here
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div
+                            onDrop={handleDrop}
+                            onDragOver={(e) => e.preventDefault()}
+                            className="border-2 border-dashed rounded-lg p-8 text-center mb-6"
                         >
-                            <Upload className="h-8 w-8 text-muted-foreground" />
-                            <p className="text-muted-foreground">
-                                Click to upload or drag and drop files here
-                            </p>
-                        </label>
-                    </div>
+                            <input
+                                type="file"
+                                id="file-upload"
+                                multiple
+                                className="hidden"
+                                onChange={handleFileSelect}
+                                accept=".pdf,.docx,.xlsx,.png,.jpg,.jpeg"
+                            />
+                            <label
+                                htmlFor="file-upload"
+                                className="cursor-pointer flex flex-col items-center gap-2"
+                            >
+                                <Upload className="h-8 w-8 text-muted-foreground" />
+                                <p className="text-muted-foreground">
+                                    Click to upload or drag and drop files here
+                                </p>
+                            </label>
+                        </div>
 
-                    <ScrollArea className="h-[400px]">
-                        <div className="space-y-4">
-                            <AnimatePresence>
-                                {batchItems.map((item) => (
-                                    <motion.div
-                                        key={item.id}
-                                        initial={{ opacity: 0, y: 20 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        exit={{ opacity: 0, x: -20 }}
-                                        className="p-4 rounded-lg border bg-card"
-                                    >
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-3">
-                                                <FileText className="h-5 w-5 text-primary" />
-                                                <div>
-                                                    <p className="font-medium">{item.file.name}</p>
-                                                    <p className="text-sm text-muted-foreground">
-                                                        {(item.file.size / 1024 / 1024).toFixed(2)} MB
-                                                    </p>
+                        <ScrollArea className="h-[400px]">
+                            <div className="space-y-4">
+                                <AnimatePresence>
+                                    {batchItems.map((item) => (
+                                        <motion.div
+                                            key={item.id}
+                                            initial={{ opacity: 0, y: 20 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            exit={{ opacity: 0, x: -20 }}
+                                            className={cn(
+                                                "p-4 rounded-lg border bg-card cursor-pointer hover:bg-accent/50 transition-colors",
+                                                selectedItem?.id === item.id && "bg-accent"
+                                            )}
+                                            onClick={() => setSelectedItem(item)}
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-3">
+                                                    <FileText className="h-5 w-5 text-primary" />
+                                                    <div>
+                                                        <p className="font-medium">{item.file.name}</p>
+                                                        <p className="text-sm text-muted-foreground">
+                                                            {(item.file.size / 1024 / 1024).toFixed(2)} MB
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-4">
+                                                    <Badge
+                                                        variant="secondary"
+                                                        className={cn(
+                                                            'gap-1 capitalize',
+                                                            getStatusBadge(item.status).className
+                                                        )}
+                                                    >
+                                                        {getStatusBadge(item.status).icon}
+                                                        {item.status}
+                                                    </Badge>
+                                                    {!isProcessing && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                removeItem(item.id);
+                                                            }}
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    )}
                                                 </div>
                                             </div>
-                                            <div className="flex items-center gap-4">
-                                                <Badge
-                                                    variant="secondary"
-                                                    className={cn(
-                                                        'gap-1 capitalize',
-                                                        getStatusBadge(item.status).className
-                                                    )}
-                                                >
-                                                    {getStatusBadge(item.status).icon}
-                                                    {item.status}
-                                                </Badge>
-                                                {!isProcessing && (
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        onClick={() => removeItem(item.id)}
-                                                    >
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </Button>
-                                                )}
-                                            </div>
-                                        </div>
-                                        {item.progress > 0 && item.progress < 100 && (
-                                            <Progress value={item.progress} className="mt-2" />
-                                        )}
-                                        {item.error && (
-                                            <p className="text-sm text-red-500 mt-2">
-                                                {item.error}
-                                            </p>
-                                        )}
-                                    </motion.div>
-                                ))}
-                            </AnimatePresence>
-                        </div>
-                    </ScrollArea>
-                </CardContent>
-            </Card>
+                                            {item.progress > 0 && item.progress < 100 && (
+                                                <Progress value={item.progress} className="mt-2" />
+                                            )}
+                                            {item.error && (
+                                                <p className="text-sm text-red-500 mt-2">
+                                                    {item.error}
+                                                </p>
+                                            )}
+                                        </motion.div>
+                                    ))}
+                                </AnimatePresence>
+                            </div>
+                        </ScrollArea>
+                    </CardContent>
+                </Card>
+
+                {/* Preview Section */}
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Results Preview</CardTitle>
+                        <CardDescription>
+                            View analysis results for the selected document
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        {selectedItem?.document && selectedItem?.analysis ? (
+                            <BatchResultPreview
+                                document={selectedItem.document}
+                                analysis={selectedItem.analysis}
+                                onClose={() => setSelectedItem(null)}
+                            />
+                        ) : (
+                            <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground">
+                                <FileText className="h-12 w-12 mb-4" />
+                                <p>Select a completed item to view results</p>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            </div>
 
             <AlertDialog open={showClearDialog} onOpenChange={setShowClearDialog}>
                 <AlertDialogContent>
