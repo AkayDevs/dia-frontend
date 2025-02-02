@@ -10,6 +10,7 @@ export interface TableLocation {
     confidence: Confidence;
     /** Type of table if detected (e.g., 'bordered', 'borderless') */
     table_type?: string;
+    metadata?: Record<string, any>;
 }
 
 /**
