@@ -5,9 +5,10 @@ import { BoundingBox, BoundingBoxUtils } from '@/types/results/shared';
 
 interface TableDetectionResultsProps {
     result: TableDetectionOutput;
+    pageUrls: string[];
 }
 
-const TableDetectionResults: React.FC<TableDetectionResultsProps> = ({ result }) => {
+const TableDetectionResults: React.FC<TableDetectionResultsProps> = ({ result, pageUrls }) => {
     const [selectedTable, setSelectedTable] = useState<number | null>(null);
 
     return (
@@ -20,7 +21,7 @@ const TableDetectionResults: React.FC<TableDetectionResultsProps> = ({ result })
                             <div className="flex-1 relative">
                                 <div className="relative" style={{ width: '100%', paddingBottom: '141.4%' }}>
                                     <img
-                                        src={`/api/documents/pages/${pageResult.page_info.page_number}`}
+                                        src={pageUrls[pageResult.page_info.page_number - 1]}
                                         alt={`Page ${pageResult.page_info.page_number}`}
                                         className="absolute inset-0 w-full h-full object-contain"
                                     />

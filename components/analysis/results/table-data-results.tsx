@@ -12,14 +12,22 @@ import {
 
 interface TableDataResultsProps {
     result: TableDataOutput;
+    pageUrls: string[];
 }
 
-const TableDataResults: React.FC<TableDataResultsProps> = ({ result }) => {
+const TableDataResults: React.FC<TableDataResultsProps> = ({ result, pageUrls }) => {
     return (
         <div className="space-y-4">
             {result.results.map((pageResult, pageIndex) => (
                 <Card key={pageIndex}>
                     <CardContent className="p-4">
+                        <div className="relative mb-4" style={{ width: '100%', paddingBottom: '141.4%' }}>
+                            <img
+                                src={pageUrls[pageResult.page_info.page_number - 1]}
+                                alt={`Page ${pageResult.page_info.page_number}`}
+                                className="absolute inset-0 w-full h-full object-contain"
+                            />
+                        </div>
                         <h3 className="font-semibold mb-4">Page {pageResult.page_info.page_number}</h3>
                         {pageResult.tables.map((table, tableIndex) => (
                             <div key={tableIndex} className="mb-6">

@@ -3,8 +3,10 @@
 import React, { useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { useAnalysisStore } from '@/store/useAnalysisStore';
+import { useDocumentStore } from '@/store/useDocumentStore';
 import { TableAnalysisStepEnum } from '@/lib/enums';
 import { findStepType } from '@/lib/utils/analysis';
+import { getDocumentPageUrls } from '@/lib/utils/document';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -24,16 +26,37 @@ export const AnalysisResultsPage = () => {
     const {
         currentAnalysis,
         currentAnalysisType,
-        isLoading,
-        error,
+        isLoading: isLoadingAnalysis,
+        error: analysisError,
         fetchAnalysis
     } = useAnalysisStore();
+
+    const {
+        currentDocument,
+        currentPages,
+        isLoading: isLoadingDocument,
+        isPagesLoading,
+        error: documentError,
+        pagesError,
+        fetchDocument,
+        fetchDocumentPages
+    } = useDocumentStore();
 
     useEffect(() => {
         if (analysisId) {
             fetchAnalysis(analysisId);
         }
     }, [analysisId, fetchAnalysis]);
+
+    useEffect(() => {
+        if (currentAnalysis?.document_id) {
+            fetchDocument(currentAnalysis.document_id);
+            fetchDocumentPages(currentAnalysis.document_id);
+        }
+    }, [currentAnalysis?.document_id, fetchDocument, fetchDocumentPages]);
+
+    const isLoading = isLoadingAnalysis || isLoadingDocument || isPagesLoading;
+    const error = analysisError || documentError || pagesError;
 
     if (isLoading) {
         return (
@@ -61,7 +84,7 @@ export const AnalysisResultsPage = () => {
         );
     }
 
-    if (!currentAnalysis || !currentAnalysisType) {
+    if (!currentAnalysis || !currentAnalysisType || !currentDocument || !currentPages) {
         return (
             <div className="container mx-auto py-6">
                 <Alert>
@@ -70,6 +93,9 @@ export const AnalysisResultsPage = () => {
             </div>
         );
     }
+
+    // Get page URLs for the document
+    const pageUrls = getDocumentPageUrls(currentDocument, currentPages.pages);
 
     // Get results for each step
     const tableDetectionResult = currentAnalysis.step_results.find(
@@ -106,7 +132,10 @@ export const AnalysisResultsPage = () => {
 
                         <TabsContent value="detection">
                             {tableDetectionResult ? (
-                                <TableDetectionResults result={tableDetectionResult} />
+                                <TableDetectionResults
+                                    result={tableDetectionResult}
+                                    pageUrls={pageUrls}
+                                />
                             ) : (
                                 <Alert>
                                     <AlertDescription>No table detection results available.</AlertDescription>
@@ -116,7 +145,10 @@ export const AnalysisResultsPage = () => {
 
                         <TabsContent value="structure">
                             {tableStructureResult ? (
-                                <TableStructureResults result={tableStructureResult} />
+                                <TableStructureResults
+                                    result={tableStructureResult}
+                                    pageUrls={pageUrls}
+                                />
                             ) : (
                                 <Alert>
                                     <AlertDescription>No table structure results available.</AlertDescription>
@@ -126,7 +158,10 @@ export const AnalysisResultsPage = () => {
 
                         <TabsContent value="data">
                             {tableDataResult ? (
-                                <TableDataResults result={tableDataResult} />
+                                <TableDataResults
+                                    result={tableDataResult}
+                                    pageUrls={pageUrls}
+                                />
                             ) : (
                                 <Alert>
                                     <AlertDescription>No table data results available.</AlertDescription>

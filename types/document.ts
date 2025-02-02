@@ -44,6 +44,25 @@ export interface DocumentMetadata {
     pageCount?: number;
     characterCount?: number;
     summary?: string;
+    num_pages?: number;
+}
+
+/**
+ * Document page interface
+ */
+export interface DocumentPage {
+    page_number: number;
+    width: number;
+    height: number;
+    image_url: string;
+}
+
+/**
+ * Document pages response interface
+ */
+export interface DocumentPages {
+    total_pages: number;
+    pages: DocumentPage[];
 }
 
 /**

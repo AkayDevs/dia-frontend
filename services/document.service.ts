@@ -8,6 +8,7 @@ import {
     Tag,
     TagCreate,
     DocumentUpdate,
+    DocumentPages,
 } from '@/types/document';
 
 class DocumentService {
@@ -155,6 +156,17 @@ class DocumentService {
         });
 
         return this.handleResponse<Document[]>(response);
+    }
+
+    /**
+     * Get document pages
+     */
+    async getDocumentPages(documentId: string): Promise<DocumentPages> {
+        const response = await fetch(`${this.baseUrl}/${documentId}/pages`, {
+            headers: this.getHeaders(),
+        });
+
+        return this.handleResponse<DocumentPages>(response);
     }
 
     /**

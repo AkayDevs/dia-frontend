@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { documentService } from '@/services/document.service';
-import { Document, DocumentListParams, DocumentWithAnalysis, Tag, TagCreate, DocumentUpdate } from '@/types/document';
+import { Document, DocumentListParams, DocumentWithAnalysis, Tag, TagCreate, DocumentUpdate, DocumentPages } from '@/types/document';
 import { API_URL } from '@/lib/constants';
 import { analysisService } from '@/services/analysis.service';
 
@@ -9,8 +9,11 @@ interface DocumentState {
     documents: Document[];
     currentDocument: DocumentWithAnalysis | null;
     documentVersions: Document[];
+    currentPages: DocumentPages | null;
     isLoading: boolean;
+    isPagesLoading: boolean;
     error: string | null;
+    pagesError: string | null;
     filters: DocumentListParams;
     lastFetched: number | null;
     isFetching: boolean;
@@ -30,6 +33,7 @@ interface DocumentState {
     updateDocument: (documentId: string, updates: DocumentUpdate) => Promise<void>;
     deleteDocument: (documentId: string) => Promise<void>;
     fetchDocumentVersions: (documentId: string) => Promise<void>;
+    fetchDocumentPages: (documentId: string) => Promise<void>;
 
     // Tag methods
     fetchTags: (documentId?: string, nameFilter?: string) => Promise<void>;
@@ -45,8 +49,11 @@ const useDocumentStore = create<DocumentState>((set, get) => ({
     documents: [],
     currentDocument: null,
     documentVersions: [],
+    currentPages: null,
     isLoading: false,
+    isPagesLoading: false,
     error: null,
+    pagesError: null,
     filters: {},
     lastFetched: null,
     isFetching: false,
@@ -224,6 +231,21 @@ const useDocumentStore = create<DocumentState>((set, get) => ({
             set({ error: error instanceof Error ? error.message : 'Failed to fetch document versions' });
         } finally {
             set({ isLoading: false });
+        }
+    },
+
+    fetchDocumentPages: async (documentId: string) => {
+        set({ isPagesLoading: true, pagesError: null });
+        try {
+            const pages = await documentService.getDocumentPages(documentId);
+            set({ currentPages: pages, pagesError: null });
+        } catch (error) {
+            set({
+                pagesError: error instanceof Error ? error.message : 'Failed to fetch document pages',
+                currentPages: null
+            });
+        } finally {
+            set({ isPagesLoading: false });
         }
     },
 
