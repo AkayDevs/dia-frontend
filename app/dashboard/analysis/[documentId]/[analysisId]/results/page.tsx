@@ -119,6 +119,8 @@ export const AnalysisResultsPage = () => {
         result => findStepType(result.step_id, currentAnalysisType) === TableAnalysisStepEnum.TABLE_STRUCTURE_RECOGNITION
     )?.result as TableStructureOutput | undefined;
 
+    console.log(tableStructureResult);
+
     const tableDataResult = currentAnalysis.step_results.find(
         result => findStepType(result.step_id, currentAnalysisType) === TableAnalysisStepEnum.TABLE_DATA_EXTRACTION
     )?.result as TableDataOutput | undefined;

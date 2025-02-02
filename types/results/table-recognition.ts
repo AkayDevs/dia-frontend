@@ -30,6 +30,7 @@ export interface TableStructure {
     num_cols: number;
     /** Confidence score for the structure detection */
     confidence: Confidence;
+    metadata?: Record<string, any>;
 }
 
 /**
