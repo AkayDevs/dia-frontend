@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useAnalysisStore } from '@/store/useAnalysisStore';
 import { useDocumentStore } from '@/store/useDocumentStore';
@@ -22,6 +22,7 @@ import { TableDataOutput } from '@/types/results/table-data-extraction';
 export const AnalysisResultsPage = () => {
     const params = useParams();
     const analysisId = params.analysisId as string;
+    const [isRefreshing, setIsRefreshing] = useState(false);
 
     const {
         currentAnalysis,
@@ -43,19 +44,31 @@ export const AnalysisResultsPage = () => {
     } = useDocumentStore();
 
     useEffect(() => {
-        if (analysisId) {
-            fetchAnalysis(analysisId);
-        }
+        const fetchData = async () => {
+            if (analysisId) {
+                setIsRefreshing(true);
+                await fetchAnalysis(analysisId);
+                setIsRefreshing(false);
+            }
+        };
+        fetchData();
     }, [analysisId, fetchAnalysis]);
 
     useEffect(() => {
-        if (currentAnalysis?.document_id) {
-            fetchDocument(currentAnalysis.document_id);
-            fetchDocumentPages(currentAnalysis.document_id);
-        }
+        const fetchDocData = async () => {
+            if (currentAnalysis?.document_id) {
+                setIsRefreshing(true);
+                await Promise.all([
+                    fetchDocument(currentAnalysis.document_id),
+                    fetchDocumentPages(currentAnalysis.document_id)
+                ]);
+                setIsRefreshing(false);
+            }
+        };
+        fetchDocData();
     }, [currentAnalysis?.document_id, fetchDocument, fetchDocumentPages]);
 
-    const isLoading = isLoadingAnalysis || isLoadingDocument || isPagesLoading;
+    const isLoading = isLoadingAnalysis || isLoadingDocument || isPagesLoading || isRefreshing;
     const error = analysisError || documentError || pagesError;
 
     if (isLoading) {
@@ -131,8 +144,18 @@ export const AnalysisResultsPage = () => {
                         </TabsList>
 
                         <TabsContent value="detection">
-                            {tableDetectionResult ? (
+                            {isLoading ? (
+                                <Card>
+                                    <CardContent className="p-4">
+                                        <div className="space-y-4">
+                                            <Skeleton className="h-8 w-[200px]" />
+                                            <Skeleton className="h-[400px] w-full" />
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            ) : tableDetectionResult && currentDocument && currentPages && !isRefreshing ? (
                                 <TableDetectionResults
+                                    key={`${currentDocument.id}-${analysisId}`}
                                     result={tableDetectionResult}
                                     pageUrls={pageUrls}
                                 />

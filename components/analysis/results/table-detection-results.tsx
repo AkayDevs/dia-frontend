@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { TableDetectionOutput } from '@/types/results/table-detection';
 import { Card, CardContent } from '@/components/ui/card';
 import { BoundingBox, BoundingBoxUtils } from '@/types/results/shared';
@@ -8,8 +8,19 @@ interface TableDetectionResultsProps {
     pageUrls: string[];
 }
 
-const TableDetectionResults: React.FC<TableDetectionResultsProps> = ({ result, pageUrls }) => {
+const TableDetectionResults: React.FC<TableDetectionResultsProps> = ({
+    result,
+    pageUrls,
+}) => {
     const [selectedTable, setSelectedTable] = useState<number | null>(null);
+
+    // Reset selected table when result changes or component unmounts
+    useEffect(() => {
+        setSelectedTable(null);
+        return () => {
+            setSelectedTable(null);
+        };
+    }, [result]);
 
     return (
         <div className="space-y-4">
