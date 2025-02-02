@@ -1,12 +1,12 @@
 import { API_URL, API_VERSION } from '@/lib/constants';
 import { AUTH_TOKEN_KEY } from '@/lib/constants';
+import { Algorithm } from '@/types/algorithm';
 import {
     AnalysisType,
     Analysis,
     AnalysisRequest,
     AnalysisStepResult,
     StepExecutionRequest,
-    Algorithm,
     AnalysisListParams
 } from '@/types/analysis';
 import { fetchWithAuth } from '@/lib/fetch';

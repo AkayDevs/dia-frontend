@@ -6,10 +6,10 @@ import {
     AnalysisRequest,
     AnalysisStepResult,
     StepExecutionRequest,
-    Algorithm,
-    AnalysisStatus,
     AnalysisListParams
 } from '@/types/analysis';
+import { Algorithm } from '@/types/algorithm';
+import { AnalysisStatus } from '@/lib/enums';
 
 interface AnalysisState {
     // Analysis types and configurations
