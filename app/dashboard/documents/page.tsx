@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { DocumentType } from '@/types/document';
-import { AnalysisStatus } from '@/types/analysis';
+import { AnalysisStatus } from '@/lib/enums';
 import { useDocumentStore } from '@/store/useDocumentStore';
 import { useAnalysisStore } from '@/store/useAnalysisStore';
 import { useToast } from '@/hooks/use-toast';
@@ -84,7 +84,7 @@ const DocumentTypeIcon = ({ type, className = "h-5 w-5" }: { type: DocumentType;
 
 // Status badge component
 const StatusBadge = ({ status }: { status: AnalysisStatus }) => {
-    const statusConfig = {
+    const statusConfig: Record<AnalysisStatus, { className: string; label: string }> = {
         [AnalysisStatus.PENDING]: {
             className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
             label: 'Ready for Analysis'
@@ -100,6 +100,10 @@ const StatusBadge = ({ status }: { status: AnalysisStatus }) => {
         [AnalysisStatus.FAILED]: {
             className: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
             label: 'Analysis Failed'
+        },
+        [AnalysisStatus.WAITING_FOR_APPROVAL]: {
+            className: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+            label: 'Waiting for Approval'
         }
     };
 
@@ -382,6 +386,7 @@ export default function DocumentsPage() {
                                 <SelectItem value={AnalysisStatus.PROCESSING}>Processing</SelectItem>
                                 <SelectItem value={AnalysisStatus.COMPLETED}>Completed</SelectItem>
                                 <SelectItem value={AnalysisStatus.FAILED}>Failed</SelectItem>
+                                <SelectItem value={AnalysisStatus.WAITING_FOR_APPROVAL}>Waiting for Approval</SelectItem>
                             </SelectContent>
                         </Select>
                         <Select

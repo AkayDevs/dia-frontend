@@ -9,7 +9,28 @@ import {
     AnalysisListParams
 } from '@/types/analysis';
 import { Algorithm } from '@/types/algorithm';
-import { AnalysisStatus } from '@/lib/enums';
+import {
+    TableAnalysisStepEnum,
+    TextAnalysisStepEnum,
+    TemplateConversionStepEnum
+} from '@/lib/enums';
+import {
+    TableDetectionOutput,
+    TableDetectionResult
+} from '@/types/results/table-detection';
+import {
+    TableStructureOutput,
+    TableStructureResult
+} from '@/types/results/table-recognition';
+import {
+    TableDataOutput,
+    TableDataResult
+} from '@/types/results/table-data-extraction';
+
+type StepResult =
+    | { step_type: TableAnalysisStepEnum.TABLE_DETECTION; result: TableDetectionOutput }
+    | { step_type: TableAnalysisStepEnum.TABLE_STRUCTURE_RECOGNITION; result: TableStructureOutput }
+    | { step_type: TableAnalysisStepEnum.TABLE_DATA_EXTRACTION; result: TableDataOutput };
 
 interface AnalysisState {
     // Analysis types and configurations
@@ -20,7 +41,7 @@ interface AnalysisState {
     // Analysis state
     analyses: Analysis[];
     currentAnalysis: Analysis | null;
-    currentStepResult: AnalysisStepResult | null;
+    currentStepResult: AnalysisStepResult & StepResult | null;
     isLoading: boolean;
     error: string | null;
 
@@ -130,7 +151,6 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
     fetchDocumentAnalyses: async (documentId: string) => {
         try {
             set({ isLoading: true, error: null });
-            console.log('fetchDocumentAnalyses', documentId);
             const analyses = await analysisService.getDocumentAnalyses(documentId);
             set({
                 analyses,
@@ -166,8 +186,19 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
         try {
             set({ isLoading: true, error: null });
             const analysis = await analysisService.getAnalysis(analysisId);
+
+            // Also fetch the analysis type if not already in state
+            let analysisType = get().analysisTypes.find(type => type.id === analysis.analysis_type_id);
+            if (!analysisType) {
+                analysisType = await analysisService.getAnalysisType(analysis.analysis_type_id);
+                set(state => ({
+                    analysisTypes: [...state.analysisTypes, analysisType!]
+                }));
+            }
+
             set({
                 currentAnalysis: analysis,
+                currentAnalysisType: analysisType,
                 isLoading: false
             });
         } catch (error) {
@@ -183,6 +214,18 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
         try {
             set({ isLoading: true, error: null });
             const stepResult = await analysisService.executeStep(analysisId, stepId, request);
+
+            // Type guard to ensure proper typing of step results
+            const isValidStepResult = (result: any): result is StepResult => {
+                return result.step_type in TableAnalysisStepEnum ||
+                    result.step_type in TextAnalysisStepEnum ||
+                    result.step_type in TemplateConversionStepEnum;
+            };
+
+            if (!isValidStepResult(stepResult)) {
+                throw new Error('Invalid step result type');
+            }
+
             set((state) => ({
                 currentStepResult: stepResult,
                 currentAnalysis: state.currentAnalysis ? {
@@ -207,7 +250,7 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
             set({ isLoading: true, error: null });
             const stepResult = await analysisService.updateStepCorrections(analysisId, stepId, corrections);
             set((state) => ({
-                currentStepResult: stepResult,
+                currentStepResult: stepResult as AnalysisStepResult & StepResult,
                 currentAnalysis: state.currentAnalysis ? {
                     ...state.currentAnalysis,
                     step_results: state.currentAnalysis.step_results.map(r =>
@@ -227,7 +270,6 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
 
     // Utility methods
     clearError: () => set({ error: null }),
-
     reset: () => set({
         analysisTypes: [],
         currentAnalysisType: null,

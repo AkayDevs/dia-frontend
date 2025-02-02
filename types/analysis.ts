@@ -49,7 +49,6 @@ export interface AnalysisStepResult {
     created_at: string;
     updated_at?: string;
     completed_at?: string;
-    step_type: TableAnalysisStepEnum | TextAnalysisStepEnum | TemplateConversionStepEnum;
     error_message?: string;
 }
 
@@ -67,7 +66,6 @@ export interface Analysis {
     completed_at?: string;
     error_message?: string;
     step_results: AnalysisStepResult[];
-    analysis_type: AnalysisType;
 }
 
 /**

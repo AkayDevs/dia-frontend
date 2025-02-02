@@ -5,11 +5,10 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Document } from '@/types/document';
 import {
     AnalysisType,
-    AnalysisTypeEnum,
     Analysis,
-    AnalysisStatus,
     AnalysisListParams
 } from '@/types/analysis';
+import { AnalysisStatus } from '@/lib/enums';
 import { useDocumentStore } from '@/store/useDocumentStore';
 import { useAnalysisStore } from '@/store/useAnalysisStore';
 import { useToast } from '@/hooks/use-toast';
@@ -18,14 +17,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
-import { motion } from 'framer-motion';
 import { format, formatDistanceToNow } from 'date-fns';
 import {
     FileText,
     Table as TableIcon,
-    FileSearch,
     FileStack,
     Clock,
     CheckCircle,
@@ -46,7 +42,7 @@ import {
     AccordionItem,
     AccordionTrigger,
 } from "@/components/ui/accordion";
-
+import { AnalysisTypeEnum } from '@/lib/enums';
 // Analysis type icon mapping
 const AnalysisTypeIcon = ({ type, className = "h-5 w-5" }: { type: AnalysisTypeEnum; className?: string }) => {
     const icons = {

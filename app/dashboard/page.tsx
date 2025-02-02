@@ -11,7 +11,8 @@ import { UploadHandler } from '@/components/ui/upload-handler';
 import { useDocumentStore } from '@/store/useDocumentStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useAnalysisStore } from '@/store/useAnalysisStore';
-import { AnalysisTypeEnum, AnalysisStatus, Analysis, AnalysisType } from '@/types/analysis';
+import { Analysis } from '@/types/analysis';
+import { AnalysisStatus } from '@/lib/enums';
 import { Document, DocumentWithAnalysis } from '@/types/document';
 import { motion } from 'framer-motion';
 import {

@@ -3,12 +3,19 @@
 import React, { useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { useAnalysisStore } from '@/store/useAnalysisStore';
-import TableDetectionResults from '@/components/analysis/results/table-detection-results';
+import { TableAnalysisStepEnum } from '@/lib/enums';
+import { findStepType } from '@/lib/utils/analysis';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle } from 'lucide-react';
-import { TableDetectionStepResult, DetectedTable } from '@/types/analysis';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import TableDetectionResults from '@/components/analysis/results/table-detection-results';
+import TableStructureResults from '@/components/analysis/results/table-structure-results';
+import TableDataResults from '@/components/analysis/results/table-data-results';
+import { TableDetectionOutput } from '@/types/results/table-detection';
+import { TableStructureOutput } from '@/types/results/table-recognition';
+import { TableDataOutput } from '@/types/results/table-data-extraction';
 
 export const AnalysisResultsPage = () => {
     const params = useParams();
@@ -16,6 +23,7 @@ export const AnalysisResultsPage = () => {
 
     const {
         currentAnalysis,
+        currentAnalysisType,
         isLoading,
         error,
         fetchAnalysis
@@ -53,7 +61,7 @@ export const AnalysisResultsPage = () => {
         );
     }
 
-    if (!currentAnalysis) {
+    if (!currentAnalysis || !currentAnalysisType) {
         return (
             <div className="container mx-auto py-6">
                 <Alert>
@@ -63,42 +71,69 @@ export const AnalysisResultsPage = () => {
         );
     }
 
-    // Find the table detection step result
+    // Get results for each step
     const tableDetectionResult = currentAnalysis.step_results.find(
-        (result): result is TableDetectionStepResult => result.step_type === 'table_detection'
-    );
+        result => findStepType(result.step_id, currentAnalysisType) === TableAnalysisStepEnum.TABLE_DETECTION
+    )?.result as TableDetectionOutput | undefined;
 
-    if (!tableDetectionResult) {
-        return (
-            <div className="container mx-auto py-6">
-                <Alert>
-                    <AlertDescription>No table detection results available for this analysis.</AlertDescription>
-                </Alert>
-            </div>
-        );
-    }
+    const tableStructureResult = currentAnalysis.step_results.find(
+        result => findStepType(result.step_id, currentAnalysisType) === TableAnalysisStepEnum.TABLE_STRUCTURE_RECOGNITION
+    )?.result as TableStructureOutput | undefined;
 
-    // Transform the backend result format to match the TableDetectionResults component props
-    const transformedResult = {
-        pageImage: tableDetectionResult.page_image_url,
-        boundingBoxes: tableDetectionResult.detected_tables.map((table: DetectedTable) => ({
-            id: table.id,
-            x: table.bbox.x,
-            y: table.bbox.y,
-            width: table.bbox.width,
-            height: table.bbox.height,
-            details: table.metadata || 'No additional details available'
-        }))
-    };
+    const tableDataResult = currentAnalysis.step_results.find(
+        result => findStepType(result.step_id, currentAnalysisType) === TableAnalysisStepEnum.TABLE_DATA_EXTRACTION
+    )?.result as TableDataOutput | undefined;
 
     return (
         <div className="container mx-auto py-6 space-y-6">
             <Card>
                 <CardHeader>
-                    <CardTitle>Table Detection Results</CardTitle>
+                    <CardTitle>Analysis Results</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <TableDetectionResults result={transformedResult} />
+                    <Tabs defaultValue="detection" className="space-y-4">
+                        <TabsList>
+                            <TabsTrigger value="detection" disabled={!tableDetectionResult}>
+                                Table Detection
+                            </TabsTrigger>
+                            <TabsTrigger value="structure" disabled={!tableStructureResult}>
+                                Table Structure
+                            </TabsTrigger>
+                            <TabsTrigger value="data" disabled={!tableDataResult}>
+                                Table Data
+                            </TabsTrigger>
+                        </TabsList>
+
+                        <TabsContent value="detection">
+                            {tableDetectionResult ? (
+                                <TableDetectionResults result={tableDetectionResult} />
+                            ) : (
+                                <Alert>
+                                    <AlertDescription>No table detection results available.</AlertDescription>
+                                </Alert>
+                            )}
+                        </TabsContent>
+
+                        <TabsContent value="structure">
+                            {tableStructureResult ? (
+                                <TableStructureResults result={tableStructureResult} />
+                            ) : (
+                                <Alert>
+                                    <AlertDescription>No table structure results available.</AlertDescription>
+                                </Alert>
+                            )}
+                        </TabsContent>
+
+                        <TabsContent value="data">
+                            {tableDataResult ? (
+                                <TableDataResults result={tableDataResult} />
+                            ) : (
+                                <Alert>
+                                    <AlertDescription>No table data results available.</AlertDescription>
+                                </Alert>
+                            )}
+                        </TabsContent>
+                    </Tabs>
                 </CardContent>
             </Card>
         </div>
