@@ -2,13 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Document } from '@/types/document';
-import {
-    AnalysisType,
-    Analysis,
-    AnalysisListParams
-} from '@/types/analysis';
-import { AnalysisStatus } from '@/lib/enums';
+import { Document, DocumentType } from '@/types/document';
+import { AnalysisStatus, AnalysisDefinitionInfo, StepDefinitionInfo, AnalysisMode } from '@/types/analysis_configs';
+import { AnalysisRunWithResults, StepExecutionResultInfo } from '@/types/analysis_execution';
 import { useDocumentStore } from '@/store/useDocumentStore';
 import { useAnalysisStore } from '@/store/useAnalysisStore';
 import { useToast } from '@/hooks/use-toast';
@@ -43,19 +39,34 @@ import {
     AccordionTrigger,
 } from "@/components/ui/accordion";
 import { AnalysisTypeEnum } from '@/lib/enums';
+import type { JSX } from 'react';
+
+// Analysis type interfaces
+interface AnalysisType {
+    id: string;
+    name: string;
+    description: string;
+    supported_document_types: DocumentType[];
+    steps: StepDefinitionInfo[];
+}
+
+interface DashboardAnalysis extends AnalysisRunWithResults {
+    type: string;
+}
+
 // Analysis type icon mapping
-const AnalysisTypeIcon = ({ type, className = "h-5 w-5" }: { type: AnalysisTypeEnum; className?: string }) => {
-    const icons = {
-        [AnalysisTypeEnum.TABLE_ANALYSIS]: <TableIcon className={className} />,
-        [AnalysisTypeEnum.TEXT_ANALYSIS]: <FileText className={className} />,
-        [AnalysisTypeEnum.TEMPLATE_CONVERSION]: <FileStack className={className} />
+const AnalysisTypeIcon = ({ type, className = "h-5 w-5" }: { type: string; className?: string }) => {
+    const icons: Record<string, JSX.Element> = {
+        'table_analysis': <TableIcon className={className} />,
+        'text_analysis': <FileText className={className} />,
+        'template_conversion': <FileStack className={className} />
     };
     return icons[type] || <FileText className={className} />;
 };
 
 // Analysis card component
 interface AnalysisCardProps {
-    analysisType: AnalysisType;
+    analysisType: AnalysisDefinitionInfo;
     onSelect?: () => void;
     selected?: boolean;
 }
@@ -67,8 +78,8 @@ const AnalysisCard = ({ analysisType, onSelect, selected }: AnalysisCardProps) =
     >
         <CardHeader className="border-b bg-muted/50">
             <CardTitle className="flex items-center gap-2 text-lg">
-                <AnalysisTypeIcon type={analysisType.name} className="text-primary" />
-                {analysisType.name.split('_').map(word =>
+                <AnalysisTypeIcon type={analysisType.code} className="text-primary" />
+                {analysisType.name.split('_').map((word: string) =>
                     word.charAt(0).toUpperCase() + word.slice(1)
                 ).join(' ')}
             </CardTitle>
@@ -81,7 +92,7 @@ const AnalysisCard = ({ analysisType, onSelect, selected }: AnalysisCardProps) =
                 <div>
                     <h4 className="text-sm font-medium mb-2">Supported Document Types</h4>
                     <div className="flex flex-wrap gap-2">
-                        {analysisType.supported_document_types.map((format) => (
+                        {analysisType.supported_document_types.map((format: DocumentType) => (
                             <Badge key={format} variant="secondary">
                                 {format.toUpperCase()}
                             </Badge>
@@ -96,172 +107,161 @@ const AnalysisCard = ({ analysisType, onSelect, selected }: AnalysisCardProps) =
 // Recent analysis card component
 interface RecentAnalysisProps {
     document: Document;
-    analyses: Analysis[];
+    analyses: AnalysisRunWithResults[];
 }
 
 const RecentAnalysisCard = ({ document, analyses }: RecentAnalysisProps) => {
     const router = useRouter();
     const documentAnalyses = analyses.filter(analysis => analysis.document_id === document.id);
-    const analysesByType = documentAnalyses.reduce<Record<string, Analysis[]>>((acc, analysis) => {
-        if (!acc[analysis.analysis_type_id]) {
-            acc[analysis.analysis_type_id] = [];
+    const analysesByType = documentAnalyses.reduce<Record<string, AnalysisRunWithResults[]>>((acc, analysis) => {
+        if (!acc[analysis.analysis_code]) {
+            acc[analysis.analysis_code] = [];
         }
-        acc[analysis.analysis_type_id].push(analysis);
+        acc[analysis.analysis_code].push(analysis);
         return acc;
     }, {});
 
     return (
-        <div className="rounded-lg border bg-card">
-            <div className="flex items-center justify-between p-4 bg-muted/30">
-                <div className="flex items-center gap-4">
-                    <div className="p-2 rounded-lg bg-primary/10">
-                        <FileText className="h-6 w-6 text-primary" />
-                    </div>
-                    <div>
-                        <h4 className="font-medium text-lg">{document.name}</h4>
-                        <p className="text-sm text-muted-foreground">
-                            Last analyzed {formatDistanceToNow(new Date(documentAnalyses[0].created_at), { addSuffix: true })}
-                        </p>
-                    </div>
-                </div>
-                <Badge variant="secondary">{document.type.toUpperCase()}</Badge>
-            </div>
-            <Accordion type="single" collapsible className="w-full">
-                {Object.entries(analysesByType).map(([typeId, typeAnalyses]) => (
-                    <AccordionItem value={typeId} key={typeId}>
-                        <AccordionTrigger className="px-4 hover:no-underline hover:bg-muted/50">
+        <Card>
+            <CardHeader>
+                <CardTitle>{document.name}</CardTitle>
+                <CardDescription>
+                    Last analyzed {formatDistanceToNow(new Date(documentAnalyses[0]?.created_at || Date.now()))} ago
+                </CardDescription>
+            </CardHeader>
+            <CardContent>
+                <div className="space-y-4">
+                    {Object.entries(analysesByType).map(([typeId, typeAnalyses]) => (
+                        <div key={typeId} className="space-y-2">
                             <div className="flex items-center gap-2">
-                                <AnalysisTypeIcon type={typeId as AnalysisTypeEnum} />
+                                <AnalysisTypeIcon type={typeId} />
                                 <span className="font-medium">
                                     {typeId.split('_').map(word =>
                                         word.charAt(0).toUpperCase() + word.slice(1)
                                     ).join(' ')}
                                 </span>
-                                <Badge variant="outline" className="ml-2">
-                                    {typeAnalyses.length}
-                                </Badge>
                             </div>
-                        </AccordionTrigger>
-                        <AccordionContent>
-                            <div className="px-4 py-2 space-y-2">
-                                {typeAnalyses.map((analysis) => (
+                            <div className="pl-8 space-y-2">
+                                {typeAnalyses.map(analysis => (
                                     <div
                                         key={analysis.id}
-                                        className="flex items-center justify-between p-2 rounded-md bg-muted/50 hover:bg-muted cursor-pointer"
-                                        onClick={() => router.push(`/dashboard/analysis/${document.id}/${analysis.id}/results`)}
+                                        className="flex items-center justify-between"
+                                        onClick={() => router.push(`/dashboard/analysis/${analysis.id}`)}
                                     >
-                                        <div className="flex items-center gap-2">
-                                            {analysis.status === AnalysisStatus.COMPLETED ? (
-                                                <CheckCircle className="h-4 w-4 text-green-500" />
-                                            ) : analysis.status === AnalysisStatus.FAILED ? (
-                                                <XCircle className="h-4 w-4 text-destructive" />
-                                            ) : (
-                                                <RefreshCw className="h-4 w-4 text-muted-foreground animate-spin" />
-                                            )}
-                                            <span className="text-sm">
-                                                {format(new Date(analysis.created_at), 'MMM d, h:mm a')}
-                                            </span>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    router.push(`/dashboard/analysis/${document.id}/${analysis.id}/step/${analysis.step_results[0].step_id}`);
-                                                }}
-                                            >
-                                                Step-wise View
-                                                <Settings className="ml-2 h-3 w-3" />
-                                            </Button>
-                                            <Button variant="ghost" size="sm">
-                                                View Results
-                                                <ArrowRight className="ml-2 h-3 w-3" />
-                                            </Button>
-                                        </div>
+                                        <span className="text-sm text-muted-foreground">
+                                            {format(new Date(analysis.created_at), 'MMM d, yyyy HH:mm')}
+                                        </span>
+                                        <Badge variant="outline">
+                                            {analysis.status}
+                                        </Badge>
                                     </div>
                                 ))}
                             </div>
-                        </AccordionContent>
-                    </AccordionItem>
-                ))}
-            </Accordion>
+                        </div>
+                    ))}
+                </div>
+            </CardContent>
+        </Card>
+    );
+};
+
+const StepResultCard = ({ result }: { result: StepExecutionResultInfo }) => {
+    return (
+        <div className="p-4 bg-muted/50 rounded-lg">
+            <div className="flex items-center justify-between mb-2">
+                <h4 className="font-medium">{result.step_definition_id}</h4>
+                <Badge variant={result.status === AnalysisStatus.COMPLETED ? 'default' : 'secondary'}>
+                    {result.status}
+                </Badge>
+            </div>
+            {result.error_message && (
+                <p className="text-sm text-muted-foreground">{result.error_message}</p>
+            )}
         </div>
     );
 };
 
 export default function AnalysisPage() {
     const router = useRouter();
-    const searchParams = useSearchParams();
     const { toast } = useToast();
-    const [activeTab, setActiveTab] = useState('recent');
+    const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
     const [selectedAnalysisType, setSelectedAnalysisType] = useState<string | null>(null);
+    const [isStartingAnalysis, setIsStartingAnalysis] = useState(false);
 
-    // Get documents and analysis configurations
+    const {
+        analysisDefinitions = [] as AnalysisDefinitionInfo[],
+        analyses = [],
+        isLoading: isLoadingAnalysis,
+        fetchAnalysisDefinitions,
+        fetchUserAnalyses,
+        startAnalysis
+    } = useAnalysisStore();
+
     const {
         documents = [],
-        isLoading: isLoadingDocs,
+        isLoading: isLoadingDocuments,
         fetchDocuments
     } = useDocumentStore();
 
-    const {
-        analysisTypes = [],
-        analyses = [],
-        isLoading: isLoadingAnalysis,
-        fetchAnalysisTypes,
-        fetchUserAnalyses
-    } = useAnalysisStore();
-
-    // Check for batch analysis documents from URL
-    const batchDocuments = searchParams.get('documents')?.split(',') || [];
-
-    // Initialize data
     useEffect(() => {
         const loadData = async () => {
             try {
                 await Promise.all([
                     fetchDocuments(),
-                    fetchAnalysisTypes(),
+                    fetchAnalysisDefinitions(),
                     fetchUserAnalyses()
                 ]);
             } catch (error) {
                 toast({
                     title: "Error",
                     description: "Failed to load analysis data",
-                    variant: "destructive",
+                    variant: "destructive"
                 });
             }
         };
         loadData();
-    }, [fetchDocuments, fetchAnalysisTypes, fetchUserAnalyses, toast]);
+    }, [fetchDocuments, fetchAnalysisDefinitions, fetchUserAnalyses, toast]);
 
-    // Get recently analyzed documents
-    const recentDocuments = documents
-        .filter(doc => analyses.some(analysis => analysis.document_id === doc.id))
-        .sort((a, b) => {
-            const latestA = analyses
-                .filter(analysis => analysis.document_id === a.id)
-                .reduce((latest, analysis) => Math.max(latest, new Date(analysis.created_at).getTime()), 0);
-            const latestB = analyses
-                .filter(analysis => analysis.document_id === b.id)
-                .reduce((latest, analysis) => Math.max(latest, new Date(analysis.created_at).getTime()), 0);
-            return latestB - latestA;
-        })
-        .slice(0, 5);
-
-    // Handle document selection
-    const handleDocumentSelect = (documentId: string) => {
+    const handleStartAnalysis = async (documentId: string) => {
         if (!selectedAnalysisType) {
             toast({
                 description: "Please select an analysis type first",
-                duration: 3000,
+                variant: "destructive"
             });
             return;
         }
-        router.push(`/dashboard/analysis/${documentId}?type=${selectedAnalysisType}`);
+
+        try {
+            setIsStartingAnalysis(true);
+            const selectedDefinition = analysisDefinitions.find(def => def.id === selectedAnalysisType);
+            if (!selectedDefinition) {
+                throw new Error("Selected analysis type not found");
+            }
+
+            await startAnalysis(
+                documentId,
+                selectedDefinition.code,
+                AnalysisMode.AUTOMATIC
+            );
+
+            toast({
+                description: "Analysis started successfully",
+            });
+
+            // Navigate to the document's analysis page
+            router.push(`/dashboard/documents/${documentId}`);
+        } catch (error) {
+            toast({
+                title: "Error",
+                description: error instanceof Error ? error.message : "Failed to start analysis",
+                variant: "destructive"
+            });
+        } finally {
+            setIsStartingAnalysis(false);
+        }
     };
 
-    const isLoading = isLoadingDocs || isLoadingAnalysis;
+    const isLoading = isLoadingDocuments || isLoadingAnalysis || isStartingAnalysis;
 
     if (isLoading) {
         return (
@@ -272,7 +272,7 @@ export default function AnalysisPage() {
     }
 
     return (
-        <div className="container mx-auto p-6 max-w-7xl space-y-8">
+        <div className="container py-8 space-y-8">
             {/* Header */}
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
@@ -283,13 +283,6 @@ export default function AnalysisPage() {
                 </div>
                 <div className="flex gap-2">
                     <Button
-                        onClick={() => router.push('/dashboard/analysis/new')}
-                        className="gap-2"
-                    >
-                        <Zap className="h-4 w-4" />
-                        New Analysis
-                    </Button>
-                    <Button
                         variant="outline"
                         onClick={() => router.push('/dashboard/documents')}
                         className="gap-2"
@@ -299,7 +292,7 @@ export default function AnalysisPage() {
                     </Button>
                     <Button
                         variant="outline"
-                        onClick={() => router.push('/dashboard/analysis/history')}
+                        onClick={() => router.push('/dashboard/history')}
                         className="gap-2"
                     >
                         <History className="h-4 w-4" />
@@ -308,181 +301,46 @@ export default function AnalysisPage() {
                 </div>
             </div>
 
-            {/* Batch Analysis Notice */}
-            {batchDocuments.length > 0 && (
-                <Card className="bg-muted/50">
-                    <CardContent className="pt-6">
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-4">
-                                <div className="p-2 rounded-lg bg-primary/10">
-                                    <Layers className="h-6 w-6 text-primary" />
-                                </div>
-                                <div>
-                                    <h3 className="font-semibold">Batch Analysis Mode</h3>
-                                    <p className="text-sm text-muted-foreground">
-                                        {batchDocuments.length} documents selected for analysis
-                                    </p>
-                                </div>
-                            </div>
-                            <Button
-                                variant="outline"
-                                onClick={() => router.push('/dashboard/documents')}
-                            >
-                                Change Selection
-                            </Button>
-                        </div>
-                    </CardContent>
-                </Card>
-            )}
-
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
-                <TabsList className="grid w-full grid-cols-3 lg:w-[400px]">
-                    <TabsTrigger value="recent" className="gap-2">
-                        <Clock className="h-4 w-4" />
-                        Recent
-                    </TabsTrigger>
-                    <TabsTrigger value="analyze" className="gap-2">
-                        <BarChart className="h-4 w-4" />
-                        Analyze
-                    </TabsTrigger>
-                    <TabsTrigger value="capabilities" className="gap-2">
-                        <Zap className="h-4 w-4" />
-                        Capabilities
-                    </TabsTrigger>
+            <Tabs defaultValue="analyze" className="space-y-8">
+                <TabsList>
+                    <TabsTrigger value="analyze">Analyze</TabsTrigger>
+                    <TabsTrigger value="recent">Recent Analyses</TabsTrigger>
                 </TabsList>
-
-                {/* Recent Tab */}
-                <TabsContent value="recent">
-                    <div className="grid gap-6">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2">
-                                    <Clock className="h-5 w-5 text-primary" />
-                                    Recent Analyses
-                                </CardTitle>
-                                <CardDescription>
-                                    Recently analyzed documents and their results
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                {recentDocuments.length === 0 ? (
-                                    <div className="text-center py-8">
-                                        <File className="h-12 w-12 text-muted-foreground/50 mx-auto" />
-                                        <h3 className="mt-4 text-lg font-semibold">No Recent Analyses</h3>
-                                        <p className="text-muted-foreground">
-                                            Start analyzing documents to see them here
-                                        </p>
-                                    </div>
-                                ) : (
-                                    <ScrollArea className="h-[400px] pr-4">
-                                        <div className="space-y-4">
-                                            {recentDocuments.map((doc) => (
-                                                <RecentAnalysisCard
-                                                    key={doc.id}
-                                                    document={doc}
-                                                    analyses={analyses}
-                                                />
-                                            ))}
-                                        </div>
-                                    </ScrollArea>
-                                )}
-                            </CardContent>
-                        </Card>
+                <TabsContent value="analyze">
+                    <div className="space-y-6">
+                        <div className="grid gap-6 lg:grid-cols-2">
+                            {analysisDefinitions.map((analysisType) => (
+                                <AnalysisCard
+                                    key={analysisType.id}
+                                    analysisType={analysisType}
+                                    onSelect={() => setSelectedAnalysisType(analysisType.id)}
+                                    selected={selectedAnalysisType === analysisType.id}
+                                />
+                            ))}
+                        </div>
+                        {selectedAnalysisType && (
+                            <div className="flex justify-end">
+                                <Button
+                                    onClick={() => router.push('/dashboard/documents')}
+                                    className="gap-2"
+                                >
+                                    Select Documents
+                                    <ArrowRight className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        )}
                     </div>
                 </TabsContent>
-
-                {/* Analyze Tab */}
-                <TabsContent value="analyze">
-                    <div className="grid gap-6 lg:grid-cols-2">
-                        {analysisTypes.map((analysisType) => (
-                            <AnalysisCard
-                                key={analysisType.id}
-                                analysisType={analysisType}
-                                selected={selectedAnalysisType === analysisType.id}
-                                onSelect={() => setSelectedAnalysisType(analysisType.id)}
+                <TabsContent value="recent">
+                    <div className="grid gap-6">
+                        {documents.map((document) => (
+                            <RecentAnalysisCard
+                                key={document.id}
+                                document={document}
+                                analyses={analyses.filter(a => a.document_id === document.id)}
                             />
                         ))}
                     </div>
-                    {selectedAnalysisType && (
-                        <div className="mt-6 flex justify-end">
-                            <Button
-                                size="lg"
-                                onClick={() => router.push('/dashboard/documents')}
-                            >
-                                Select Documents
-                                <ArrowRight className="ml-2 h-4 w-4" />
-                            </Button>
-                        </div>
-                    )}
-                </TabsContent>
-
-                {/* Capabilities Tab */}
-                <TabsContent value="capabilities">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <Settings className="h-5 w-5 text-primary" />
-                                Analysis Capabilities
-                            </CardTitle>
-                            <CardDescription>
-                                Available analysis types and their features
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="p-6">
-                            <div className="space-y-8">
-                                {analysisTypes.map((analysisType, index) => (
-                                    <div key={analysisType.id}>
-                                        <div className="flex items-center gap-4 mb-4">
-                                            <div className="p-3 rounded-lg bg-primary/10">
-                                                <AnalysisTypeIcon type={analysisType.name} className="h-6 w-6 text-primary" />
-                                            </div>
-                                            <div>
-                                                <h3 className="text-xl font-semibold">
-                                                    {analysisType.name.split('_').map(word =>
-                                                        word.charAt(0).toUpperCase() + word.slice(1)
-                                                    ).join(' ')}
-                                                </h3>
-                                                <p className="text-muted-foreground">{analysisType.description}</p>
-                                            </div>
-                                        </div>
-
-                                        <div className="grid gap-6 md:grid-cols-2 pl-14">
-                                            <div>
-                                                <h4 className="text-sm font-medium mb-3">Supported Document Types</h4>
-                                                <div className="flex flex-wrap gap-2">
-                                                    {analysisType.supported_document_types.map((format) => (
-                                                        <Badge key={format} variant="secondary">
-                                                            {format.toUpperCase()}
-                                                        </Badge>
-                                                    ))}
-                                                </div>
-                                            </div>
-
-                                            <div>
-                                                <h4 className="text-sm font-medium mb-3">Analysis Steps</h4>
-                                                <div className="space-y-2">
-                                                    {analysisType.steps.map((step) => (
-                                                        <div key={step.id} className="flex items-center gap-2">
-                                                            <CheckCircle className="h-4 w-4 text-green-500" />
-                                                            <span className="text-sm">
-                                                                {step.name.split('_').map(word =>
-                                                                    word.charAt(0).toUpperCase() + word.slice(1)
-                                                                ).join(' ')}
-                                                            </span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {index < analysisTypes.length - 1 && (
-                                            <Separator className="my-8" />
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
-                        </CardContent>
-                    </Card>
                 </TabsContent>
             </Tabs>
         </div>
