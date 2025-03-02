@@ -35,6 +35,54 @@ export interface PageInfo {
 }
 
 /**
+ * Validation utilities for shared types
+ */
+export const ValidationUtils = {
+    /**
+     * Validate a bounding box
+     * @returns true if valid, throws error if invalid
+     */
+    validateBoundingBox: (bbox: BoundingBox): boolean => {
+        if (bbox.x1 < 0) throw new Error("x1 must be greater than or equal to 0");
+        if (bbox.y1 < 0) throw new Error("y1 must be greater than or equal to 0");
+        if (bbox.x2 < bbox.x1) throw new Error("x2 must be greater than or equal to x1");
+        if (bbox.y2 < bbox.y1) throw new Error("y2 must be greater than or equal to y1");
+        return true;
+    },
+
+    /**
+     * Validate a confidence score
+     * @returns true if valid, throws error if invalid
+     */
+    validateConfidence: (confidence: Confidence): boolean => {
+        if (confidence.score < 0 || confidence.score > 1) {
+            throw new Error("Confidence score must be between 0 and 1");
+        }
+        if (!confidence.method) {
+            throw new Error("Confidence method is required");
+        }
+        return true;
+    },
+
+    /**
+     * Validate page information
+     * @returns true if valid, throws error if invalid
+     */
+    validatePageInfo: (pageInfo: PageInfo): boolean => {
+        if (pageInfo.page_number < 1) {
+            throw new Error("Page number must be greater than or equal to 1");
+        }
+        if (pageInfo.width <= 0) {
+            throw new Error("Page width must be greater than 0");
+        }
+        if (pageInfo.height <= 0) {
+            throw new Error("Page height must be greater than 0");
+        }
+        return true;
+    }
+};
+
+/**
  * Helper functions for working with bounding boxes
  */
 export const BoundingBoxUtils = {
@@ -84,5 +132,20 @@ export const BoundingBoxUtils = {
             x2: Math.round((bbox.x2 * pageInfo.width) / 100),
             y2: Math.round((bbox.y2 * pageInfo.height) / 100)
         };
+    },
+
+    /**
+     * Calculate area of a bounding box in pixels
+     */
+    getArea: (bbox: BoundingBox): number => {
+        return (bbox.x2 - bbox.x1) * (bbox.y2 - bbox.y1);
+    },
+
+    /**
+     * Check if a point is inside a bounding box
+     */
+    containsPoint: (bbox: BoundingBox, point: { x: number; y: number }): boolean => {
+        return point.x >= bbox.x1 && point.x <= bbox.x2 &&
+            point.y >= bbox.y1 && point.y <= bbox.y2;
     }
 };

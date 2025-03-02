@@ -21,7 +21,7 @@ import {
     AlertTriangle,
     Info
 } from 'lucide-react';
-import { BoundingBoxUtils } from '@/types/results/shared';
+import { BoundingBoxUtils } from '@/types/results/table_analysis/shared';
 
 interface TableDataResultsProps {
     result: TableDataOutput;

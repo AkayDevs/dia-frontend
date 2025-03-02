@@ -20,7 +20,7 @@ import {
     Columns as ColumnsIcon,
     Grid as GridIcon
 } from 'lucide-react';
-import { BoundingBoxUtils } from '@/types/results/shared';
+import { BoundingBoxUtils } from '@/types/results/table_analysis/shared';
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 interface TableStructureResultsProps {

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { TableDetectionOutput } from '@/types/results/table-detection';
 import { Card, CardContent } from '@/components/ui/card';
-import { BoundingBox, BoundingBoxUtils } from '@/types/results/shared';
+import { BoundingBox, BoundingBoxUtils } from '@/types/results/table_analysis/shared';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';

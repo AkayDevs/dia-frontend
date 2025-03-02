@@ -7,7 +7,8 @@ export enum DocumentType {
     PDF = 'pdf',
     DOCX = 'docx',
     XLSX = 'xlsx',
-    IMAGE = 'image'
+    IMAGE = 'image',
+    UNKNOWN = 'unknown'
 }
 
 /**
@@ -76,6 +77,14 @@ export interface DocumentBase {
 }
 
 /**
+ * Document creation interface
+ */
+export interface DocumentCreate extends DocumentBase {
+    tag_ids?: number[];
+    previous_version_id?: string;
+}
+
+/**
  * Document response interface
  */
 export interface Document extends DocumentBase {
@@ -114,7 +123,6 @@ export interface DocumentListParams {
 export interface DocumentUpdate {
     name?: string;
     tag_ids?: number[];
-    file?: File;
 }
 
 /**
