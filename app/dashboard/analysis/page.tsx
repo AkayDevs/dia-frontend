@@ -40,6 +40,13 @@ import {
 } from "@/components/ui/accordion";
 import { AnalysisTypeEnum } from '@/lib/enums';
 import type { JSX } from 'react';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 
 // Analysis type interfaces
 interface AnalysisType {
@@ -319,14 +326,47 @@ export default function AnalysisPage() {
                             ))}
                         </div>
                         {selectedAnalysisType && (
-                            <div className="flex justify-end">
-                                <Button
-                                    onClick={() => router.push('/dashboard/documents')}
-                                    className="gap-2"
-                                >
-                                    Select Documents
-                                    <ArrowRight className="h-4 w-4" />
-                                </Button>
+                            <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
+                                <div className="flex items-center gap-4">
+                                    <Select
+                                        value={selectedDocumentId || ""}
+                                        onValueChange={setSelectedDocumentId}
+                                    >
+                                        <SelectTrigger className="w-[300px]">
+                                            <SelectValue placeholder="Select a document" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {documents.map((document) => (
+                                                <SelectItem
+                                                    key={document.id}
+                                                    value={document.id}
+                                                >
+                                                    {document.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <Button
+                                        onClick={() => selectedDocumentId && handleStartAnalysis(selectedDocumentId)}
+                                        disabled={!selectedDocumentId || isStartingAnalysis}
+                                        className="gap-2"
+                                    >
+                                        {isStartingAnalysis ? (
+                                            <>
+                                                <Loader2 className="h-4 w-4 animate-spin" />
+                                                Starting Analysis...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Zap className="h-4 w-4" />
+                                                Start Analysis
+                                            </>
+                                        )}
+                                    </Button>
+                                </div>
+                                <p className="text-sm text-muted-foreground">
+                                    Select a document to analyze using the selected analysis type.
+                                </p>
                             </div>
                         )}
                     </div>
