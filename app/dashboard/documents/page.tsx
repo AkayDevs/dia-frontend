@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { DocumentType } from '@/types/document';
-import { AnalysisStatus } from '@/lib/enums';
+import { AnalysisStatus } from '@/types/analysis_configs';
 import { useDocumentStore } from '@/store/useDocumentStore';
 import { useAnalysisStore } from '@/store/useAnalysisStore';
 import { useToast } from '@/hooks/use-toast';
@@ -77,9 +77,10 @@ const DocumentTypeIcon = ({ type, className = "h-5 w-5" }: { type: DocumentType;
         [DocumentType.PDF]: <DocumentIcon className={`${className} text-blue-500`} />,
         [DocumentType.DOCX]: <DocumentTextIcon className={`${className} text-indigo-500`} />,
         [DocumentType.XLSX]: <DocumentChartBarIcon className={`${className} text-green-500`} />,
-        [DocumentType.IMAGE]: <PhotoIcon className={`${className} text-purple-500`} />
+        [DocumentType.IMAGE]: <PhotoIcon className={`${className} text-purple-500`} />,
+        [DocumentType.UNKNOWN]: <DocumentIcon className={`${className} text-gray-500`} />
     };
-    return icons[type] || <DocumentIcon className={`${className} text-gray-500`} />;
+    return icons[type];
 };
 
 // Status badge component
@@ -89,7 +90,7 @@ const StatusBadge = ({ status }: { status: AnalysisStatus }) => {
             className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
             label: 'Ready for Analysis'
         },
-        [AnalysisStatus.PROCESSING]: {
+        [AnalysisStatus.IN_PROGRESS]: {
             className: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
             label: 'Processing'
         },
@@ -100,14 +101,10 @@ const StatusBadge = ({ status }: { status: AnalysisStatus }) => {
         [AnalysisStatus.FAILED]: {
             className: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
             label: 'Analysis Failed'
-        },
-        [AnalysisStatus.WAITING_FOR_APPROVAL]: {
-            className: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
-            label: 'Waiting for Approval'
         }
     };
 
-    const config = statusConfig[status];
+    const config = statusConfig[status] || statusConfig[AnalysisStatus.PENDING];
 
     return (
         <Badge variant="secondary" className={config.className}>
@@ -176,7 +173,7 @@ export default function DocumentsPage() {
             const currentStatus = statusMap.get(analysis.document_id);
             // Only update if there's no status yet or if this analysis is more recent
             if (!currentStatus || new Date(analysis.created_at) > new Date(analysis.created_at)) {
-                statusMap.set(analysis.document_id, analysis.status as AnalysisStatus);
+                statusMap.set(analysis.document_id, analysis.status);
             }
         });
         return statusMap;
@@ -383,10 +380,9 @@ export default function DocumentsPage() {
                             <SelectContent>
                                 <SelectItem value="ALL">All Status</SelectItem>
                                 <SelectItem value={AnalysisStatus.PENDING}>Ready for Analysis</SelectItem>
-                                <SelectItem value={AnalysisStatus.PROCESSING}>Processing</SelectItem>
+                                <SelectItem value={AnalysisStatus.IN_PROGRESS}>Processing</SelectItem>
                                 <SelectItem value={AnalysisStatus.COMPLETED}>Completed</SelectItem>
                                 <SelectItem value={AnalysisStatus.FAILED}>Failed</SelectItem>
-                                <SelectItem value={AnalysisStatus.WAITING_FOR_APPROVAL}>Waiting for Approval</SelectItem>
                             </SelectContent>
                         </Select>
                         <Select
@@ -674,7 +670,7 @@ export default function DocumentsPage() {
                                                             <EyeIcon className="mr-2 h-4 w-4" />
                                                             View Details
                                                         </DropdownMenuItem>
-                                                        {documentAnalysisStatus.get(document.id) !== AnalysisStatus.PROCESSING && (
+                                                        {documentAnalysisStatus.get(document.id) !== AnalysisStatus.IN_PROGRESS && (
                                                             <DropdownMenuItem
                                                                 onClick={() => handleAnalyze(document.id)}
                                                             >
