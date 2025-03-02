@@ -10,8 +10,9 @@ import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { useToast } from '@/hooks/use-toast';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useDocumentStore } from '@/store/useDocumentStore';
-import { AnalysisStatus, Analysis } from '@/types/analysis';
-import { Document } from '@/types/document';
+import { AnalysisStatus } from '@/types/analysis_configs';
+import { AnalysisRunWithResults } from '@/types/analysis_execution';
+import { Document, DocumentWithAnalysis } from '@/types/document';
 import {
     DocumentIcon,
     ChartBarIcon,
@@ -105,8 +106,8 @@ export function Sidebar({ className }: SidebarProps) {
     // Calculate processing documents count
     const processingCount = useMemo(() => {
         if (!documents) return 0;
-        return (documents as Array<Document & { analyses?: Analysis[] }>).filter(doc =>
-            doc.analyses?.some(analysis => analysis.status === AnalysisStatus.PROCESSING)
+        return (documents as Array<DocumentWithAnalysis>).filter(doc =>
+            doc.analyses?.some(analysis => analysis.status === AnalysisStatus.IN_PROGRESS)
         ).length;
     }, [documents]);
 

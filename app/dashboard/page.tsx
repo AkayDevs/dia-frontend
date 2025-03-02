@@ -11,8 +11,8 @@ import { UploadHandler } from '@/components/ui/upload-handler';
 import { useDocumentStore } from '@/store/useDocumentStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useAnalysisStore } from '@/store/useAnalysisStore';
-import { Analysis } from '@/types/analysis';
-import { AnalysisStatus } from '@/lib/enums';
+import { AnalysisRunWithResults } from '@/types/analysis_execution';
+import { AnalysisStatus, AnalysisDefinitionInfo } from '@/types/analysis_configs';
 import { Document, DocumentWithAnalysis } from '@/types/document';
 import { motion } from 'framer-motion';
 import {
@@ -21,7 +21,9 @@ import {
     ExclamationCircleIcon,
     ArrowPathIcon,
     DocumentDuplicateIcon,
-    DocumentTextIcon as FileText
+    DocumentTextIcon as FileText,
+    CheckCircleIcon,
+    ClockIcon
 } from '@heroicons/react/24/outline';
 import { formatDistanceToNow } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
@@ -32,7 +34,7 @@ interface OngoingAnalysis {
     startedAt: string;
 }
 
-interface DashboardAnalysis extends Analysis {
+interface DashboardAnalysis extends AnalysisRunWithResults {
     type: string;
 }
 
@@ -96,8 +98,8 @@ export default function DashboardPage() {
         isLoading: isLoadingAnalyses,
         error: analysisError,
         fetchUserAnalyses,
-        analysisTypes,
-        fetchAnalysisTypes
+        analysisDefinitions,
+        fetchAnalysisDefinitions
     } = useAnalysisStore();
 
     // Initialize dashboard with recent documents and analyses
@@ -110,7 +112,7 @@ export default function DashboardPage() {
                 await Promise.all([
                     fetchDocuments(),
                     fetchUserAnalyses({ limit: 100 }), // Fetch recent analyses
-                    fetchAnalysisTypes()
+                    fetchAnalysisDefinitions()
                 ]);
             } catch (error) {
                 if (error instanceof Error && error.message.includes('authentication')) {
@@ -120,7 +122,7 @@ export default function DashboardPage() {
             }
         };
         loadData();
-    }, [isAuthenticated, setFilters, fetchDocuments, fetchUserAnalyses, fetchAnalysisTypes, logout, router]);
+    }, [isAuthenticated, setFilters, fetchDocuments, fetchUserAnalyses, fetchAnalysisDefinitions, logout, router]);
 
     // Calculate dashboard stats from documents and analyses
     const stats = useMemo((): DashboardStats => {
@@ -145,13 +147,13 @@ export default function DashboardPage() {
         // Calculate analysis-related stats
         const analysisStats = analyses.reduce((stats, analysis) => {
             stats.totalAnalyses += 1;
-            const analysisType = analysisTypes?.find(type => type.id === analysis.analysis_type_id);
+            const analysisDefinition = analysisDefinitions?.find(def => def.code === analysis.analysis_code);
 
             // Add analysis with type information
-            if (analysisType) {
+            if (analysisDefinition) {
                 stats.analyses.push({
                     ...analysis,
-                    type: analysisType.name
+                    type: analysisDefinition.name
                 });
             }
 
@@ -160,24 +162,29 @@ export default function DashboardPage() {
                 stats.analysisSuccessRate += 1;
             } else if (analysis.status === AnalysisStatus.FAILED) {
                 stats.failedAnalyses += 1;
-            } else if (analysis.status === AnalysisStatus.PROCESSING) {
+            }
+
+            // Track ongoing analyses
+            if (analysis.status === AnalysisStatus.IN_PROGRESS) {
                 const document = typedDocuments.find(doc => doc.id === analysis.document_id);
-                if (document && analysisType) {
+                if (document && analysisDefinition) {
                     stats.ongoingAnalyses.items.push({
                         documentName: document.name,
-                        type: analysisType.name,
+                        type: analysisDefinition.name,
                         startedAt: analysis.created_at
                     });
                 }
-                stats.ongoingAnalyses.count += 1;
             }
 
+            // Update ongoing analyses count to match the actual in-progress analyses
+            stats.ongoingAnalyses.count = analyses.filter(a => a.status === AnalysisStatus.IN_PROGRESS).length;
+
             // Track analysis types usage
-            if (analysisType) {
-                const currentTypeCount = analyses.filter(a => a.analysis_type_id === analysis.analysis_type_id).length;
+            if (analysisDefinition) {
+                const currentTypeCount = analyses.filter(a => a.analysis_code === analysis.analysis_code).length;
                 if (currentTypeCount > stats.mostUsedAnalysisType.count) {
                     stats.mostUsedAnalysisType = {
-                        type: analysisType.name,
+                        type: analysisDefinition.name,
                         count: currentTypeCount
                     };
                 }
@@ -208,7 +215,7 @@ export default function DashboardPage() {
         }
 
         return analysisStats;
-    }, [documents, analyses, analysisTypes]);
+    }, [documents, analyses, analysisDefinitions]);
 
     const handleUploadSuccess = useCallback(async (file: File) => {
         try {
@@ -337,67 +344,57 @@ export default function DashboardPage() {
                             />
                         </Card>
 
-                        <div className="grid gap-4">
-                            <Card className="p-6 hover:shadow-lg transition-shadow">
-                                <div className="flex items-start gap-4">
-                                    <div className="p-3 rounded-xl bg-primary/10">
-                                        <ChartBarIcon className="w-6 h-6 text-primary" />
-                                    </div>
-                                    <div className="space-y-1">
-                                        <h3 className="text-xl font-semibold">Quick Analysis</h3>
-                                        <p className="text-sm text-muted-foreground">
-                                            Start analyzing your documents
-                                        </p>
-                                    </div>
+                        <Card className="p-6 hover:shadow-lg transition-shadow">
+                            <div className="flex items-start gap-4">
+                                <div className="p-3 rounded-xl bg-primary/10">
+                                    <ChartBarIcon className="w-6 h-6 text-primary" />
                                 </div>
-                                <Button
-                                    className="w-full mt-4"
-                                    onClick={() => router.push('/dashboard/analysis')}
-                                >
-                                    Start Analysis
-                                </Button>
-                            </Card>
-
-                            <Card className="p-6 hover:shadow-lg transition-shadow">
-                                <div className="flex items-start gap-4">
-                                    <div className="p-3 rounded-xl bg-primary/10">
-                                        <ArrowPathIcon className="w-6 h-6 text-primary animate-spin" />
-                                    </div>
-                                    <div className="space-y-1">
-                                        <h3 className="text-xl font-semibold">Ongoing Analyses</h3>
-                                        <p className="text-sm text-muted-foreground">
-                                            {stats.ongoingAnalyses.count > 0
-                                                ? `${stats.ongoingAnalyses.count} analysis${stats.ongoingAnalyses.count > 1 ? 'es' : ''} in progress`
-                                                : 'No ongoing analyses'}
-                                        </p>
-                                    </div>
+                                <div className="space-y-1">
+                                    <h3 className="text-xl font-semibold">Analysis Status</h3>
+                                    <p className="text-sm text-muted-foreground">
+                                        Current state of analysis runs
+                                    </p>
                                 </div>
-                                {stats.ongoingAnalyses.count > 0 && (
-                                    <div className="mt-4 space-y-2">
-                                        {stats.ongoingAnalyses.items.map((analysis, index) => (
-                                            <div key={index} className="flex items-center justify-between p-2 rounded-md bg-muted/50">
-                                                <div className="flex items-center gap-2">
-                                                    <FileText className="h-4 w-4 text-primary" />
-                                                    <span className="text-sm font-medium truncate max-w-[150px]">
-                                                        {analysis.documentName}
-                                                    </span>
-                                                </div>
-                                                <div className="flex items-center gap-2">
-                                                    <Badge variant="outline">
-                                                        {analysis.type.split('_').map(word =>
-                                                            word.charAt(0).toUpperCase() + word.slice(1)
-                                                        ).join(' ')}
-                                                    </Badge>
-                                                    <span className="text-xs text-muted-foreground">
-                                                        {formatDistanceToNow(new Date(analysis.startedAt), { addSuffix: true })}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        ))}
+                            </div>
+                            <div className="mt-4 grid grid-cols-2 gap-4">
+                                <div className="p-3 rounded-lg bg-muted/50">
+                                    <div className="flex items-center gap-2">
+                                        <ArrowPathIcon className="w-4 h-4 text-blue-500 animate-spin" />
+                                        <span className="text-sm font-medium">In Progress</span>
                                     </div>
-                                )}
-                            </Card>
-                        </div>
+                                    <p className="text-2xl font-semibold mt-1">
+                                        {analyses.filter(a => a.status === 'in_progress').length}
+                                    </p>
+                                </div>
+                                <div className="p-3 rounded-lg bg-muted/50">
+                                    <div className="flex items-center gap-2">
+                                        <CheckCircleIcon className="w-4 h-4 text-green-500" />
+                                        <span className="text-sm font-medium">Completed</span>
+                                    </div>
+                                    <p className="text-2xl font-semibold mt-1">
+                                        {analyses.filter(a => a.status === 'completed').length}
+                                    </p>
+                                </div>
+                                <div className="p-3 rounded-lg bg-muted/50">
+                                    <div className="flex items-center gap-2">
+                                        <ExclamationCircleIcon className="w-4 h-4 text-red-500" />
+                                        <span className="text-sm font-medium">Failed</span>
+                                    </div>
+                                    <p className="text-2xl font-semibold mt-1">
+                                        {analyses.filter(a => a.status === 'failed').length}
+                                    </p>
+                                </div>
+                                <div className="p-3 rounded-lg bg-muted/50">
+                                    <div className="flex items-center gap-2">
+                                        <ClockIcon className="w-4 h-4 text-yellow-500" />
+                                        <span className="text-sm font-medium">Pending</span>
+                                    </div>
+                                    <p className="text-2xl font-semibold mt-1">
+                                        {analyses.filter(a => a.status === 'pending').length}
+                                    </p>
+                                </div>
+                            </div>
+                        </Card>
                     </div>
 
                     <div className="space-y-4">

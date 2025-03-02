@@ -3,6 +3,7 @@ import { documentService } from '@/services/document.service';
 import { Document, DocumentListParams, DocumentWithAnalysis, Tag, TagCreate, DocumentUpdate, DocumentPages } from '@/types/document';
 import { API_URL } from '@/lib/constants';
 import { analysisService } from '@/services/analysis.service';
+import { AnalysisRunWithResults } from '@/types/analysis_execution';
 
 interface DocumentState {
     // Document state
@@ -26,8 +27,9 @@ interface DocumentState {
     // Document methods
     setFilters: (filters: Partial<DocumentListParams>) => void;
     clearError: () => void;
+    clearPagesError: () => void;
     fetchDocuments: (forceRefresh?: boolean) => Promise<void>;
-    fetchDocument: (documentId: string) => Promise<void>;
+    fetchDocument: (documentId: string, includeAnalyses?: boolean) => Promise<void>;
     uploadDocument: (file: File, tagIds?: number[]) => Promise<Document>;
     uploadDocuments: (files: File[]) => Promise<Document[]>;
     updateDocument: (documentId: string, updates: DocumentUpdate) => Promise<void>;
@@ -42,7 +44,23 @@ interface DocumentState {
     deleteTag: (tagId: number) => Promise<void>;
     updateDocumentTags: (documentId: string, tagIds: number[]) => Promise<void>;
     clearTagError: () => void;
+
+    // Utility methods
+    reset: () => void;
 }
+
+// Helper function to ensure document URLs are absolute
+const ensureAbsoluteUrl = (url: string): string => {
+    return url.startsWith('http') ? url : `${API_URL}${url}`;
+};
+
+// Helper function to process document with full URLs
+const processDocument = <T extends Document>(document: T): T => {
+    return {
+        ...document,
+        url: ensureAbsoluteUrl(document.url)
+    };
+};
 
 const useDocumentStore = create<DocumentState>((set, get) => ({
     // Initial state
@@ -70,6 +88,7 @@ const useDocumentStore = create<DocumentState>((set, get) => ({
     },
 
     clearError: () => set({ error: null }),
+    clearPagesError: () => set({ pagesError: null }),
 
     fetchDocuments: async (forceRefresh = false) => {
         const state = get();
@@ -88,17 +107,12 @@ const useDocumentStore = create<DocumentState>((set, get) => ({
 
         if (state.isFetching) return;
 
-        set({ isLoading: true, isFetching: true });
+        set({ isLoading: true, isFetching: true, error: null });
 
         try {
             const documents = await documentService.getDocuments(state.filters);
-            // Add API URL to document URLs
-            const documentsWithFullUrls = documents.map(doc => ({
-                ...doc,
-                url: doc.url.startsWith('http') ? doc.url : `${API_URL}${doc.url}`
-            }));
             set({
-                documents: documentsWithFullUrls,
+                documents: documents.map(processDocument),
                 lastFetched: now,
                 error: null
             });
@@ -109,39 +123,37 @@ const useDocumentStore = create<DocumentState>((set, get) => ({
         }
     },
 
-    fetchDocument: async (documentId: string) => {
-        set({ isLoading: true });
+    fetchDocument: async (documentId: string, includeAnalyses = true) => {
+        set({ isLoading: true, error: null });
         try {
             const document = await documentService.getDocument(documentId);
-            const analyses = await analysisService.getDocumentAnalyses(documentId);
-            // Add API URL to document URL and ensure it's a DocumentWithAnalysis
+            let analyses = [] as AnalysisRunWithResults[];
+            if (includeAnalyses) {
+                analyses = await analysisService.getDocumentAnalyses(documentId);
+            }
+
             const documentWithFullUrl: DocumentWithAnalysis = {
-                ...document,
-                url: document.url.startsWith('http') ? document.url : `${API_URL}${document.url}`,
-                analyses: analyses
+                ...processDocument(document),
+                analyses
             };
-            set({ currentDocument: documentWithFullUrl, error: null });
+            set({ currentDocument: documentWithFullUrl });
         } catch (error) {
             set({ error: error instanceof Error ? error.message : 'Failed to fetch document' });
+            throw error;
         } finally {
             set({ isLoading: false });
         }
     },
 
     uploadDocument: async (file: File, tagIds?: number[]) => {
-        set({ isLoading: true });
+        set({ isLoading: true, error: null });
         try {
             const document = await documentService.uploadDocument(file, tagIds);
-            // Add API URL to document URL
-            const documentWithFullUrl = {
-                ...document,
-                url: document.url.startsWith('http') ? document.url : `${API_URL}${document.url}`
-            };
+            const processedDocument = processDocument(document);
             set((state) => ({
-                documents: [documentWithFullUrl, ...state.documents],
-                error: null
+                documents: [processedDocument, ...state.documents]
             }));
-            return documentWithFullUrl;
+            return processedDocument;
         } catch (error) {
             set({ error: error instanceof Error ? error.message : 'Failed to upload document' });
             throw error;
@@ -151,19 +163,14 @@ const useDocumentStore = create<DocumentState>((set, get) => ({
     },
 
     uploadDocuments: async (files: File[]) => {
-        set({ isLoading: true });
+        set({ isLoading: true, error: null });
         try {
             const documents = await documentService.uploadDocuments(files);
-            // Add API URL to document URLs
-            const documentsWithFullUrls = documents.map(doc => ({
-                ...doc,
-                url: doc.url.startsWith('http') ? doc.url : `${API_URL}${doc.url}`
-            }));
+            const processedDocuments = documents.map(processDocument);
             set((state) => ({
-                documents: [...documentsWithFullUrls, ...state.documents],
-                error: null
+                documents: [...processedDocuments, ...state.documents]
             }));
-            return documentsWithFullUrls;
+            return processedDocuments;
         } catch (error) {
             set({ error: error instanceof Error ? error.message : 'Failed to upload documents' });
             throw error;
@@ -173,22 +180,18 @@ const useDocumentStore = create<DocumentState>((set, get) => ({
     },
 
     updateDocument: async (documentId: string, updates: DocumentUpdate) => {
-        set({ isLoading: true });
+        set({ isLoading: true, error: null });
         try {
             const updatedDocument = await documentService.updateDocument(documentId, updates);
-            // Add API URL to document URL and ensure it's a DocumentWithAnalysis when needed
-            const documentWithFullUrl = {
-                ...updatedDocument,
-                url: updatedDocument.url.startsWith('http') ? updatedDocument.url : `${API_URL}${updatedDocument.url}`,
-            };
+            const processedDocument = processDocument(updatedDocument);
+
             set((state) => ({
                 documents: state.documents.map((doc) =>
-                    doc.id === documentId ? documentWithFullUrl : doc
+                    doc.id === documentId ? processedDocument : doc
                 ),
                 currentDocument: state.currentDocument?.id === documentId
-                    ? { ...documentWithFullUrl, analyses: state.currentDocument.analyses }
-                    : state.currentDocument,
-                error: null
+                    ? { ...processedDocument, analyses: state.currentDocument.analyses }
+                    : state.currentDocument
             }));
         } catch (error) {
             set({ error: error instanceof Error ? error.message : 'Failed to update document' });
@@ -199,15 +202,13 @@ const useDocumentStore = create<DocumentState>((set, get) => ({
     },
 
     deleteDocument: async (documentId: string) => {
-        set({ isLoading: true });
+        set({ isLoading: true, error: null });
         try {
             await documentService.deleteDocument(documentId);
             set((state) => ({
                 documents: state.documents.filter((doc) => doc.id !== documentId),
-                currentDocument: state.currentDocument?.id === documentId
-                    ? null
-                    : state.currentDocument,
-                error: null
+                currentDocument: state.currentDocument?.id === documentId ? null : state.currentDocument,
+                documentVersions: state.documentVersions.filter((doc) => doc.id !== documentId)
             }));
         } catch (error) {
             set({ error: error instanceof Error ? error.message : 'Failed to delete document' });
@@ -218,17 +219,13 @@ const useDocumentStore = create<DocumentState>((set, get) => ({
     },
 
     fetchDocumentVersions: async (documentId: string) => {
-        set({ isLoading: true });
+        set({ isLoading: true, error: null });
         try {
             const versions = await documentService.getDocumentVersions(documentId);
-            // Add API URL to document URLs
-            const versionsWithFullUrls = versions.map(version => ({
-                ...version,
-                url: version.url.startsWith('http') ? version.url : `${API_URL}${version.url}`
-            }));
-            set({ documentVersions: versionsWithFullUrls, error: null });
+            set({ documentVersions: versions.map(processDocument) });
         } catch (error) {
             set({ error: error instanceof Error ? error.message : 'Failed to fetch document versions' });
+            throw error;
         } finally {
             set({ isLoading: false });
         }
@@ -238,12 +235,21 @@ const useDocumentStore = create<DocumentState>((set, get) => ({
         set({ isPagesLoading: true, pagesError: null });
         try {
             const pages = await documentService.getDocumentPages(documentId);
-            set({ currentPages: pages, pagesError: null });
+            // Process page image URLs
+            const processedPages: DocumentPages = {
+                ...pages,
+                pages: pages.pages.map(page => ({
+                    ...page,
+                    image_url: ensureAbsoluteUrl(page.image_url)
+                }))
+            };
+            set({ currentPages: processedPages });
         } catch (error) {
             set({
                 pagesError: error instanceof Error ? error.message : 'Failed to fetch document pages',
                 currentPages: null
             });
+            throw error;
         } finally {
             set({ isPagesLoading: false });
         }
@@ -251,24 +257,24 @@ const useDocumentStore = create<DocumentState>((set, get) => ({
 
     // Tag methods
     fetchTags: async (documentId?: string, nameFilter?: string) => {
-        set({ isLoadingTags: true });
+        set({ isLoadingTags: true, tagError: null });
         try {
             const tags = await documentService.getTags(documentId, nameFilter);
-            set({ tags, tagError: null });
+            set({ tags });
         } catch (error) {
             set({ tagError: error instanceof Error ? error.message : 'Failed to fetch tags' });
+            throw error;
         } finally {
             set({ isLoadingTags: false });
         }
     },
 
     createTag: async (tag: TagCreate) => {
-        set({ isLoadingTags: true });
+        set({ isLoadingTags: true, tagError: null });
         try {
             const newTag = await documentService.createTag(tag);
             set((state) => ({
-                tags: [...state.tags, newTag],
-                tagError: null
+                tags: [...state.tags, newTag]
             }));
             return newTag;
         } catch (error) {
@@ -280,14 +286,11 @@ const useDocumentStore = create<DocumentState>((set, get) => ({
     },
 
     updateTag: async (tagId: number, tag: TagCreate) => {
-        set({ isLoadingTags: true });
+        set({ isLoadingTags: true, tagError: null });
         try {
-            await documentService.updateTag(tagId, tag);
+            const updatedTag = await documentService.updateTag(tagId, tag);
             set((state) => ({
-                tags: state.tags.map((t) =>
-                    t.id === tagId ? { ...t, ...tag } : t
-                ),
-                tagError: null
+                tags: state.tags.map((t) => t.id === tagId ? updatedTag : t)
             }));
         } catch (error) {
             set({ tagError: error instanceof Error ? error.message : 'Failed to update tag' });
@@ -298,12 +301,11 @@ const useDocumentStore = create<DocumentState>((set, get) => ({
     },
 
     deleteTag: async (tagId: number) => {
-        set({ isLoadingTags: true });
+        set({ isLoadingTags: true, tagError: null });
         try {
             await documentService.deleteTag(tagId);
             set((state) => ({
-                tags: state.tags.filter((t) => t.id !== tagId),
-                tagError: null
+                tags: state.tags.filter((t) => t.id !== tagId)
             }));
         } catch (error) {
             set({ tagError: error instanceof Error ? error.message : 'Failed to delete tag' });
@@ -314,23 +316,18 @@ const useDocumentStore = create<DocumentState>((set, get) => ({
     },
 
     updateDocumentTags: async (documentId: string, tagIds: number[]) => {
-        set({ isLoadingTags: true });
+        set({ isLoadingTags: true, tagError: null });
         try {
-            await documentService.updateDocumentTags(documentId, tagIds);
-            const document = await documentService.getDocument(documentId);
-            // Add API URL to document URL and ensure it's a DocumentWithAnalysis when needed
-            const documentWithFullUrl = {
-                ...document,
-                url: document.url.startsWith('http') ? document.url : `${API_URL}${document.url}`,
-            };
+            const updatedDocument = await documentService.updateDocumentTags(documentId, tagIds);
+            const processedDocument = processDocument(updatedDocument);
+
             set((state) => ({
                 documents: state.documents.map((doc) =>
-                    doc.id === documentId ? documentWithFullUrl : doc
+                    doc.id === documentId ? processedDocument : doc
                 ),
                 currentDocument: state.currentDocument?.id === documentId
-                    ? { ...documentWithFullUrl, analyses: state.currentDocument.analyses }
-                    : state.currentDocument,
-                tagError: null
+                    ? { ...processedDocument, analyses: state.currentDocument.analyses }
+                    : state.currentDocument
             }));
         } catch (error) {
             set({ tagError: error instanceof Error ? error.message : 'Failed to update document tags' });
@@ -340,7 +337,25 @@ const useDocumentStore = create<DocumentState>((set, get) => ({
         }
     },
 
-    clearTagError: () => set({ tagError: null })
+    clearTagError: () => set({ tagError: null }),
+
+    // Utility methods
+    reset: () => set({
+        documents: [],
+        currentDocument: null,
+        documentVersions: [],
+        currentPages: null,
+        isLoading: false,
+        isPagesLoading: false,
+        error: null,
+        pagesError: null,
+        filters: {},
+        lastFetched: null,
+        isFetching: false,
+        tags: [],
+        isLoadingTags: false,
+        tagError: null
+    })
 }));
 
 export { useDocumentStore }; 

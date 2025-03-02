@@ -1,15 +1,22 @@
 import { API_URL, API_VERSION } from '@/lib/constants';
 import { AUTH_TOKEN_KEY } from '@/lib/constants';
-import { Algorithm } from '@/types/algorithm';
-import {
-    AnalysisType,
-    Analysis,
-    AnalysisRequest,
-    AnalysisStepResult,
-    StepExecutionRequest,
-    AnalysisListParams
-} from '@/types/analysis';
 import { fetchWithAuth } from '@/lib/fetch';
+import { DocumentType } from '@/types/document';
+import {
+    AnalysisDefinitionInfo,
+    AnalysisDefinitionWithStepsAndAlgorithms,
+    AlgorithmDefinitionInfo,
+    AnalysisMode,
+    AnalysisRunConfig
+} from '@/types/analysis_configs';
+import {
+    AnalysisRunInfo,
+    AnalysisRunWithResults,
+    StepExecutionResultInfo,
+    AnalysisRunCreate,
+    AnalysisRunUpdate,
+    AnalysisRunListParams
+} from '@/types/analysis_execution';
 
 class AnalysisService {
     private baseUrl = `${API_URL}${API_VERSION}/analysis`;
@@ -49,70 +56,79 @@ class AnalysisService {
     }
 
     /**
-     * Get available analysis types
+     * Get list of available analysis definitions
      */
-    async getAnalysisTypes(): Promise<AnalysisType[]> {
-        const response = await fetch(`${this.baseUrl}/types`, {
+    async getAnalysisDefinitions(): Promise<AnalysisDefinitionInfo[]> {
+        const response = await fetch(`${this.baseUrl}/definitions`, {
             headers: this.getHeaders(),
         });
 
-        return this.handleResponse<AnalysisType[]>(response);
+        return this.handleResponse<AnalysisDefinitionInfo[]>(response);
     }
 
     /**
-     * Get specific analysis type details
+     * Get detailed analysis definition with steps and algorithms
      */
-    async getAnalysisType(analysisTypeId: string): Promise<AnalysisType> {
-        const response = await fetch(`${this.baseUrl}/types/${analysisTypeId}`, {
+    async getAnalysisDefinition(definitionId: string): Promise<AnalysisDefinitionWithStepsAndAlgorithms> {
+        const response = await fetch(`${this.baseUrl}/definitions/${definitionId}`, {
             headers: this.getHeaders(),
         });
 
-        return this.handleResponse<AnalysisType>(response);
+        return this.handleResponse<AnalysisDefinitionWithStepsAndAlgorithms>(response);
     }
 
     /**
      * Get algorithms for a specific step
      */
-    async getStepAlgorithms(stepId: string): Promise<Algorithm[]> {
+    async getStepAlgorithms(stepId: string): Promise<AlgorithmDefinitionInfo[]> {
         const response = await fetch(`${this.baseUrl}/steps/${stepId}/algorithms`, {
             headers: this.getHeaders(),
         });
 
-        return this.handleResponse<Algorithm[]>(response);
+        return this.handleResponse<AlgorithmDefinitionInfo[]>(response);
     }
 
     /**
      * Start a new analysis
      */
-    async startAnalysis(documentId: string, request: AnalysisRequest): Promise<Analysis> {
+    async startAnalysis(
+        documentId: string,
+        analysisCode: string,
+        mode: AnalysisMode = AnalysisMode.AUTOMATIC,
+        config?: AnalysisRunConfig
+    ): Promise<AnalysisRunInfo> {
         const response = await fetch(`${this.baseUrl}/documents/${documentId}/analyze`, {
             method: 'POST',
             headers: this.getHeaders(),
-            body: JSON.stringify(request),
+            body: JSON.stringify({
+                analysis_code: analysisCode,
+                mode,
+                config
+            }),
         });
 
-        return this.handleResponse<Analysis>(response);
+        return this.handleResponse<AnalysisRunInfo>(response);
     }
 
     /**
      * Get list of analyses for a document
      */
-    async getDocumentAnalyses(documentId: string): Promise<Analysis[]> {
+    async getDocumentAnalyses(documentId: string): Promise<AnalysisRunWithResults[]> {
         const response = await fetch(`${this.baseUrl}/documents/${documentId}/analyses`, {
             headers: this.getHeaders(),
         });
-        return this.handleResponse<Analysis[]>(response);
+        return this.handleResponse<AnalysisRunWithResults[]>(response);
     }
 
     /**
      * Get analysis by ID
      */
-    async getAnalysis(analysisId: string): Promise<Analysis> {
+    async getAnalysis(analysisId: string): Promise<AnalysisRunWithResults> {
         const response = await fetch(`${this.baseUrl}/analyses/${analysisId}`, {
             headers: this.getHeaders(),
         });
 
-        return this.handleResponse<Analysis>(response);
+        return this.handleResponse<AnalysisRunWithResults>(response);
     }
 
     /**
@@ -121,18 +137,22 @@ class AnalysisService {
     async executeStep(
         analysisId: string,
         stepId: string,
-        request: StepExecutionRequest
-    ): Promise<AnalysisStepResult> {
+        algorithmId: string,
+        parameters?: Record<string, any>
+    ): Promise<StepExecutionResultInfo> {
         const response = await fetch(
             `${this.baseUrl}/analyses/${analysisId}/steps/${stepId}/execute`,
             {
                 method: 'POST',
                 headers: this.getHeaders(),
-                body: JSON.stringify(request),
+                body: JSON.stringify({
+                    algorithm_id: algorithmId,
+                    parameters
+                }),
             }
         );
 
-        return this.handleResponse<AnalysisStepResult>(response);
+        return this.handleResponse<StepExecutionResultInfo>(response);
     }
 
     /**
@@ -142,7 +162,7 @@ class AnalysisService {
         analysisId: string,
         stepId: string,
         corrections: Record<string, any>
-    ): Promise<AnalysisStepResult> {
+    ): Promise<StepExecutionResultInfo> {
         const response = await fetch(
             `${this.baseUrl}/analyses/${analysisId}/steps/${stepId}/corrections`,
             {
@@ -152,20 +172,20 @@ class AnalysisService {
             }
         );
 
-        return this.handleResponse<AnalysisStepResult>(response);
+        return this.handleResponse<StepExecutionResultInfo>(response);
     }
 
     /**
      * Get all analyses for the current user with optional filters
      */
-    async getUserAnalyses(params?: AnalysisListParams): Promise<Analysis[]> {
+    async getUserAnalyses(params?: AnalysisRunListParams): Promise<AnalysisRunWithResults[]> {
         const queryParams = new URLSearchParams();
         if (params) {
             if (params.status) queryParams.append('status', params.status);
-            if (params.analysis_type_id) queryParams.append('analysis_type_id', params.analysis_type_id);
+            if (params.analysis_definition_id) queryParams.append('analysis_definition_id', params.analysis_definition_id);
             if (params.document_type) queryParams.append('document_type', params.document_type);
-            if (params.start_date) queryParams.append('start_date', params.start_date.toISOString());
-            if (params.end_date) queryParams.append('end_date', params.end_date.toISOString());
+            if (params.start_date) queryParams.append('start_date', params.start_date);
+            if (params.end_date) queryParams.append('end_date', params.end_date);
             if (params.skip) queryParams.append('skip', params.skip.toString());
             if (params.limit) queryParams.append('limit', params.limit.toString());
         }
@@ -175,12 +195,15 @@ class AnalysisService {
             headers: this.getHeaders(),
         });
 
-        return this.handleResponse<Analysis[]>(response);
+        return this.handleResponse<AnalysisRunWithResults[]>(response);
     }
 
+    /**
+     * Export analysis results in specified format
+     */
     async exportResults(analysisId: string, format: 'json' | 'csv'): Promise<Blob> {
         const response = await fetchWithAuth(
-            `${API_URL}/analysis/${analysisId}/export?format=${format}`,
+            `${this.baseUrl}/${analysisId}/export?format=${format}`,
             {
                 method: 'GET',
             }
@@ -194,6 +217,9 @@ class AnalysisService {
         return response.blob();
     }
 
+    /**
+     * Download analysis results in specified format
+     */
     async downloadExport(analysisId: string, format: 'json' | 'csv'): Promise<void> {
         const blob = await this.exportResults(analysisId, format);
         const url = window.URL.createObjectURL(blob);

@@ -1,63 +1,86 @@
 import { create } from 'zustand';
 import { analysisService } from '@/services/analysis.service';
 import {
-    AnalysisType,
-    Analysis,
-    AnalysisRequest,
-    AnalysisStepResult,
-    StepExecutionRequest,
-    AnalysisListParams
-} from '@/types/analysis';
-import { Algorithm } from '@/types/algorithm';
+    AnalysisDefinitionInfo,
+    AnalysisDefinitionWithStepsAndAlgorithms,
+    AlgorithmDefinitionInfo,
+    AnalysisMode,
+    AnalysisRunConfig
+} from '@/types/analysis_configs';
 import {
-    TableAnalysisStepEnum,
-    TextAnalysisStepEnum,
-    TemplateConversionStepEnum
-} from '@/lib/enums';
+    AnalysisRunInfo,
+    AnalysisRunWithResults,
+    StepExecutionResultInfo,
+    AnalysisRunListParams
+} from '@/types/analysis_execution';
+import { DocumentType } from '@/types/document';
 import {
-    TableDetectionOutput,
     TableDetectionResult
-} from '@/types/results/table-detection';
+} from '@/types/results/table_analysis/table_detection';
 import {
-    TableStructureOutput,
     TableStructureResult
-} from '@/types/results/table-recognition';
+} from '@/types/results/table_analysis/table_structure';
 import {
-    TableDataOutput,
     TableDataResult
-} from '@/types/results/table-data-extraction';
+} from '@/types/results/table_analysis/table_data';
 
-type StepResult =
-    | { step_type: TableAnalysisStepEnum.TABLE_DETECTION; result: TableDetectionOutput }
-    | { step_type: TableAnalysisStepEnum.TABLE_STRUCTURE_RECOGNITION; result: TableStructureOutput }
-    | { step_type: TableAnalysisStepEnum.TABLE_DATA_EXTRACTION; result: TableDataOutput };
+/**
+ * Enum for table analysis steps
+ */
+export enum TableAnalysisStep {
+    TABLE_DETECTION = 'table_detection',
+    TABLE_STRUCTURE = 'table_structure',
+    TABLE_DATA = 'table_data'
+}
+
+/**
+ * Union type for step results
+ */
+type StepResult = {
+    step_type: TableAnalysisStep;
+    result: TableDetectionResult | TableStructureResult | TableDataResult;
+};
 
 interface AnalysisState {
-    // Analysis types and configurations
-    analysisTypes: AnalysisType[];
-    currentAnalysisType: AnalysisType | null;
-    availableAlgorithms: Record<string, Algorithm[]>;
+    // Analysis definitions and configurations
+    analysisDefinitions: AnalysisDefinitionInfo[];
+    currentDefinition: AnalysisDefinitionWithStepsAndAlgorithms | null;
+    availableAlgorithms: Record<string, AlgorithmDefinitionInfo[]>;
 
     // Analysis state
-    analyses: Analysis[];
-    currentAnalysis: Analysis | null;
-    currentStepResult: AnalysisStepResult & StepResult | null;
+    analyses: AnalysisRunWithResults[];
+    currentAnalysis: AnalysisRunWithResults | null;
+    currentStepResult: StepExecutionResultInfo & StepResult | null;
     isLoading: boolean;
     error: string | null;
 
-    // Methods for analysis types
-    fetchAnalysisTypes: () => Promise<void>;
-    fetchAnalysisType: (analysisTypeId: string) => Promise<void>;
-    setCurrentAnalysisType: (analysisType: AnalysisType | null) => void;
+    // Methods for analysis definitions
+    fetchAnalysisDefinitions: () => Promise<void>;
+    fetchAnalysisDefinition: (definitionId: string) => Promise<void>;
+    setCurrentDefinition: (definition: AnalysisDefinitionWithStepsAndAlgorithms | null) => void;
     fetchStepAlgorithms: (stepId: string) => Promise<void>;
 
     // Methods for analysis operations
-    startAnalysis: (documentId: string, request: AnalysisRequest) => Promise<void>;
+    startAnalysis: (
+        documentId: string,
+        analysisCode: string,
+        mode?: AnalysisMode,
+        config?: AnalysisRunConfig
+    ) => Promise<void>;
     fetchDocumentAnalyses: (documentId: string) => Promise<void>;
-    fetchUserAnalyses: (params?: AnalysisListParams) => Promise<void>;
+    fetchUserAnalyses: (params?: AnalysisRunListParams) => Promise<void>;
     fetchAnalysis: (analysisId: string) => Promise<void>;
-    executeStep: (analysisId: string, stepId: string, request: StepExecutionRequest) => Promise<void>;
-    updateStepCorrections: (analysisId: string, stepId: string, corrections: Record<string, any>) => Promise<void>;
+    executeStep: (
+        analysisId: string,
+        stepId: string,
+        algorithmId: string,
+        parameters?: Record<string, any>
+    ) => Promise<void>;
+    updateStepCorrections: (
+        analysisId: string,
+        stepId: string,
+        corrections: Record<string, any>
+    ) => Promise<void>;
 
     // Utility methods
     clearError: () => void;
@@ -66,8 +89,8 @@ interface AnalysisState {
 
 export const useAnalysisStore = create<AnalysisState>((set, get) => ({
     // Initial state
-    analysisTypes: [],
-    currentAnalysisType: null,
+    analysisDefinitions: [],
+    currentDefinition: null,
     availableAlgorithms: {},
     analyses: [],
     currentAnalysis: null,
@@ -75,39 +98,39 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
     isLoading: false,
     error: null,
 
-    // Analysis types methods
-    fetchAnalysisTypes: async () => {
+    // Analysis definitions methods
+    fetchAnalysisDefinitions: async () => {
         try {
             set({ isLoading: true, error: null });
-            const types = await analysisService.getAnalysisTypes();
-            set({ analysisTypes: types, isLoading: false });
+            const definitions = await analysisService.getAnalysisDefinitions();
+            set({ analysisDefinitions: definitions, isLoading: false });
         } catch (error) {
             set({
-                error: error instanceof Error ? error.message : 'Failed to fetch analysis types',
+                error: error instanceof Error ? error.message : 'Failed to fetch analysis definitions',
                 isLoading: false
             });
             throw error;
         }
     },
 
-    fetchAnalysisType: async (analysisTypeId: string) => {
+    fetchAnalysisDefinition: async (definitionId: string) => {
         try {
             set({ isLoading: true, error: null });
-            const analysisType = await analysisService.getAnalysisType(analysisTypeId);
+            const definition = await analysisService.getAnalysisDefinition(definitionId);
             set({
-                currentAnalysisType: analysisType,
+                currentDefinition: definition,
                 isLoading: false
             });
         } catch (error) {
             set({
-                error: error instanceof Error ? error.message : 'Failed to fetch analysis type',
+                error: error instanceof Error ? error.message : 'Failed to fetch analysis definition',
                 isLoading: false
             });
             throw error;
         }
     },
 
-    setCurrentAnalysisType: (analysisType) => set({ currentAnalysisType: analysisType }),
+    setCurrentDefinition: (definition) => set({ currentDefinition: definition }),
 
     fetchStepAlgorithms: async (stepId: string) => {
         try {
@@ -130,13 +153,15 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
     },
 
     // Analysis operations
-    startAnalysis: async (documentId: string, request: AnalysisRequest) => {
+    startAnalysis: async (documentId: string, analysisCode: string, mode = AnalysisMode.AUTOMATIC, config?) => {
         try {
             set({ isLoading: true, error: null });
-            const analysis = await analysisService.startAnalysis(documentId, request);
+            const analysis = await analysisService.startAnalysis(documentId, analysisCode, mode, config);
+            // Fetch the complete analysis with results
+            const analysisWithResults = await analysisService.getAnalysis(analysis.id);
             set((state) => ({
-                analyses: [analysis, ...state.analyses],
-                currentAnalysis: analysis,
+                analyses: [analysisWithResults, ...state.analyses],
+                currentAnalysis: analysisWithResults,
                 isLoading: false
             }));
         } catch (error) {
@@ -165,7 +190,7 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
         }
     },
 
-    fetchUserAnalyses: async (params?: AnalysisListParams) => {
+    fetchUserAnalyses: async (params?: AnalysisRunListParams) => {
         try {
             set({ isLoading: true, error: null });
             const analyses = await analysisService.getUserAnalyses(params);
@@ -187,18 +212,19 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
             set({ isLoading: true, error: null });
             const analysis = await analysisService.getAnalysis(analysisId);
 
-            // Also fetch the analysis type if not already in state
-            let analysisType = get().analysisTypes.find(type => type.id === analysis.analysis_type_id);
-            if (!analysisType) {
-                analysisType = await analysisService.getAnalysisType(analysis.analysis_type_id);
+            // Also fetch the analysis definition if not already in state
+            const definitionId = analysis.analysis_code;
+            let definition = get().analysisDefinitions.find(def => def.code === definitionId);
+            if (!definition) {
+                definition = await analysisService.getAnalysisDefinition(definitionId);
                 set(state => ({
-                    analysisTypes: [...state.analysisTypes, analysisType!]
+                    analysisDefinitions: [...state.analysisDefinitions, definition!]
                 }));
             }
 
             set({
                 currentAnalysis: analysis,
-                currentAnalysisType: analysisType,
+                currentDefinition: definition as AnalysisDefinitionWithStepsAndAlgorithms,
                 isLoading: false
             });
         } catch (error) {
@@ -210,16 +236,14 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
         }
     },
 
-    executeStep: async (analysisId: string, stepId: string, request: StepExecutionRequest) => {
+    executeStep: async (analysisId: string, stepId: string, algorithmId: string, parameters?) => {
         try {
             set({ isLoading: true, error: null });
-            const stepResult = await analysisService.executeStep(analysisId, stepId, request);
+            const stepResult = await analysisService.executeStep(analysisId, stepId, algorithmId, parameters);
 
             // Type guard to ensure proper typing of step results
             const isValidStepResult = (result: any): result is StepResult => {
-                return result.step_type in TableAnalysisStepEnum ||
-                    result.step_type in TextAnalysisStepEnum ||
-                    result.step_type in TemplateConversionStepEnum;
+                return Object.values(TableAnalysisStep).includes(result.step_type);
             };
 
             if (!isValidStepResult(stepResult)) {
@@ -227,11 +251,11 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
             }
 
             set((state) => ({
-                currentStepResult: stepResult,
+                currentStepResult: stepResult as StepExecutionResultInfo & StepResult,
                 currentAnalysis: state.currentAnalysis ? {
                     ...state.currentAnalysis,
-                    step_results: state.currentAnalysis.step_results.map(r =>
-                        r.step_id === stepId ? stepResult : r
+                    step_results: state.currentAnalysis.step_results.map((r: StepExecutionResultInfo) =>
+                        r.id === stepId ? stepResult : r
                     )
                 } : null,
                 isLoading: false
@@ -250,11 +274,11 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
             set({ isLoading: true, error: null });
             const stepResult = await analysisService.updateStepCorrections(analysisId, stepId, corrections);
             set((state) => ({
-                currentStepResult: stepResult as AnalysisStepResult & StepResult,
+                currentStepResult: stepResult as StepExecutionResultInfo & StepResult,
                 currentAnalysis: state.currentAnalysis ? {
                     ...state.currentAnalysis,
-                    step_results: state.currentAnalysis.step_results.map(r =>
-                        r.step_id === stepId ? stepResult : r
+                    step_results: state.currentAnalysis.step_results.map((r: StepExecutionResultInfo) =>
+                        r.id === stepId ? stepResult : r
                     )
                 } : null,
                 isLoading: false
@@ -271,8 +295,8 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
     // Utility methods
     clearError: () => set({ error: null }),
     reset: () => set({
-        analysisTypes: [],
-        currentAnalysisType: null,
+        analysisDefinitions: [],
+        currentDefinition: null,
         availableAlgorithms: {},
         analyses: [],
         currentAnalysis: null,

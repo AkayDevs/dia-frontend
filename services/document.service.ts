@@ -9,6 +9,7 @@ import {
     TagCreate,
     DocumentUpdate,
     DocumentPages,
+    DocumentType
 } from '@/types/document';
 
 class DocumentService {
@@ -39,10 +40,41 @@ class DocumentService {
             if (response.status === 401) {
                 throw new Error('Authentication failed');
             }
+            if (response.status === 429) {
+                throw new Error('Too many requests. Please try again later.');
+            }
             const error = await response.json();
             throw new Error(error.detail || error.message || 'An error occurred');
         }
         return response.json();
+    }
+
+    /**
+     * Get list of documents with optional filtering
+     */
+    async getDocuments(params: DocumentListParams = {}): Promise<Document[]> {
+        const queryParams = new URLSearchParams();
+
+        if (params.skip !== undefined) queryParams.append('skip', params.skip.toString());
+        if (params.limit !== undefined) queryParams.append('limit', params.limit.toString());
+        if (params.doc_type) queryParams.append('doc_type', params.doc_type);
+        if (params.tag_id !== undefined) queryParams.append('tag_id', params.tag_id.toString());
+
+        const response = await fetch(`${this.baseUrl}?${queryParams.toString()}`, {
+            headers: this.getHeaders(),
+        });
+        return this.handleResponse<Document[]>(response);
+    }
+
+    /**
+     * Get document by ID with analysis results
+     */
+    async getDocument(documentId: string): Promise<DocumentWithAnalysis> {
+        const response = await fetch(`${this.baseUrl}/${documentId}`, {
+            headers: this.getHeaders(),
+        });
+
+        return this.handleResponse<DocumentWithAnalysis>(response);
     }
 
     /**
@@ -65,7 +97,7 @@ class DocumentService {
     }
 
     /**
-     * Upload multiple documents
+     * Upload multiple documents in batch
      */
     async uploadDocuments(files: File[]): Promise<Document[]> {
         const formData = new FormData();
@@ -83,42 +115,11 @@ class DocumentService {
     }
 
     /**
-     * Get list of documents with optional filtering
-     */
-    async getDocuments(params: DocumentListParams = {}): Promise<Document[]> {
-        const queryParams = new URLSearchParams();
-
-        if (params.skip !== undefined) queryParams.append('skip', params.skip.toString());
-        if (params.limit !== undefined) queryParams.append('limit', params.limit.toString());
-        if (params.doc_type) queryParams.append('doc_type', params.doc_type);
-        if (params.tag_id !== undefined) queryParams.append('tag_id', params.tag_id.toString());
-
-        const response = await fetch(`${this.baseUrl}?${queryParams.toString()}`, {
-            headers: this.getHeaders(),
-        });
-        return this.handleResponse<Document[]>(response);
-    }
-
-    /**
-     * Get document by ID
-     */
-    async getDocument(documentId: string): Promise<Document> {
-        const response = await fetch(`${this.baseUrl}/${documentId}`, {
-            headers: this.getHeaders(),
-        });
-
-        return this.handleResponse<Document>(response);
-    }
-
-    /**
      * Update document metadata and/or content
      */
     async updateDocument(documentId: string, updates: DocumentUpdate): Promise<Document> {
         const formData = new FormData();
 
-        if (updates.file) {
-            formData.append('file', updates.file);
-        }
         if (updates.name) {
             formData.append('name', updates.name);
         }
@@ -170,7 +171,7 @@ class DocumentService {
     }
 
     /**
-     * Get list of tags
+     * Get list of tags with optional filtering
      */
     async getTags(documentId?: string, nameFilter?: string): Promise<Tag[]> {
         const queryParams = new URLSearchParams();
