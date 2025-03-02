@@ -1,12 +1,14 @@
 'use client';
 
 import { useEffect, useState, use } from 'react';
+import type { JSX } from 'react';
 import { useRouter } from 'next/navigation';
 import { useDocumentStore } from '@/store/useDocumentStore';
 import { useAnalysisStore } from '@/store/useAnalysisStore';
 import { useToast } from '@/hooks/use-toast';
 import { Document, DocumentType, DocumentWithAnalysis, DocumentUpdate } from '@/types/document';
-import { Analysis, AnalysisStatus, AnalysisTypeEnum } from '@/types/analysis';
+import { AnalysisStatus } from '@/types/analysis_configs';
+import { AnalysisRunWithResults } from '@/types/analysis_execution';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -57,21 +59,26 @@ import { DocumentEditor } from '@/components/editors/document-editor';
 import Link from 'next/link';
 import { Loader2 } from 'lucide-react';
 
+interface DashboardAnalysis extends AnalysisRunWithResults {
+    type: string;
+}
+
 interface DocumentPageProps {
     params: Promise<{
         documentId: string;
     }>;
 }
 
-// Document type icon mapping (reused from documents page)
+// Document type icon mapping
 const DocumentTypeIcon = ({ type, className = "h-5 w-5" }: { type: DocumentType; className?: string }) => {
-    const icons = {
+    const icons: Record<DocumentType, JSX.Element> = {
         [DocumentType.PDF]: <DocumentIcon className={`${className} text-blue-500`} />,
         [DocumentType.DOCX]: <DocumentTextIcon className={`${className} text-indigo-500`} />,
         [DocumentType.XLSX]: <DocumentChartBarIcon className={`${className} text-green-500`} />,
-        [DocumentType.IMAGE]: <PhotoIcon className={`${className} text-purple-500`} />
+        [DocumentType.IMAGE]: <PhotoIcon className={`${className} text-purple-500`} />,
+        [DocumentType.UNKNOWN]: <DocumentIcon className={`${className} text-gray-500`} />
     };
-    return icons[type] || <DocumentIcon className={`${className} text-gray-500`} />;
+    return icons[type];
 };
 
 const formatDate = (dateString: string | undefined) => {
@@ -85,7 +92,7 @@ const formatDate = (dateString: string | undefined) => {
     }
 };
 
-const getLatestAnalysis = (analyses: Analysis[]): Analysis | undefined => {
+const getLatestAnalysis = (analyses: AnalysisRunWithResults[]): AnalysisRunWithResults | undefined => {
     return analyses.length > 0
         ? analyses.reduce((latest, current) =>
             new Date(current.created_at) > new Date(latest.created_at) ? current : latest
@@ -218,6 +225,9 @@ export default function DocumentPage({ params }: DocumentPageProps) {
             });
         }
     };
+
+    // Cast analyses to DashboardAnalysis[]
+    const dashboardAnalyses = analyses as DashboardAnalysis[];
 
     // Loading state
     if (isLoading) {
@@ -497,25 +507,25 @@ export default function DocumentPage({ params }: DocumentPageProps) {
                         </TabsContent>
 
                         <TabsContent value="analysis" className="space-y-6">
-                            {analyses.length > 0 ? (
+                            {dashboardAnalyses.length > 0 ? (
                                 <div className="space-y-6">
-                                    {analyses.map((analysis) => (
+                                    {dashboardAnalyses.map((analysis) => (
                                         <Card key={analysis.id} className="p-4">
                                             <div className="flex items-center justify-between mb-4">
                                                 <div>
                                                     <h4 className="text-sm font-medium">
-                                                        {analysis.analysis_type_id === AnalysisTypeEnum.TABLE_ANALYSIS ? (
+                                                        {analysis.type === 'table_analysis' ? (
                                                             <div className="flex items-center gap-2">
                                                                 <TableCellsIcon className="w-4 h-4" />
                                                                 Table Analysis
                                                             </div>
-                                                        ) : analysis.analysis_type_id === AnalysisTypeEnum.TEXT_ANALYSIS ? (
+                                                        ) : analysis.type === 'text_analysis' ? (
                                                             <div className="flex items-center gap-2">
                                                                 <DocumentTextIcon className="w-4 h-4" />
                                                                 Text Analysis
                                                             </div>
                                                         ) : (
-                                                            analysis.analysis_type_id
+                                                            analysis.type
                                                         )}
                                                     </h4>
                                                     <p className="text-xs text-muted-foreground">
@@ -533,7 +543,7 @@ export default function DocumentPage({ params }: DocumentPageProps) {
                                                     View Details
                                                 </Button>
                                             </div>
-                                            {analysis.status === AnalysisStatus.PROCESSING && (
+                                            {analysis.status === AnalysisStatus.IN_PROGRESS && (
                                                 <Progress value={33} className="h-2 mt-2" />
                                             )}
                                         </Card>
