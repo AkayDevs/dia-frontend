@@ -1,4 +1,4 @@
-import { TableDetectionOptions, TableExtractionOptions } from '@/types/analysis/definitions/table_analysis/shared';
+import { TableDetectionOptions, TableExtractionOptions } from '@/types/analysis/types/table';
 
 /**
  * Default table detection options

@@ -26,8 +26,8 @@ import {
 import { BaseAnalysisRun, BaseAnalysisStepResult, AnalysisStatus } from '@/types/analysis/base';
 import { getAnalysisConstants } from '@/constants/analysis/registry';
 import { isTableAnalysisConfig, isTextAnalysisConfig, AnalysisDefinitionCode } from '@/types/analysis/registry';
-import { TableAnalysisConfig } from '@/types/analysis/types/table_analysis';
-import { TextAnalysisConfig } from '@/types/analysis/types/text_analysis';
+import { TableAnalysisConfig } from '@/types/analysis/types/table';
+import { TextAnalysisConfig } from '@/types/analysis/types/text';
 
 /**
  * Enum for table analysis steps

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { ResultsProps } from '../../interfaces';
 import { useAnalysisStore } from '@/store/useAnalysisStore';
-import { TableAnalysisResult } from '@/types/analysis/types/table_analysis';
+import { TableAnalysisResult } from '@/types/analysis/types/table';
 import { AnalysisStatus } from '@/types/analysis/base';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -17,24 +17,24 @@ export function Results({ analysisId, documentId, result: initialResult, isLoadi
   const [isLoading, setIsLoading] = useState(initialLoading || true);
   const [error, setError] = useState<string | null>(initialError || null);
   const [activeTable, setActiveTable] = useState<string | null>(null);
-
+  
   useEffect(() => {
     if (initialResult) {
       setResult(initialResult as TableAnalysisResult);
       setIsLoading(false);
       return;
     }
-
+    
     const fetchResult = async () => {
       setIsLoading(true);
       try {
         const resultData = await getAnalysisResult(analysisId);
         setResult(resultData as TableAnalysisResult);
-
+        
         if (resultData?.tables?.length > 0) {
           setActiveTable(resultData.tables[0].id);
         }
-
+        
         setError(null);
       } catch (err: any) {
         setError(err.message || 'Failed to load analysis results');
@@ -43,24 +43,24 @@ export function Results({ analysisId, documentId, result: initialResult, isLoadi
         setIsLoading(false);
       }
     };
-
+    
     fetchResult();
   }, [analysisId, getAnalysisResult, initialResult]);
-
+  
   const getStatusBadge = (status: AnalysisStatus) => {
     const label = ANALYSIS_STATUS_LABELS[status] || status;
     const colorClass = ANALYSIS_STATUS_COLORS[status] || 'bg-gray-100 text-gray-800';
-
+    
     return (
       <span className={`px-2 py-1 text-xs font-medium rounded-full ${colorClass}`}>
         {label}
       </span>
     );
   };
-
+  
   const renderTableData = (tableId: string) => {
     const table = result?.tables.find(t => t.id === tableId);
-
+    
     if (!table) {
       return (
         <div className="p-4 text-muted-foreground">
@@ -68,7 +68,7 @@ export function Results({ analysisId, documentId, result: initialResult, isLoadi
         </div>
       );
     }
-
+    
     return (
       <div className="overflow-auto">
         <table className="min-w-full divide-y divide-gray-200">
@@ -76,7 +76,7 @@ export function Results({ analysisId, documentId, result: initialResult, isLoadi
             <tr>
               {table.headerRow ? (
                 table.headerRow.map((header, i) => (
-                  <th
+                  <th 
                     key={i}
                     className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                   >
@@ -85,7 +85,7 @@ export function Results({ analysisId, documentId, result: initialResult, isLoadi
                 ))
               ) : (
                 Array.from({ length: table.columnCount }).map((_, i) => (
-                  <th
+                  <th 
                     key={i}
                     className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                   >
@@ -110,7 +110,7 @@ export function Results({ analysisId, documentId, result: initialResult, isLoadi
       </div>
     );
   };
-
+  
   if (isLoading) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -118,7 +118,7 @@ export function Results({ analysisId, documentId, result: initialResult, isLoadi
       </div>
     );
   }
-
+  
   if (error) {
     return (
       <div className="p-4 text-destructive">
@@ -127,7 +127,7 @@ export function Results({ analysisId, documentId, result: initialResult, isLoadi
       </div>
     );
   }
-
+  
   if (!result || !result.tables || result.tables.length === 0) {
     return (
       <Card>
@@ -143,7 +143,7 @@ export function Results({ analysisId, documentId, result: initialResult, isLoadi
       </Card>
     );
   }
-
+  
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -167,13 +167,13 @@ export function Results({ analysisId, documentId, result: initialResult, isLoadi
           </div>
         </div>
       </div>
-
+      
       <Card>
         <CardHeader className="pb-0">
           <TabsList className="grid" style={{ gridTemplateColumns: `repeat(${Math.min(result.tables.length, 5)}, 1fr)` }}>
             {result.tables.map((table, index) => (
-              <TabsTrigger
-                key={table.id}
+              <TabsTrigger 
+                key={table.id} 
                 value={table.id}
                 onClick={() => setActiveTable(table.id)}
               >
@@ -201,7 +201,7 @@ export function Results({ analysisId, documentId, result: initialResult, isLoadi
                       Download
                     </Button>
                   </div>
-
+                  
                   {renderTableData(table.id)}
                 </div>
               </TabsContent>

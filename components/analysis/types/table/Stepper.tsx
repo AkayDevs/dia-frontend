@@ -6,7 +6,7 @@ import { useAnalysisStore } from '@/store/useAnalysisStore';
 import { getAnalysisSteps } from '@/constants/analysis/registry';
 import { AnalysisTypeCode } from '@/types/analysis/registry';
 import { StepStatus } from '@/types/analysis/base';
-import { TableAnalysisConfig } from '@/types/analysis/types/table_analysis';
+import { TableAnalysisConfig } from '@/types/analysis/types/table';
 import { TABLE_ANALYSIS_ERROR_MESSAGES, TABLE_ANALYSIS_SUCCESS_MESSAGES } from '@/constants/analysis/types/table';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -19,18 +19,18 @@ export function Stepper({ analysisId, documentId, currentStep = 0, onStepChange,
   const [activeStep, setActiveStep] = useState(currentStep);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
+  
   useEffect(() => {
     const fetchAnalysis = async () => {
       setIsLoading(true);
       try {
         const analysisData = await getAnalysis(analysisId);
         setAnalysis(analysisData as TableAnalysisConfig);
-
+        
         // Get steps for table analysis
         const tableSteps = getAnalysisSteps(AnalysisTypeCode.TABLE_DETECTION);
         setSteps(tableSteps);
-
+        
         setError(null);
       } catch (err: any) {
         setError(err.message || 'Failed to load analysis data');
@@ -39,17 +39,17 @@ export function Stepper({ analysisId, documentId, currentStep = 0, onStepChange,
         setIsLoading(false);
       }
     };
-
+    
     fetchAnalysis();
   }, [analysisId, getAnalysis]);
-
+  
   const handleStepChange = (stepIndex: number) => {
     setActiveStep(stepIndex);
     if (onStepChange) {
       onStepChange(stepIndex);
     }
   };
-
+  
   const handleNextStep = () => {
     if (activeStep < steps.length - 1) {
       handleStepChange(activeStep + 1);
@@ -57,7 +57,7 @@ export function Stepper({ analysisId, documentId, currentStep = 0, onStepChange,
       onComplete();
     }
   };
-
+  
   const getStepStatusIcon = (status: StepStatus) => {
     switch (status) {
       case StepStatus.COMPLETED:
@@ -72,7 +72,7 @@ export function Stepper({ analysisId, documentId, currentStep = 0, onStepChange,
         return <AlertCircle className="h-5 w-5 text-gray-400" />;
     }
   };
-
+  
   if (isLoading) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -80,7 +80,7 @@ export function Stepper({ analysisId, documentId, currentStep = 0, onStepChange,
       </div>
     );
   }
-
+  
   if (error) {
     return (
       <div className="p-4 text-destructive">
@@ -89,7 +89,7 @@ export function Stepper({ analysisId, documentId, currentStep = 0, onStepChange,
       </div>
     );
   }
-
+  
   if (!analysis || !steps.length) {
     return (
       <div className="p-4 text-muted-foreground">
@@ -97,7 +97,7 @@ export function Stepper({ analysisId, documentId, currentStep = 0, onStepChange,
       </div>
     );
   }
-
+  
   return (
     <div className="space-y-6">
       <div className="space-y-2">
@@ -106,36 +106,36 @@ export function Stepper({ analysisId, documentId, currentStep = 0, onStepChange,
           Follow these steps to analyze tables in your document.
         </p>
       </div>
-
+      
       <div className="flex items-center">
         {steps.map((step, index) => (
           <div key={step.id} className="flex items-center">
-            <div
+            <div 
               className={`flex flex-col items-center ${index <= activeStep ? 'text-primary' : 'text-muted-foreground'}`}
               onClick={() => handleStepChange(index)}
             >
               <div className={`
                 flex items-center justify-center w-10 h-10 rounded-full border-2
-                ${index === activeStep ? 'border-primary bg-primary/10' :
+                ${index === activeStep ? 'border-primary bg-primary/10' : 
                   index < activeStep ? 'border-primary' : 'border-muted'}
               `}>
                 {index + 1}
               </div>
               <span className="text-xs mt-1">{step.name}</span>
             </div>
-
+            
             {index < steps.length - 1 && (
               <div className={`w-12 h-0.5 mx-1 ${index < activeStep ? 'bg-primary' : 'bg-muted'}`} />
             )}
           </div>
         ))}
       </div>
-
+      
       <Card className="p-6">
         <div className="space-y-4">
           <h3 className="text-lg font-medium">{steps[activeStep]?.name}</h3>
           <p className="text-sm text-muted-foreground">{steps[activeStep]?.description}</p>
-
+          
           {/* Step-specific content would go here */}
           <div className="py-4">
             {activeStep === 0 && (
@@ -148,7 +148,7 @@ export function Stepper({ analysisId, documentId, currentStep = 0, onStepChange,
               <p>Table validation settings and controls would go here.</p>
             )}
           </div>
-
+          
           <div className="flex justify-end space-x-2">
             <Button
               variant="outline"

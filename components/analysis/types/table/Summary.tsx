@@ -3,8 +3,8 @@
 import { useState, useEffect } from 'react';
 import { SummaryProps } from '../../interfaces';
 import { useAnalysisStore } from '@/store/useAnalysisStore';
-import { TableAnalysisConfig } from '@/types/analysis/types/table_analysis';
-import { TableAnalysisResult } from '@/types/analysis/types/table_analysis';
+import { TableAnalysisConfig } from '@/types/analysis/types/table';
+import { TableAnalysisResult } from '@/types/analysis/types/table';
 import { AnalysisStatus } from '@/types/analysis/base';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';

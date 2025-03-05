@@ -5,8 +5,8 @@ export * from './base';
 export * from './registry';
 
 // Export specific analysis types
-export * from './types/table_analysis';
-export * from './types/text_analysis';
+export * from './types/table';
+export * from './types/text';
 
 // Re-export common types for convenience
 import { AnalysisTypeCode } from './registry';

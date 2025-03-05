@@ -1,4 +1,4 @@
-import { TextExtractionOptions, TextProcessingOptions } from '@/types/analysis/definitions/text_analysis';
+import { TextExtractionOptions, TextProcessingOptions } from '@/types/analysis/types/text';
 
 /**
  * Default text extraction options

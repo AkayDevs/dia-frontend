@@ -1,4 +1,21 @@
 /**
+ * Analysis definition code enum
+ */
+export enum AnalysisDefinitionCode {
+    TABLE_ANALYSIS = 'table_analysis',
+    TEXT_ANALYSIS = 'text_analysis'
+}
+
+/**
+ * Table analysis step code
+ */
+export enum TableAnalysisStepCode {
+    TABLE_DETECTION = 'table_analysis.table_detection',
+    TABLE_STRUCTURE = 'table_analysis.table_structure',
+    TABLE_DATA = 'table_analysis.table_data',
+}
+
+/**
  * Analysis status enum
  */
 export enum AnalysisStatus {

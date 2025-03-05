@@ -2,8 +2,8 @@
 export * from './registry';
 
 // Export specific analysis constants
-export * from './definitions/table-analysis';
-export * from './definitions/text-analysis';
+export * from './types/table';
+export * from './types/text';
 
 // Common analysis constants
 export const ANALYSIS_STATUS_LABELS = {
