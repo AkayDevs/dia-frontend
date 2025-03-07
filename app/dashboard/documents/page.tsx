@@ -12,20 +12,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { FolderIcon, ArrowUpTrayIcon } from '@heroicons/react/24/outline';
 import { motion } from 'framer-motion';
-import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon } from 'lucide-react';
-import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-} from '@/components/ui/popover';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
+import { AnalysisRunWithResults } from '@/types/analysis/base';
 import {
     DocumentTypeIcon,
     StatusBadge,
@@ -40,34 +27,6 @@ import {
     Pagination
 } from '@/components/documents';
 import { format, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
-import { formatDistanceToNow } from 'date-fns';
-import { cn } from '@/lib/utils';
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from '@/components/ui/table';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { ChevronDownIcon, DocumentIcon, DocumentTextIcon, DocumentChartBarIcon, PhotoIcon, TrashIcon, EyeIcon, ArrowPathIcon, ChartBarIcon, TagIcon, PlusIcon, XMarkIcon, CheckIcon } from '@heroicons/react/24/outline';
 
 const ITEMS_PER_PAGE = 10;
 
@@ -130,6 +89,23 @@ export default function DocumentsPage() {
             }
         });
         return statusMap;
+    }, [analyses]);
+
+    // Create a map of document IDs to their analyses
+    const documentAnalyses = useMemo(() => {
+        const analysesMap = new Map<string, AnalysisRunWithResults[]>();
+
+        analyses.forEach(analysis => {
+            if (!analysesMap.has(analysis.document_id)) {
+                analysesMap.set(analysis.document_id, []);
+            }
+
+            const documentAnalyses = analysesMap.get(analysis.document_id) || [];
+            documentAnalyses.push(analysis);
+            analysesMap.set(analysis.document_id, documentAnalyses);
+        });
+
+        return analysesMap;
     }, [analyses]);
 
     // Initialize page with documents and analyses
@@ -375,6 +351,7 @@ export default function DocumentsPage() {
                                 documents={paginatedDocuments}
                                 selectedDocuments={selectedDocuments}
                                 documentAnalysisStatus={documentAnalysisStatus}
+                                documentAnalyses={documentAnalyses}
                                 onToggleDocument={toggleDocumentSelection}
                                 onToggleAll={toggleAllDocuments}
                                 onViewDetails={(id: string) => router.push(`/dashboard/documents/${id}`)}
@@ -424,6 +401,9 @@ export default function DocumentsPage() {
                         await handleUpdateDocumentTags(selectedDocumentForTags, tagIds);
                         setSelectedDocumentForTags(null);
                     }
+                }}
+                onSave={async () => {
+                    // This is already handled in onTagsChange
                 }}
             />
         </div>
