@@ -80,6 +80,7 @@ interface AnalysisState {
     fetchDocumentAnalyses: (documentId: string) => Promise<void>;
     fetchUserAnalyses: (params?: any) => Promise<void>;
     fetchAnalysis: (analysisId: string) => Promise<void>;
+    getAnalysisResult: (analysisId: string) => Promise<StepResultResponse | null>;
     executeStep: (
         analysisId: string,
         stepId: string,
@@ -289,6 +290,41 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
                 error: error instanceof Error ? error.message : 'Failed to fetch analysis',
                 isLoading: false
             });
+        }
+    },
+
+    getAnalysisResult: async (analysisId) => {
+        try {
+            const analysis = await analysisService.getAnalysis(analysisId);
+            if (!analysis) {
+                return null;
+            }
+
+            // Since 'results' might not be directly on AnalysisRunWithResults,
+            // we'll check for step results or return a default result
+            // This is a workaround until the proper type is defined
+            const analysisWithResults = analysis as any;
+            if (analysisWithResults.results && analysisWithResults.results.length > 0) {
+                return analysisWithResults.results[analysisWithResults.results.length - 1];
+            }
+
+            // If no results array, check if there's a current step result
+            if (analysisWithResults.current_step_result) {
+                return analysisWithResults.current_step_result;
+            }
+
+            // Create a basic result object if nothing else is available
+            return {
+                id: analysisId,
+                analysis_id: analysisId,
+                step_id: '',
+                status: analysis.status,
+                created_at: analysis.created_at,
+                result: {}
+            };
+        } catch (error) {
+            console.error('Error getting analysis result:', error);
+            return null;
         }
     },
 
