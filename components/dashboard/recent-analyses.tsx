@@ -6,12 +6,14 @@ import { formatDistanceToNow } from 'date-fns';
 import { useRouter } from 'next/navigation';
 import { DashboardAnalysis } from './use-dashboard-stats';
 import { AnalysisStatus } from '@/enums/analysis';
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface RecentAnalysesProps {
     analyses: DashboardAnalysis[];
+    isLoading?: boolean;
 }
 
-export function RecentAnalyses({ analyses }: RecentAnalysesProps) {
+export function RecentAnalyses({ analyses, isLoading = false }: RecentAnalysesProps) {
     const router = useRouter();
 
     const getStatusBadge = (status?: AnalysisStatus) => {
@@ -45,6 +47,36 @@ export function RecentAnalyses({ analyses }: RecentAnalysesProps) {
                 );
         }
     };
+
+    if (isLoading) {
+        return (
+            <Card className="p-6 hover:shadow-lg transition-shadow">
+                <div className="flex items-start gap-4 mb-6">
+                    <Skeleton className="h-12 w-12 rounded-xl" />
+                    <div className="space-y-2">
+                        <Skeleton className="h-6 w-40" />
+                        <Skeleton className="h-4 w-56" />
+                    </div>
+                </div>
+
+                <div className="space-y-3 mb-4">
+                    {[...Array(3)].map((_, i) => (
+                        <div key={i} className="p-3 border rounded-lg">
+                            <div className="flex justify-between items-center">
+                                <div className="space-y-2">
+                                    <Skeleton className="h-5 w-32" />
+                                    <Skeleton className="h-4 w-24" />
+                                </div>
+                                <Skeleton className="h-6 w-20 rounded-full" />
+                            </div>
+                        </div>
+                    ))}
+                </div>
+
+                <Skeleton className="h-10 w-full" />
+            </Card>
+        );
+    }
 
     return (
         <Card className="p-6 hover:shadow-lg transition-shadow">

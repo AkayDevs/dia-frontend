@@ -21,6 +21,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from "@/components/ui/skeleton";
 
 export interface DocumentListProps {
     documents: Document[];
@@ -93,8 +94,9 @@ export function DocumentList({
     onAnalyze,
     isCompact = false,
     showAnalyzeButton = false,
-    className = ''
-}: DocumentListProps) {
+    className = '',
+    isLoading = false
+}: DocumentListProps & { isLoading?: boolean }) {
     const router = useRouter();
 
     const isProcessingOrPending = (status: any): boolean => {
@@ -104,6 +106,31 @@ export function DocumentList({
             status === 'processing' ||
             status === 'pending';
     };
+
+    if (isLoading) {
+        return (
+            <div className={`space-y-3 ${className}`}>
+                {[...Array(isCompact ? 3 : 5)].map((_, i) => (
+                    <div key={i} className="p-4 border rounded-lg">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4 min-w-0">
+                                <Skeleton className="h-10 w-10 rounded-xl" />
+                                <div className="space-y-2">
+                                    <Skeleton className="h-5 w-40" />
+                                    <Skeleton className="h-4 w-24" />
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <Skeleton className="h-6 w-20 rounded-full" />
+                                <Skeleton className="h-8 w-8 rounded-full" />
+                                <Skeleton className="h-8 w-8 rounded-full" />
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        );
+    }
 
     if (documents.length === 0) {
         return (

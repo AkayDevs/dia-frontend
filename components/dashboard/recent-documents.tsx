@@ -45,6 +45,7 @@ export function RecentDocuments({ documents, onDeleteDocument, isLoading }: Rece
                     onDelete={onDeleteDocument}
                     isCompact={true}
                     className="mb-4"
+                    isLoading={isLoading}
                 />
             )}
 

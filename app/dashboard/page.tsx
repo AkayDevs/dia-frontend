@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -11,8 +11,9 @@ import { useAnalysisStore } from '@/store/useAnalysisStore';
 import { AnalysisMode } from '@/enums/analysis';
 import { ArrowPathIcon } from '@heroicons/react/24/outline';
 import { motion } from 'framer-motion';
+import { Skeleton } from "@/components/ui/skeleton";
+import { format } from 'date-fns';
 
-// Import our new components
 import { useDashboardStats } from '@/components/dashboard/use-dashboard-stats';
 import { UploadSection } from '@/components/dashboard/upload-section';
 import { RecentAnalyses } from '@/components/dashboard/recent-analyses';
@@ -25,7 +26,7 @@ export default function DashboardPage() {
     const { isAuthenticated, user, logout } = useAuthStore();
     const {
         documents,
-        isLoading: isLoadingDocs,
+        isLoading: docIsLoading,
         error: docError,
         fetchDocuments,
         uploadDocument,
@@ -36,25 +37,28 @@ export default function DashboardPage() {
     } = useDocumentStore();
     const {
         analyses,
-        isLoading: isLoadingAnalyses,
+        isLoading: analysisIsLoading,
         error: analysisError,
         fetchUserAnalyses,
         analysisDefinitions,
         fetchAnalysisDefinitions
     } = useAnalysisStore();
 
-    // Initialize dashboard with recent documents and analyses
+    const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+    const [isRefreshing, setIsRefreshing] = useState(false);
+
     useEffect(() => {
         if (!isAuthenticated) return;
 
-        setFilters({ limit: 5 }); // Show only 5 recent documents
+        setFilters({ limit: 5 });
         const loadData = async () => {
             try {
                 await Promise.all([
                     fetchDocuments(),
-                    fetchUserAnalyses({ limit: 100 }), // Fetch recent analyses
+                    fetchUserAnalyses(),
                     fetchAnalysisDefinitions()
                 ]);
+                setLastUpdated(new Date());
             } catch (error) {
                 if (error instanceof Error && error.message.includes('authentication')) {
                     logout();
@@ -65,7 +69,6 @@ export default function DashboardPage() {
         loadData();
     }, [isAuthenticated, setFilters, fetchDocuments, fetchUserAnalyses, fetchAnalysisDefinitions, logout, router]);
 
-    // Use our custom hook to calculate dashboard stats
     const stats = useDashboardStats(documents, analyses, analysisDefinitions);
 
     const handleUploadSuccess = useCallback(async (file: File) => {
@@ -113,62 +116,69 @@ export default function DashboardPage() {
         });
     };
 
-    // Combine errors from different sources
-    const error = docError || analysisError;
-    const isLoading = isLoadingDocs || isLoadingAnalyses;
+    const handleRefresh = async () => {
+        setIsRefreshing(true);
+        clearDocError();
+        await fetchDocuments(true);
+        setLastUpdated(new Date());
+        setIsRefreshing(false);
+    };
 
-    if (isLoading) {
-        return (
-            <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
-                <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                    className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full"
-                />
-            </div>
-        );
-    }
+    const error = docError || analysisError;
+    const isLoading = docIsLoading || analysisIsLoading;
 
     return (
         <div className="container py-8 space-y-6">
-            <div className="flex justify-between items-center">
-                <h1 className="text-3xl font-bold">Dashboard</h1>
-                <Button
-                    variant="outline"
-                    onClick={() => {
-                        clearDocError();
-                        fetchDocuments();
-                    }}
-                    className="gap-2"
-                >
-                    <ArrowPathIcon className="w-4 h-4" />
-                    Refresh
-                </Button>
+            <div className="mb-8">
+                <div className="bg-card rounded-lg p-6 shadow-sm">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4">
+                        <div className="space-y-1">
+                            <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+                            <p className="text-muted-foreground">
+                                Manage your documents and analysis workflows
+                            </p>
+                        </div>
+                        <div className="flex items-center gap-3 ml-auto">
+                            <div className="text-xs text-muted-foreground whitespace-nowrap">
+                                Last updated: {format(lastUpdated, 'MMM d, yyyy h:mm a')}
+                            </div>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={handleRefresh}
+                                disabled={isRefreshing}
+                                className="gap-2 h-9 px-3 shadow-sm whitespace-nowrap"
+                            >
+                                <ArrowPathIcon className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                                <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
+                            </Button>
+                        </div>
+                    </div>
+                </div>
             </div>
 
-            {error ? (
-                <ErrorDisplay error={error} />
-            ) : (
-                <>
-                    <StatsOverview stats={stats} />
+            {error && <ErrorDisplay error={error} />}
 
-                    <div className="grid gap-6 md:grid-cols-2">
-                        <UploadSection
-                            onUploadSuccess={handleUploadSuccess}
-                            onBatchUpload={handleBatchUpload}
-                            onError={handleError}
-                        />
+            <StatsOverview stats={stats} isLoading={isLoading} />
 
-                        <RecentAnalyses analyses={stats.analyses} />
-                    </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <UploadSection
+                    onUploadSuccess={handleUploadSuccess}
+                    onBatchUpload={handleBatchUpload}
+                    onError={handleError}
+                />
 
-                    <RecentDocuments
-                        documents={documents}
-                        onDeleteDocument={handleDeleteDocument}
-                        isLoading={isLoadingDocs}
-                    />
-                </>
-            )}
+                <RecentDocuments
+                    documents={documents}
+                    onDeleteDocument={handleDeleteDocument}
+                    isLoading={docIsLoading}
+                />
+
+                <RecentAnalyses
+                    analyses={stats.analyses}
+                    isLoading={analysisIsLoading}
+                />
+            </div>
         </div>
     );
 } 

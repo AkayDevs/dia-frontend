@@ -16,9 +16,11 @@ import {
     ArrowPathIcon,
     QuestionMarkCircleIcon
 } from '@heroicons/react/24/outline';
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface StatsOverviewProps {
     stats: DashboardStats;
+    isLoading?: boolean;
 }
 
 interface StatItem {
@@ -38,7 +40,7 @@ interface StatItem {
     extraContent?: React.ReactNode;
 }
 
-export function StatsOverview({ stats }: StatsOverviewProps) {
+export function StatsOverview({ stats, isLoading = false }: StatsOverviewProps) {
     const [selectedAnalysisType, setSelectedAnalysisType] = useState<string>('all');
 
     const calculatePercentage = (value: number) => {
@@ -376,6 +378,25 @@ export function StatsOverview({ stats }: StatsOverviewProps) {
             }
         }
     ];
+
+    if (isLoading) {
+        return (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {[...Array(4)].map((_, i) => (
+                    <Card key={i} className="p-6">
+                        <div className="flex items-start gap-4">
+                            <Skeleton className="h-12 w-12 rounded-xl" />
+                            <div className="space-y-2 flex-1">
+                                <Skeleton className="h-5 w-24" />
+                                <Skeleton className="h-8 w-20" />
+                                <Skeleton className="h-4 w-full" />
+                            </div>
+                        </div>
+                    </Card>
+                ))}
+            </div>
+        );
+    }
 
     return (
         <div className="grid gap-4">
