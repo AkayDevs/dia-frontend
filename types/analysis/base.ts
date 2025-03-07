@@ -45,7 +45,6 @@ export interface NotificationConfig {
 export interface AnalysisRunInfo extends AnalysisRunRequest {
   id?: string;
   status?: AnalysisStatus;
-  type: string;
   created_at: string;
   updated_at?: string;
   started_at?: string;

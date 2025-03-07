@@ -1,19 +1,39 @@
 import { useMemo } from 'react';
 import { Document, DocumentWithAnalysis } from '@/types/document';
-import { AnalysisRunWithResults } from '@/types/analysis/base';
+import { AnalysisRunWithResults, StepResultResponse } from '@/types/analysis/base';
 import { AnalysisDefinitionInfo } from '@/types/analysis/configs';
-import { AnalysisStatus } from '@/enums/analysis';
+import { AnalysisStatus, AnalysisDefinitionCode } from '@/enums/analysis';
 
+/**
+ * Represents an ongoing analysis for the dashboard
+ */
 export interface OngoingAnalysis {
     documentName: string;
-    type: string;
+    displayName: string;
     startedAt: string;
 }
 
+/**
+ * Extends AnalysisRunWithResults to include a user-friendly display name
+ */
 export interface DashboardAnalysis extends AnalysisRunWithResults {
-    type: string;
+    // User-friendly display name of the analysis
+    displayName: string;
 }
 
+/**
+ * Analysis type statistics
+ */
+export interface AnalysisTypeStats {
+    displayName: string;
+    code: string;
+    count: number;
+    documentCount: number;
+}
+
+/**
+ * Dashboard statistics interface
+ */
 export interface DashboardStats {
     // Document stats
     totalDocuments: number;
@@ -27,14 +47,15 @@ export interface DashboardStats {
         count: number;
         items: OngoingAnalysis[];
     };
-    mostUsedAnalysisType: {
-        type: string;
-        count: number;
-    };
-    averageAnalysisTime: number;
+    mostUsedAnalysisType: AnalysisTypeStats;
+    analysisTypes: AnalysisTypeStats[];
+    averageAnalysisTime: number; // in minutes
     analyses: DashboardAnalysis[];
 }
 
+/**
+ * Initial empty stats
+ */
 export const initialStats: DashboardStats = {
     totalDocuments: 0,
     analyzedDocuments: 0,
@@ -46,13 +67,30 @@ export const initialStats: DashboardStats = {
         items: []
     },
     mostUsedAnalysisType: {
-        type: '',
-        count: 0
+        displayName: '',
+        code: '',
+        count: 0,
+        documentCount: 0
     },
+    analysisTypes: [],
     averageAnalysisTime: 0,
     analyses: []
 };
 
+/**
+ * Converts an analysis code to a user-friendly display name
+ * Example: "table_analysis" -> "Table Analysis"
+ */
+function getDisplayNameFromCode(code: string): string {
+    return code
+        .split('_')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+}
+
+/**
+ * Hook to calculate dashboard statistics from documents and analyses
+ */
 export function useDashboardStats(
     documents: Document[],
     analyses: AnalysisRunWithResults[],
@@ -63,90 +101,130 @@ export function useDashboardStats(
             return initialStats;
         }
 
-        const typedDocuments = documents as Array<DocumentWithAnalysis>;
+        // Initialize stats with document count
+        const stats: DashboardStats = {
+            ...initialStats,
+            totalDocuments: documents.length
+        };
 
-        // Calculate document-related stats
-        const docStats = typedDocuments.reduce((stats, doc) => {
-            stats.totalDocuments += 1;
-            if (doc.analyses?.some(a => a.status === AnalysisStatus.COMPLETED)) {
-                stats.analyzedDocuments += 1;
-            }
-            if (doc.analyses?.some(a => a.status === AnalysisStatus.FAILED)) {
-                stats.failedAnalyses += 1;
-            }
-            return stats;
-        }, { ...initialStats });
+        // Track unique document-analysis combinations
+        const analyzedDocumentMap = new Map<string, Set<string>>();
+        const analysisTypeMap = new Map<string, AnalysisTypeStats & { successCount: number }>();
 
-        // Calculate analysis-related stats
-        const analysisStats = analyses.reduce((stats, analysis) => {
-            stats.totalAnalyses += 1;
-            const analysisDefinition = analysisDefinitions?.find(def => def.code === analysis.analysis_code);
+        // Process all analyses
+        analyses.forEach(analysis => {
+            const { document_id, analysis_code, status } = analysis;
 
-            // Add analysis with type information
-            if (analysisDefinition) {
-                stats.analyses.push({
-                    ...analysis,
-                    type: analysisDefinition.name
+            // Find the analysis definition
+            const analysisDefinition = analysisDefinitions?.find(def => def.code === analysis_code);
+            const displayName = analysisDefinition?.name || getDisplayNameFromCode(analysis_code);
+
+            // Add to analyses array with display name
+            stats.analyses.push({
+                ...analysis,
+                displayName
+            });
+
+            // Track analysis type statistics
+            if (!analysisTypeMap.has(analysis_code)) {
+                analysisTypeMap.set(analysis_code, {
+                    displayName,
+                    code: analysis_code,
+                    count: 0,
+                    documentCount: 0,
+                    successCount: 0
                 });
             }
 
-            // Calculate success rate
-            if (analysis.status === AnalysisStatus.COMPLETED) {
-                stats.analysisSuccessRate += 1;
-            } else if (analysis.status === AnalysisStatus.FAILED) {
-                stats.failedAnalyses += 1;
+            const typeStats = analysisTypeMap.get(analysis_code)!;
+            typeStats.count++;
+
+            // Track unique document-analysis combinations
+            if (!analyzedDocumentMap.has(document_id)) {
+                analyzedDocumentMap.set(document_id, new Set());
+            }
+
+            const documentAnalyses = analyzedDocumentMap.get(document_id)!;
+
+            // Only count each document once per analysis type
+            if (!documentAnalyses.has(analysis_code) && status === AnalysisStatus.COMPLETED) {
+                documentAnalyses.add(analysis_code);
+                typeStats.documentCount++;
+            }
+
+            // Track success rate
+            if (status === AnalysisStatus.COMPLETED) {
+                typeStats.successCount++;
             }
 
             // Track ongoing analyses
-            if (analysis.status === AnalysisStatus.IN_PROGRESS) {
-                const document = typedDocuments.find(doc => doc.id === analysis.document_id);
-                if (document && analysisDefinition) {
+            if (status === AnalysisStatus.PENDING || status === AnalysisStatus.IN_PROGRESS) {
+                const document = documents.find(doc => doc.id === document_id);
+                if (document) {
                     stats.ongoingAnalyses.items.push({
                         documentName: document.name,
-                        type: analysisDefinition.name,
-                        startedAt: analysis.created_at
+                        displayName,
+                        startedAt: analysis.started_at || analysis.created_at
                     });
                 }
             }
+        });
 
-            // Update ongoing analyses count to match the actual in-progress analyses
-            stats.ongoingAnalyses.count = analyses.filter(a => a.status === AnalysisStatus.IN_PROGRESS).length;
+        // Update ongoing analyses count
+        stats.ongoingAnalyses.count = analyses.filter(
+            a => a.status === AnalysisStatus.PENDING || a.status === AnalysisStatus.IN_PROGRESS
+        ).length;
 
-            // Track analysis types usage
-            if (analysisDefinition) {
-                const currentTypeCount = analyses.filter(a => a.analysis_code === analysis.analysis_code).length;
-                if (currentTypeCount > stats.mostUsedAnalysisType.count) {
-                    stats.mostUsedAnalysisType = {
-                        type: analysisDefinition.name,
-                        count: currentTypeCount
-                    };
-                }
-            }
+        // Calculate total unique analyzed documents
+        stats.analyzedDocuments = Array.from(analyzedDocumentMap.values())
+            .filter(set => set.size > 0)
+            .length;
 
-            return stats;
-        }, docStats);
+        // Calculate failed analyses
+        stats.failedAnalyses = analyses.filter(a => a.status === AnalysisStatus.FAILED).length;
+
+        // Calculate total analyses
+        stats.totalAnalyses = analyses.length;
+
+        // Convert analysis type map to array and find most used type
+        stats.analysisTypes = Array.from(analysisTypeMap.values()).map(typeStats => ({
+            displayName: typeStats.displayName,
+            code: typeStats.code,
+            count: typeStats.count,
+            documentCount: typeStats.documentCount
+        }));
+
+        if (stats.analysisTypes.length > 0) {
+            // Find most used analysis type by document count
+            stats.mostUsedAnalysisType = stats.analysisTypes.reduce((prev, current) =>
+                current.documentCount > prev.documentCount ? current : prev,
+                { displayName: '', code: '', count: 0, documentCount: 0 } as AnalysisTypeStats
+            );
+        }
+
+        // Calculate success rate across all analyses
+        const successfulAnalyses = analyses.filter(a => a.status === AnalysisStatus.COMPLETED).length;
+        if (stats.totalAnalyses > 0) {
+            stats.analysisSuccessRate = (successfulAnalyses / stats.totalAnalyses) * 100;
+        }
 
         // Calculate average duration for completed analyses
         const completedAnalyses = analyses.filter(a =>
             a.status === AnalysisStatus.COMPLETED &&
             a.completed_at &&
-            a.created_at
+            a.started_at
         );
 
         if (completedAnalyses.length > 0) {
             const totalDuration = completedAnalyses.reduce((total, analysis) => {
-                const startTime = new Date(analysis.created_at).getTime();
+                // Use started_at if available, otherwise fall back to created_at
+                const startTime = new Date(analysis.started_at || analysis.created_at).getTime();
                 const endTime = new Date(analysis.completed_at!).getTime();
                 return total + ((endTime - startTime) / (1000 * 60)); // Convert to minutes
             }, 0);
-            analysisStats.averageAnalysisTime = totalDuration / completedAnalyses.length;
+            stats.averageAnalysisTime = totalDuration / completedAnalyses.length;
         }
 
-        // Finalize success rate calculation
-        if (analysisStats.totalAnalyses > 0) {
-            analysisStats.analysisSuccessRate = (analysisStats.analysisSuccessRate / analysisStats.totalAnalyses) * 100;
-        }
-
-        return analysisStats;
+        return stats;
     }, [documents, analyses, analysisDefinitions]);
 } 
