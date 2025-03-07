@@ -9,7 +9,6 @@ import {
     TagCreate,
     DocumentUpdate,
     DocumentPages,
-    DocumentType
 } from '@/types/document';
 
 class DocumentService {

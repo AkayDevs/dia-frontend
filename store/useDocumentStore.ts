@@ -7,7 +7,7 @@ import { AnalysisRunWithResults } from '@/types/analysis/base';
 
 interface DocumentState {
     // Document state
-    documents: Document[];
+    documents: Document[] | DocumentWithAnalysis[];
     currentDocument: DocumentWithAnalysis | null;
     documentVersions: Document[];
     currentPages: DocumentPages | null;
@@ -29,7 +29,7 @@ interface DocumentState {
     clearError: () => void;
     clearPagesError: () => void;
     fetchDocuments: (forceRefresh?: boolean) => Promise<void>;
-    fetchDocument: (documentId: string, includeAnalyses?: boolean) => Promise<void>;
+    fetchDocument: (documentId: string, forceRefresh?: boolean) => Promise<void>;
     uploadDocument: (file: File, tagIds?: number[]) => Promise<Document>;
     uploadDocuments: (files: File[]) => Promise<Document[]>;
     updateDocument: (documentId: string, updates: DocumentUpdate) => Promise<void>;
@@ -98,7 +98,7 @@ const useDocumentStore = create<DocumentState>((set, get) => ({
         if (
             !forceRefresh &&
             state.lastFetched &&
-            now - state.lastFetched < 60000 && // Cache for 1 minute
+            now - state.lastFetched < 300000 && // Cache for 5 minutes
             state.documents.length > 0 &&
             !state.isFetching
         ) {
@@ -123,25 +123,58 @@ const useDocumentStore = create<DocumentState>((set, get) => ({
         }
     },
 
-    fetchDocument: async (documentId: string, includeAnalyses = true) => {
-        set({ isLoading: true, error: null });
+    fetchDocument: async (documentId: string, forceRefresh = false) => {
+        const state = get();
+        const now = Date.now();
+
+        // Don't proceed if already fetching
+        if (state.isFetching) return;
+
         try {
-            const document = await documentService.getDocument(documentId);
-            let analyses = [] as AnalysisRunWithResults[];
-            if (includeAnalyses) {
-                analyses = await analysisService.getDocumentAnalyses(documentId);
+            const cacheTimeValid = state.lastFetched && (now - state.lastFetched < 300000); // 5 minutes cache
+
+            // Return cached document if conditions are met
+            if (
+                !forceRefresh &&
+                state.currentDocument?.id === documentId &&
+                state.currentDocument?.analyses?.length > 0 &&
+                cacheTimeValid
+            ) {
+                return;
             }
 
-            const documentWithFullUrl: DocumentWithAnalysis = {
-                ...processDocument(document),
-                analyses
-            };
-            set({ currentDocument: documentWithFullUrl });
+            // Check if the document is already in the array with analyses
+            const doc_in_array = state.documents.find(doc => doc.id === documentId) as DocumentWithAnalysis;
+            if (!forceRefresh && doc_in_array && doc_in_array?.analyses?.length > 0) {
+                set({
+                    currentDocument: doc_in_array,
+                    lastFetched: now // Update lastFetched even when using cached array data
+                });
+                return;
+            }
+
+            // Set loading and fetching states
+            set({ isLoading: true, isFetching: true, error: null });
+
+            // Fetch document from API
+            const document = await documentService.getDocument(documentId);
+            const processedDocument = processDocument(document);
+
+            // Update state with new document data
+            set({
+                // Update document in array or add it if not present
+                documents: state.documents.some(doc => doc.id === documentId)
+                    ? state.documents.map(doc => doc.id === documentId ? processedDocument : doc)
+                    : [...state.documents, processedDocument],
+                currentDocument: processedDocument,
+                lastFetched: now // Update the lastFetched timestamp
+            });
         } catch (error) {
             set({ error: error instanceof Error ? error.message : 'Failed to fetch document' });
             throw error;
         } finally {
-            set({ isLoading: false });
+            // Always reset loading states
+            set({ isLoading: false, isFetching: false });
         }
     },
 

@@ -69,10 +69,6 @@ interface AnalysisType {
     steps: AnalysisStepInfo[];
 }
 
-interface DashboardAnalysis extends AnalysisRunWithResults {
-    type: string;
-}
-
 // Add these interfaces for algorithm accuracy data
 interface AlgorithmMetric {
     name: string;
@@ -234,7 +230,7 @@ export default function AnalysisPage() {
         setIsLoading(true);
         try {
             await Promise.all([
-                fetchDocuments(),
+                fetchDocuments(true),
                 fetchAnalysisDefinitions(),
                 fetchUserAnalyses()
             ]);

@@ -2,6 +2,7 @@
  * Supported document types
  */
 import { AnalysisRunWithResults } from '@/types/analysis/base';
+import { DocumentType } from '@/enums/document';
 
 /**
  * Tag interface
