@@ -8,10 +8,7 @@ import { StatsOverview } from '@/components/dashboard/stats-overview';
 import { useDocumentStore } from '@/store/useDocumentStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useAnalysisStore } from '@/store/useAnalysisStore';
-import { AnalysisMode } from '@/enums/analysis';
 import { ArrowPathIcon } from '@heroicons/react/24/outline';
-import { motion } from 'framer-motion';
-import { Skeleton } from "@/components/ui/skeleton";
 import { format } from 'date-fns';
 
 import { useDashboardStats } from '@/components/dashboard/use-dashboard-stats';
@@ -128,10 +125,10 @@ export default function DashboardPage() {
     const isLoading = docIsLoading || analysisIsLoading;
 
     return (
-        <div className="container py-8 space-y-6">
+        <div className="container pb-8 space-y-6">
             <div className="mb-8">
                 <div className="bg-card rounded-lg p-6 shadow-sm">
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b">
                         <div className="space-y-1">
                             <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
                             <p className="text-muted-foreground">
@@ -174,11 +171,11 @@ export default function DashboardPage() {
                     isLoading={docIsLoading}
                 />
 
-                <RecentAnalyses
-                    analyses={stats.analyses}
-                    isLoading={analysisIsLoading}
-                />
             </div>
+            <RecentAnalyses
+                analyses={stats.analyses}
+                isLoading={analysisIsLoading}
+            />
         </div>
     );
 } 
