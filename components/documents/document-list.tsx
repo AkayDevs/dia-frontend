@@ -1,7 +1,8 @@
 import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Document, DocumentType, AnalysisStatus } from '@/types/document';
+import { Document } from '@/types/document';
+import { DocumentType, AnalysisStatus } from '@/enums/document';
 import { formatDistanceToNow, format } from 'date-fns';
 import { motion } from 'framer-motion';
 import {
@@ -14,7 +15,9 @@ import {
     ArrowPathIcon,
     ExclamationCircleIcon,
     CheckCircleIcon,
-    ClockIcon
+    ClockIcon,
+    XCircleIcon,
+    TableCellsIcon
 } from '@heroicons/react/24/outline';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
@@ -28,54 +31,39 @@ export interface DocumentListProps {
     className?: string;
 }
 
-const DocumentTypeIcon = ({ type }: { type: DocumentType }) => {
-    switch (type) {
+const DocumentTypeIcon = ({ type }: { type: any }) => {
+    const docType = typeof type === 'string' ? type : DocumentType.UNKNOWN;
+
+    switch (docType) {
         case DocumentType.PDF:
-            return <DocumentIcon className="w-5 h-5" />;
+            return <DocumentTextIcon className="w-5 h-5 text-primary" />;
         case DocumentType.DOCX:
-            return <DocumentTextIcon className="w-5 h-5" />;
+            return <DocumentIcon className="w-5 h-5 text-primary" />;
         case DocumentType.XLSX:
-            return <DocumentChartBarIcon className="w-5 h-5" />;
+            return <TableCellsIcon className="w-5 h-5 text-primary" />;
         case DocumentType.IMAGE:
-            return <PhotoIcon className="w-5 h-5" />;
+            return <PhotoIcon className="w-5 h-5 text-primary" />;
         default:
-            return <DocumentIcon className="w-5 h-5" />;
+            return <DocumentIcon className="w-5 h-5 text-primary" />;
     }
 };
 
-const StatusBadge = ({ status, errorMessage }: { status: AnalysisStatus; errorMessage?: string }) => {
+const StatusBadge = ({ status, errorMessage }: { status: any; errorMessage?: string }) => {
     const getStatusConfig = () => {
-        switch (status) {
+        // Handle string status values
+        const statusValue = typeof status === 'string' ? status : String(status);
+
+        switch (statusValue) {
             case AnalysisStatus.PENDING:
-                return {
-                    icon: <ClockIcon className="w-4 h-4" />,
-                    label: 'Pending',
-                    className: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
-                };
+                return { className: 'bg-yellow-100 text-yellow-800', label: 'Pending' };
             case AnalysisStatus.PROCESSING:
-                return {
-                    icon: <ArrowPathIcon className="w-4 h-4 animate-spin" />,
-                    label: 'Processing',
-                    className: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300'
-                };
+                return { className: 'bg-blue-100 text-blue-800', label: 'Processing' };
             case AnalysisStatus.COMPLETED:
-                return {
-                    icon: <CheckCircleIcon className="w-4 h-4" />,
-                    label: 'Completed',
-                    className: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-                };
+                return { className: 'bg-green-100 text-green-800', label: 'Completed' };
             case AnalysisStatus.FAILED:
-                return {
-                    icon: <ExclamationCircleIcon className="w-4 h-4" />,
-                    label: 'Failed',
-                    className: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
-                };
+                return { className: 'bg-red-100 text-red-800', label: 'Failed' };
             default:
-                return {
-                    icon: <ClockIcon className="w-4 h-4" />,
-                    label: status,
-                    className: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
-                };
+                return { className: 'bg-gray-100 text-gray-800', label: statusValue };
         }
     };
 
@@ -85,7 +73,6 @@ const StatusBadge = ({ status, errorMessage }: { status: AnalysisStatus; errorMe
         <Tooltip>
             <TooltipTrigger>
                 <Badge variant="secondary" className={`gap-1.5 ${config.className}`}>
-                    {config.icon}
                     <span className="capitalize">{config.label}</span>
                 </Badge>
             </TooltipTrigger>
@@ -109,6 +96,14 @@ export function DocumentList({
     className = ''
 }: DocumentListProps) {
     const router = useRouter();
+
+    const isProcessingOrPending = (status: any): boolean => {
+        if (!status) return false;
+        return status === AnalysisStatus.PROCESSING ||
+            status === AnalysisStatus.PENDING ||
+            status === 'processing' ||
+            status === 'pending';
+    };
 
     if (documents.length === 0) {
         return (
@@ -170,7 +165,12 @@ export function DocumentList({
                             </div>
 
                             <div className="flex items-center gap-4 shrink-0">
-                                <StatusBadge status={document.status} errorMessage={document.error_message} />
+                                {document.hasOwnProperty('status') && (
+                                    <StatusBadge
+                                        status={(document as any).status}
+                                        errorMessage={(document as any).error_message}
+                                    />
+                                )}
                                 <div className="flex items-center gap-2">
                                     {showAnalyzeButton && onAnalyze && (
                                         <Tooltip>
@@ -179,14 +179,14 @@ export function DocumentList({
                                                     variant="ghost"
                                                     size="icon"
                                                     onClick={() => onAnalyze(document.id)}
-                                                    disabled={['processing', 'pending'].includes(document.status)}
+                                                    disabled={isProcessingOrPending((document as any).status)}
                                                     className="text-muted-foreground hover:text-primary transition-colors"
                                                 >
                                                     <ArrowPathIcon className="w-4 h-4" />
                                                 </Button>
                                             </TooltipTrigger>
                                             <TooltipContent>
-                                                {['processing', 'pending'].includes(document.status)
+                                                {isProcessingOrPending((document as any).status)
                                                     ? 'Analysis in progress'
                                                     : 'Analyze document'
                                                 }

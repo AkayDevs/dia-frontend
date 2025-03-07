@@ -1,7 +1,7 @@
 /**
  * Supported document types
  */
-import { Analysis } from './analysis';
+import { AnalysisRunWithResults } from '@/types/analysis/base';
 
 /**
  * Tag interface
@@ -86,7 +86,7 @@ export interface Document extends DocumentBase {
  * Document with analysis results
  */
 export interface DocumentWithAnalysis extends Document {
-    analyses: Analysis[];
+    analyses: AnalysisRunWithResults[];
 }
 
 /**

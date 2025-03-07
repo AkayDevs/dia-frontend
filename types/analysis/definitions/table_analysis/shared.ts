@@ -33,3 +33,25 @@ export interface BaseStepOutput {
     total_tables_processed: number;
     metadata: Record<string, any>;
 }
+
+/**
+ * Table detection options
+ */
+export interface TableDetectionOptions {
+    detectHeaderRows: boolean;
+    detectHeaderColumns: boolean;
+    minConfidence: number;
+    includeRulings: boolean;
+    extractSpans: boolean;
+    mergeOverlappingCells: boolean;
+}
+
+/**
+ * Table extraction options
+ */
+export interface TableExtractionOptions {
+    outputFormat: 'json' | 'csv' | 'excel';
+    includeConfidenceScores: boolean;
+    includeCoordinates: boolean;
+    normalizeWhitespace: boolean;
+}

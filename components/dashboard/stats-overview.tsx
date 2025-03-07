@@ -3,6 +3,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
+import { AnalysisStatus } from '@/enums/analysis';
+import { DashboardStats, DashboardAnalysis } from './use-dashboard-stats';
 import {
     DocumentIcon,
     ArrowUpIcon,
@@ -14,39 +16,6 @@ import {
     ArrowPathIcon,
     QuestionMarkCircleIcon
 } from '@heroicons/react/24/outline';
-
-interface Analysis {
-    document_id: string;
-    type: string;
-    status: string;
-    created_at: string;
-    completed_at?: string;
-}
-
-interface DashboardStats {
-    // Document stats
-    totalDocuments: number;
-    analyzedDocuments: number;
-    failedAnalyses: number;
-
-    // Analysis stats
-    totalAnalyses: number;
-    analysisSuccessRate: number;
-    ongoingAnalyses: {
-        count: number;
-        items: Array<{
-            documentName: string;
-            type: string;
-            startedAt: string;
-        }>;
-    };
-    mostUsedAnalysisType: {
-        type: string;
-        count: number;
-    };
-    averageAnalysisTime: number;
-    analyses: Analysis[];
-}
 
 interface StatsOverviewProps {
     stats: DashboardStats;
@@ -94,13 +63,13 @@ export function StatsOverview({ stats }: StatsOverviewProps) {
     const calculateTypeSpecificDurations = () => {
         const typeStats = new Map<string, { total: number; count: number }>();
 
-        const completedAnalyses = stats.analyses.filter((a: Analysis) =>
+        const completedAnalyses = stats.analyses.filter((a: DashboardAnalysis) =>
             a.status === 'completed' &&
             a.completed_at &&
             a.created_at
         );
 
-        completedAnalyses.forEach((analysis: Analysis) => {
+        completedAnalyses.forEach((analysis: DashboardAnalysis) => {
             const duration = (new Date(analysis.completed_at!).getTime() - new Date(analysis.created_at).getTime()) / (1000 * 60);
             const current = typeStats.get(analysis.type) || { total: 0, count: 0 };
             typeStats.set(analysis.type, {

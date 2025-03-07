@@ -10,8 +10,8 @@ import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { useToast } from '@/hooks/use-toast';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useDocumentStore } from '@/store/useDocumentStore';
-import { AnalysisStatus } from '@/types/analysis_configs';
-import { AnalysisRunWithResults } from '@/types/analysis_execution';
+import { AnalysisStatus } from '@/enums/analysis';
+import { AnalysisRunWithResults } from '@/types/analysis/base';
 import { Document, DocumentWithAnalysis } from '@/types/document';
 import {
     DocumentIcon,

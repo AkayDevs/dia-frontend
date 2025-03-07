@@ -15,7 +15,7 @@ export interface AnalysisDefinitionInfo {
 }
 
 export interface AnalysisDefinition extends AnalysisDefinitionInfo {
-    steps: AnalysisStepInfo[];
+    steps: AnalysisStep[];
 }
 
 export interface AnalysisStepInfo {

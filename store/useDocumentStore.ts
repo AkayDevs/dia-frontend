@@ -3,7 +3,7 @@ import { documentService } from '@/services/document.service';
 import { Document, DocumentListParams, DocumentWithAnalysis, Tag, TagCreate, DocumentUpdate, DocumentPages } from '@/types/document';
 import { API_URL } from '@/lib/constants';
 import { analysisService } from '@/services/analysis.service';
-import { AnalysisRunWithResults } from '@/types/analysis_execution';
+import { AnalysisRunWithResults } from '@/types/analysis/base';
 
 interface DocumentState {
     // Document state

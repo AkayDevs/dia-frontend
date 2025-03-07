@@ -1,5 +1,16 @@
 import { ReactNode } from 'react';
-import { BaseAnalysisRun, BaseAnalysisResult, BaseStep } from '@/types/analysis/base';
+import { AnalysisRunInfo, StepResultResponse } from '@/types/analysis/base';
+
+/**
+ * Base step interface
+ */
+export interface BaseStep {
+    id: string;
+    code: string;
+    name: string;
+    description?: string;
+    order: number;
+}
 
 /**
  * Base props for all analysis components
@@ -24,7 +35,7 @@ export interface StepperProps extends BaseAnalysisProps {
  * Results component props
  */
 export interface ResultsProps extends BaseAnalysisProps {
-    result?: BaseAnalysisResult;
+    result?: StepResultResponse;
     isLoading?: boolean;
     error?: string;
 }
@@ -33,8 +44,8 @@ export interface ResultsProps extends BaseAnalysisProps {
  * Options component props
  */
 export interface OptionsProps extends BaseAnalysisProps {
-    config?: BaseAnalysisRun;
-    onChange?: (config: Partial<BaseAnalysisRun>) => void;
+    config?: AnalysisRunInfo;
+    onChange?: (config: Partial<AnalysisRunInfo>) => void;
     onSave?: () => void;
 }
 
@@ -42,8 +53,8 @@ export interface OptionsProps extends BaseAnalysisProps {
  * Summary component props
  */
 export interface SummaryProps extends BaseAnalysisProps {
-    result?: BaseAnalysisResult;
-    config?: BaseAnalysisRun;
+    result?: StepResultResponse;
+    config?: AnalysisRunInfo;
 }
 
 /**

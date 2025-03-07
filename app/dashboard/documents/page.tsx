@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { DocumentType } from '@/types/document';
-import { AnalysisStatus } from '@/types/analysis_configs';
+import { AnalysisStatus } from '@/enums/analysis';
 import { useDocumentStore } from '@/store/useDocumentStore';
 import { useAnalysisStore } from '@/store/useAnalysisStore';
 import { useToast } from '@/hooks/use-toast';

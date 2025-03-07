@@ -2,60 +2,53 @@ import { create } from 'zustand';
 import { analysisService } from '@/services/analysis.service';
 import {
     AnalysisDefinitionInfo,
-    AnalysisDefinitionWithStepsAndAlgorithms,
-    AlgorithmDefinitionInfo,
-    AnalysisMode,
-    AnalysisRunConfig
-} from '@/types/analysis_configs';
+    AnalysisDefinition,
+    AnalysisStepInfo,
+    AnalysisAlgorithmInfo
+} from '@/types/analysis/configs';
 import {
     AnalysisRunInfo,
     AnalysisRunWithResults,
-    StepExecutionResultInfo,
-    AnalysisRunListParams
-} from '@/types/analysis_execution';
-import { DocumentType } from '@/types/document';
+    StepResultResponse,
+    AnalysisRunConfig
+} from '@/types/analysis/base';
+import { DocumentType } from '@/enums/document';
 import {
-    TableDetectionResult
-} from '@/types/results/table_analysis/table_detection';
-import {
-    TableStructureResult
-} from '@/types/results/table_analysis/table_structure';
-import {
-    TableDataResult
-} from '@/types/results/table_analysis/table_data';
-import { BaseAnalysisRun, BaseAnalysisStepResult, AnalysisStatus } from '@/types/analysis/base';
+    AnalysisDefinitionCode,
+    TableAnalysisStepCode,
+    AnalysisStatus,
+    AnalysisMode
+} from '@/enums/analysis';
 import { getAnalysisConstants } from '@/constants/analysis/registry';
-import { isTableAnalysisConfig, isTextAnalysisConfig, AnalysisDefinitionCode } from '@/types/analysis/registry';
-import { TableAnalysisConfig } from '@/types/analysis/types/table';
-import { TextAnalysisConfig } from '@/types/analysis/types/text';
-
-/**
- * Enum for table analysis steps
- */
-export enum TableAnalysisStep {
-    TABLE_DETECTION = 'table_detection',
-    TABLE_STRUCTURE = 'table_structure',
-    TABLE_DATA = 'table_data'
-}
+import {
+    isTableDetectionResult,
+    isTableStructureResult,
+    isTableDataResult,
+} from '@/types/analysis/registry';
+import {
+    TableDetectionOutput,
+    TableStructureOutput,
+    TableDataOutput
+} from '@/types/analysis/definitions/table_analysis';
 
 /**
  * Union type for step results
  */
 type StepResult = {
-    step_type: TableAnalysisStep;
-    result: TableDetectionResult | TableStructureResult | TableDataResult;
+    step_code: TableAnalysisStepCode;
+    result: TableDetectionOutput | TableStructureOutput | TableDataOutput;
 };
 
 interface AnalysisState {
     // Analysis definitions and configurations
     analysisDefinitions: AnalysisDefinitionInfo[];
-    currentDefinition: AnalysisDefinitionWithStepsAndAlgorithms | null;
-    availableAlgorithms: Record<string, AlgorithmDefinitionInfo[]>;
+    currentDefinition: AnalysisDefinition | null;
+    availableAlgorithms: Record<string, AnalysisAlgorithmInfo[]>;
 
     // Analysis state
     analyses: AnalysisRunWithResults[];
     currentAnalysis: AnalysisRunWithResults | null;
-    currentStepResult: StepExecutionResultInfo & StepResult | null;
+    currentStepResult: StepResultResponse & StepResult | null;
 
     // UI state
     isLoading: boolean;
@@ -67,10 +60,6 @@ interface AnalysisState {
     analysisType: string;
     constants: any;
 
-    // Type-specific configurations (derived from currentAnalysis)
-    tableConfig: TableAnalysisConfig | null;
-    textConfig: TextAnalysisConfig | null;
-
     // Type guards (derived from analysisType)
     isTableAnalysis: boolean;
     isTextAnalysis: boolean;
@@ -78,7 +67,7 @@ interface AnalysisState {
     // Methods for analysis definitions
     fetchAnalysisDefinitions: () => Promise<void>;
     fetchAnalysisDefinition: (definitionId: string) => Promise<void>;
-    setCurrentDefinition: (definition: AnalysisDefinitionWithStepsAndAlgorithms | null) => void;
+    setCurrentDefinition: (definition: AnalysisDefinition | null) => void;
     fetchStepAlgorithms: (stepId: string) => Promise<void>;
 
     // Methods for analysis operations
@@ -89,7 +78,7 @@ interface AnalysisState {
         config?: AnalysisRunConfig
     ) => Promise<void>;
     fetchDocumentAnalyses: (documentId: string) => Promise<void>;
-    fetchUserAnalyses: (params?: AnalysisRunListParams) => Promise<void>;
+    fetchUserAnalyses: (params?: any) => Promise<void>;
     fetchAnalysis: (analysisId: string) => Promise<void>;
     executeStep: (
         analysisId: string,
@@ -104,7 +93,7 @@ interface AnalysisState {
     ) => Promise<void>;
 
     // Analysis configuration methods
-    updateConfig: (config: Partial<BaseAnalysisRun>) => Promise<void>;
+    updateConfig: (config: Partial<AnalysisRunInfo>) => Promise<void>;
 
     // Navigation and selection methods
     setAnalysisId: (id: string) => void;
@@ -132,8 +121,6 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
     documentId: '',
     analysisType: '',
     constants: null,
-    tableConfig: null,
-    textConfig: null,
     isTableAnalysis: false,
     isTextAnalysis: false,
 
@@ -141,33 +128,10 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
     fetchAnalysisDefinitions: async () => {
         set({ isLoading: true, error: null });
         try {
-            // API call would go here
-            // const response = await fetch('/api/analysis/definitions');
-            // const data = await response.json();
-            // set({ analysisDefinitions: data, isLoading: false });
-
-            // Mock data for now
+            // Use the analysis service to fetch definitions
+            const definitions = await analysisService.getAnalysisDefinitions();
             set({
-                analysisDefinitions: [
-                    {
-                        id: '1',
-                        code: AnalysisDefinitionCode.TABLE_ANALYSIS,
-                        name: 'Table Analysis',
-                        version: '1.0.0',
-                        description: 'Detect and extract tables from documents',
-                        supported_document_types: [DocumentType.PDF, DocumentType.IMAGE],
-                        is_active: true
-                    },
-                    {
-                        id: '2',
-                        code: AnalysisDefinitionCode.TEXT_ANALYSIS,
-                        name: 'Text Analysis',
-                        version: '1.0.0',
-                        description: 'Extract and analyze text from documents',
-                        supported_document_types: [DocumentType.PDF, DocumentType.TEXT],
-                        is_active: true
-                    }
-                ],
+                analysisDefinitions: definitions,
                 isLoading: false
             });
         } catch (error) {
@@ -181,46 +145,24 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
     fetchAnalysisDefinition: async (definitionId: string) => {
         set({ isLoading: true, error: null });
         try {
-            // API call would go here
-            // const response = await fetch(`/api/analysis/definitions/${definitionId}`);
-            // const data = await response.json();
-            // set({ currentDefinition: data, isLoading: false });
+            // Use the analysis service to fetch a specific definition
+            const definition = await analysisService.getAnalysisDefinition(definitionId);
 
-            // Mock data for now
+            // Ensure each step has the algorithms property
+            if (definition.steps) {
+                definition.steps = definition.steps.map(step => {
+                    if (!step.algorithms) {
+                        return {
+                            ...step,
+                            algorithms: []
+                        };
+                    }
+                    return step;
+                });
+            }
+
             set({
-                currentDefinition: {
-                    id: definitionId,
-                    code: AnalysisDefinitionCode.TABLE_ANALYSIS,
-                    name: 'Table Analysis',
-                    version: '1.0.0',
-                    description: 'Detect and extract tables from documents',
-                    supported_document_types: [DocumentType.PDF, DocumentType.IMAGE],
-                    is_active: true,
-                    steps: [
-                        {
-                            id: '1',
-                            code: TableAnalysisStep.TABLE_DETECTION,
-                            name: 'Table Detection',
-                            description: 'Detect tables in the document',
-                            order: 1
-                        },
-                        {
-                            id: '2',
-                            code: TableAnalysisStep.TABLE_STRUCTURE,
-                            name: 'Table Structure',
-                            description: 'Analyze table structure',
-                            order: 2
-                        },
-                        {
-                            id: '3',
-                            code: TableAnalysisStep.TABLE_DATA,
-                            name: 'Table Data',
-                            description: 'Extract data from tables',
-                            order: 3
-                        }
-                    ],
-                    algorithms: []
-                },
+                currentDefinition: definition,
                 isLoading: false
             });
         } catch (error) {
@@ -238,31 +180,12 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
     fetchStepAlgorithms: async (stepId: string) => {
         set({ isLoading: true, error: null });
         try {
-            // API call would go here
-            // const response = await fetch(`/api/analysis/steps/${stepId}/algorithms`);
-            // const data = await response.json();
-            // set(state => ({
-            //     availableAlgorithms: {
-            //         ...state.availableAlgorithms,
-            //         [stepId]: data
-            //     },
-            //     isLoading: false
-            // }));
-
-            // Mock data for now
+            // Use the analysis service to fetch algorithms for a step
+            const algorithms = await analysisService.getStepAlgorithms(stepId);
             set(state => ({
                 availableAlgorithms: {
                     ...state.availableAlgorithms,
-                    [stepId]: [
-                        {
-                            id: '1',
-                            code: 'default_algorithm',
-                            name: 'Default Algorithm',
-                            description: 'Default algorithm for this step',
-                            version: '1.0.0',
-                            is_active: true
-                        }
-                    ]
+                    [stepId]: algorithms
                 },
                 isLoading: false
             }));
@@ -274,99 +197,35 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
         }
     },
 
-    startAnalysis: async (documentId, analysisCode, mode = AnalysisMode.AUTOMATIC, config = {}) => {
+    startAnalysis: async (documentId, analysisCode, mode = AnalysisMode.AUTOMATIC, config = {
+        steps: {},
+        notifications: {
+            notify_on_completion: true,
+            notify_on_failure: true
+        },
+        metadata: {}
+    }) => {
         set({ isLoading: true, error: null });
         try {
-            // API call would go here
-            // const response = await fetch('/api/analysis', {
-            //     method: 'POST',
-            //     headers: { 'Content-Type': 'application/json' },
-            //     body: JSON.stringify({ documentId, analysisCode, mode, config })
-            // });
-            // const data = await response.json();
-            // set({ currentAnalysis: data, isLoading: false });
+            // Use the analysis service to start a new analysis
+            const analysis = await analysisService.startAnalysis(documentId, analysisCode, mode, config);
 
-            // Mock data for now
-            const mockAnalysis = {
-                id: `analysis-${Date.now()}`,
-                document_id: documentId,
-                analysis_code: analysisCode,
-                mode,
-                status: AnalysisStatus.PENDING,
-                config,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-                results: []
-            };
+            // Since the startAnalysis endpoint might not return the full AnalysisRunWithResults,
+            // we need to fetch the complete analysis
+            const fullAnalysis = await analysisService.getAnalysis(analysis.id || '');
 
             set({
-                currentAnalysis: mockAnalysis,
-                analyses: [...get().analyses, mockAnalysis],
+                currentAnalysis: fullAnalysis,
+                analyses: [...get().analyses, fullAnalysis],
                 isLoading: false,
                 // Update derived state
-                analysisId: mockAnalysis.id,
-                documentId: mockAnalysis.document_id,
-                analysisType: mockAnalysis.analysis_code,
-                isTableAnalysis: mockAnalysis.analysis_code === AnalysisDefinitionCode.TABLE_ANALYSIS,
-                isTextAnalysis: mockAnalysis.analysis_code === AnalysisDefinitionCode.TEXT_ANALYSIS,
-                constants: getAnalysisConstants(mockAnalysis.analysis_code)
+                analysisId: fullAnalysis.id || '',
+                documentId: fullAnalysis.document_id,
+                analysisType: fullAnalysis.analysis_code,
+                isTableAnalysis: fullAnalysis.analysis_code === AnalysisDefinitionCode.TABLE_ANALYSIS,
+                isTextAnalysis: fullAnalysis.analysis_code === AnalysisDefinitionCode.TEXT_ANALYSIS,
+                constants: getAnalysisConstants(fullAnalysis.analysis_code)
             });
-
-            // Update type-specific configs
-            const baseConfig: BaseAnalysisRun = {
-                id: mockAnalysis.id,
-                documentId: mockAnalysis.document_id,
-                type: mockAnalysis.analysis_code,
-                createdAt: mockAnalysis.created_at,
-                status: mockAnalysis.status as AnalysisStatus
-            };
-
-            if (mockAnalysis.analysis_code === AnalysisDefinitionCode.TABLE_ANALYSIS) {
-                set({
-                    tableConfig: {
-                        ...baseConfig,
-                        type: AnalysisDefinitionCode.TABLE_ANALYSIS,
-                        tableOptions: {
-                            detectHeaderRows: true,
-                            detectHeaderColumns: true,
-                            minConfidence: 80,
-                            includeRulings: true,
-                            extractSpans: true,
-                            mergeOverlappingCells: true
-                        },
-                        extractionOptions: {
-                            outputFormat: 'csv',
-                            includeConfidenceScores: true,
-                            includeCoordinates: true,
-                            normalizeWhitespace: true
-                        }
-                    } as TableAnalysisConfig,
-                    textConfig: null
-                });
-            } else if (mockAnalysis.analysis_code === AnalysisDefinitionCode.TEXT_ANALYSIS) {
-                set({
-                    tableConfig: null,
-                    textConfig: {
-                        ...baseConfig,
-                        type: AnalysisDefinitionCode.TEXT_ANALYSIS,
-                        extractionOptions: {
-                            preserveFormatting: true,
-                            extractStructuredContent: true,
-                            detectLanguage: true,
-                            ocrQuality: 'high',
-                            includeConfidenceScores: true
-                        },
-                        processingOptions: {
-                            removeHeadersFooters: true,
-                            normalizeWhitespace: true,
-                            detectParagraphs: true,
-                            detectLists: true,
-                            detectTables: true,
-                            extractMetadata: true
-                        }
-                    } as TextAnalysisConfig
-                });
-            }
         } catch (error) {
             set({
                 error: error instanceof Error ? error.message : 'Failed to start analysis',
@@ -378,26 +237,10 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
     fetchDocumentAnalyses: async (documentId) => {
         set({ isLoading: true, error: null });
         try {
-            // API call would go here
-            // const response = await fetch(`/api/documents/${documentId}/analyses`);
-            // const data = await response.json();
-            // set({ analyses: data, isLoading: false });
-
-            // Mock data for now
+            // Use the analysis service to fetch analyses for a document
+            const analyses = await analysisService.getDocumentAnalyses(documentId);
             set({
-                analyses: [
-                    {
-                        id: `analysis-${Date.now()}`,
-                        document_id: documentId,
-                        analysis_code: AnalysisDefinitionCode.TABLE_ANALYSIS,
-                        mode: AnalysisMode.AUTOMATIC,
-                        status: AnalysisStatus.COMPLETED,
-                        config: {},
-                        created_at: new Date().toISOString(),
-                        updated_at: new Date().toISOString(),
-                        results: []
-                    }
-                ],
+                analyses,
                 isLoading: false
             });
         } catch (error) {
@@ -411,32 +254,10 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
     fetchUserAnalyses: async (params) => {
         set({ isLoading: true, error: null });
         try {
-            // API call would go here
-            // const queryParams = new URLSearchParams();
-            // if (params) {
-            //     Object.entries(params).forEach(([key, value]) => {
-            //         if (value !== undefined) queryParams.append(key, String(value));
-            //     });
-            // }
-            // const response = await fetch(`/api/analyses?${queryParams.toString()}`);
-            // const data = await response.json();
-            // set({ analyses: data, isLoading: false });
-
-            // Mock data for now
+            // Use the analysis service to fetch user analyses
+            const analyses = await analysisService.getUserAnalyses(params);
             set({
-                analyses: [
-                    {
-                        id: `analysis-${Date.now()}`,
-                        document_id: 'doc-123',
-                        analysis_code: AnalysisDefinitionCode.TABLE_ANALYSIS,
-                        mode: AnalysisMode.AUTOMATIC,
-                        status: AnalysisStatus.COMPLETED,
-                        config: {},
-                        created_at: new Date().toISOString(),
-                        updated_at: new Date().toISOString(),
-                        results: []
-                    }
-                ],
+                analyses,
                 isLoading: false
             });
         } catch (error) {
@@ -450,91 +271,19 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
     fetchAnalysis: async (analysisId) => {
         set({ isLoading: true, error: null });
         try {
-            // API call would go here
-            // const response = await fetch(`/api/analyses/${analysisId}`);
-            // const data = await response.json();
-            // set({ currentAnalysis: data, isLoading: false });
-
-            // Mock data for now
-            const mockAnalysis = {
-                id: analysisId,
-                document_id: get().documentId || 'doc-123',
-                analysis_code: AnalysisDefinitionCode.TABLE_ANALYSIS,
-                mode: AnalysisMode.AUTOMATIC,
-                status: AnalysisStatus.IN_PROGRESS,
-                config: {},
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-                results: []
-            };
-
+            // Use the analysis service to fetch a specific analysis
+            const analysis = await analysisService.getAnalysis(analysisId);
             set({
-                currentAnalysis: mockAnalysis,
+                currentAnalysis: analysis,
                 isLoading: false,
                 // Update derived state
-                analysisId: mockAnalysis.id,
-                documentId: mockAnalysis.document_id,
-                analysisType: mockAnalysis.analysis_code,
-                isTableAnalysis: mockAnalysis.analysis_code === AnalysisDefinitionCode.TABLE_ANALYSIS,
-                isTextAnalysis: mockAnalysis.analysis_code === AnalysisDefinitionCode.TEXT_ANALYSIS,
-                constants: getAnalysisConstants(mockAnalysis.analysis_code)
+                analysisId: analysis.id || '',
+                documentId: analysis.document_id,
+                analysisType: analysis.analysis_code,
+                isTableAnalysis: analysis.analysis_code === AnalysisDefinitionCode.TABLE_ANALYSIS,
+                isTextAnalysis: analysis.analysis_code === AnalysisDefinitionCode.TEXT_ANALYSIS,
+                constants: getAnalysisConstants(analysis.analysis_code)
             });
-
-            // Update type-specific configs
-            const baseConfig: BaseAnalysisRun = {
-                id: mockAnalysis.id,
-                documentId: mockAnalysis.document_id,
-                type: mockAnalysis.analysis_code,
-                createdAt: mockAnalysis.created_at,
-                status: mockAnalysis.status as AnalysisStatus
-            };
-
-            if (mockAnalysis.analysis_code === AnalysisDefinitionCode.TABLE_ANALYSIS) {
-                set({
-                    tableConfig: {
-                        ...baseConfig,
-                        type: AnalysisDefinitionCode.TABLE_ANALYSIS,
-                        tableOptions: {
-                            detectHeaderRows: true,
-                            detectHeaderColumns: true,
-                            minConfidence: 80,
-                            includeRulings: true,
-                            extractSpans: true,
-                            mergeOverlappingCells: true
-                        },
-                        extractionOptions: {
-                            outputFormat: 'csv',
-                            includeConfidenceScores: true,
-                            includeCoordinates: true,
-                            normalizeWhitespace: true
-                        }
-                    } as TableAnalysisConfig,
-                    textConfig: null
-                });
-            } else if (mockAnalysis.analysis_code === AnalysisDefinitionCode.TEXT_ANALYSIS) {
-                set({
-                    tableConfig: null,
-                    textConfig: {
-                        ...baseConfig,
-                        type: AnalysisDefinitionCode.TEXT_ANALYSIS,
-                        extractionOptions: {
-                            preserveFormatting: true,
-                            extractStructuredContent: true,
-                            detectLanguage: true,
-                            ocrQuality: 'high',
-                            includeConfidenceScores: true
-                        },
-                        processingOptions: {
-                            removeHeadersFooters: true,
-                            normalizeWhitespace: true,
-                            detectParagraphs: true,
-                            detectLists: true,
-                            detectTables: true,
-                            extractMetadata: true
-                        }
-                    } as TextAnalysisConfig
-                });
-            }
         } catch (error) {
             set({
                 error: error instanceof Error ? error.message : 'Failed to fetch analysis',
@@ -546,39 +295,18 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
     executeStep: async (analysisId, stepId, algorithmId, parameters = {}) => {
         set({ isLoading: true, error: null });
         try {
-            // API call would go here
-            // const response = await fetch(`/api/analyses/${analysisId}/steps/${stepId}/execute`, {
-            //     method: 'POST',
-            //     headers: { 'Content-Type': 'application/json' },
-            //     body: JSON.stringify({ algorithmId, parameters })
-            // });
-            // const data = await response.json();
-            // set({ currentStepResult: data, isLoading: false });
+            // Use the analysis service to execute a step
+            const result = await analysisService.executeStep(analysisId, stepId, algorithmId, parameters);
 
-            // Mock data for now
-            const mockStepResult = {
-                id: `result-${Date.now()}`,
-                analysis_id: analysisId,
-                step_id: stepId,
-                algorithm_id: algorithmId,
-                status: 'completed',
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-                step_type: TableAnalysisStep.TABLE_DETECTION,
-                result: {
-                    tables: [
-                        {
-                            id: 'table-1',
-                            page_number: 1,
-                            bounding_box: { x1: 100, y1: 100, x2: 500, y2: 300 },
-                            confidence: 0.95
-                        }
-                    ]
-                }
+            // Create a combined result with the step code for type safety
+            const stepResult: StepResultResponse & StepResult = {
+                ...result,
+                step_code: result.step_code as TableAnalysisStepCode,
+                result: result.result as any
             };
 
             set({
-                currentStepResult: mockStepResult as any,
+                currentStepResult: stepResult,
                 isLoading: false
             });
 
@@ -587,7 +315,7 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
             if (currentAnalysis) {
                 const updatedAnalysis = {
                     ...currentAnalysis,
-                    results: [...(currentAnalysis.results || []), mockStepResult]
+                    step_results: [...(currentAnalysis.step_results || []), stepResult]
                 };
                 set({ currentAnalysis: updatedAnalysis });
             }
@@ -602,32 +330,34 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
     updateStepCorrections: async (analysisId, stepId, corrections) => {
         set({ isLoading: true, error: null });
         try {
-            // API call would go here
-            // const response = await fetch(`/api/analyses/${analysisId}/steps/${stepId}/corrections`, {
-            //     method: 'POST',
-            //     headers: { 'Content-Type': 'application/json' },
-            //     body: JSON.stringify(corrections)
-            // });
-            // const data = await response.json();
-            // set({ currentStepResult: data, isLoading: false });
+            // Use the analysis service to update step corrections
+            const result = await analysisService.updateStepCorrections(analysisId, stepId, corrections);
 
-            // Mock data for now
-            const { currentStepResult } = get();
-            if (currentStepResult) {
-                const updatedResult = {
-                    ...currentStepResult,
-                    updated_at: new Date().toISOString(),
-                    corrections
+            // Create a combined result with the step code for type safety
+            const stepResult: StepResultResponse & StepResult = {
+                ...result,
+                step_code: result.step_code as TableAnalysisStepCode,
+                result: result.result as any
+            };
+
+            set({
+                currentStepResult: stepResult,
+                isLoading: false
+            });
+
+            // Update the current analysis with the updated result
+            const { currentAnalysis } = get();
+            if (currentAnalysis) {
+                const stepResults = currentAnalysis.step_results.map(sr =>
+                    sr.id === stepResult.id ? stepResult : sr
+                );
+
+                const updatedAnalysis = {
+                    ...currentAnalysis,
+                    step_results: stepResults
                 };
-                set({
-                    currentStepResult: updatedResult,
-                    isLoading: false
-                });
-            } else {
-                set({
-                    error: 'No step result to update',
-                    isLoading: false
-                });
+
+                set({ currentAnalysis: updatedAnalysis });
             }
         } catch (error) {
             set({
@@ -646,42 +376,14 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
             }
 
             // In a real app, you would call your API here
-            // const response = await fetch(`/api/analyses/${analysisId}`, {
-            //   method: 'PATCH',
-            //   headers: { 'Content-Type': 'application/json' },
-            //   body: JSON.stringify(newConfigData)
-            // });
-            // const updatedConfig = await response.json();
-
             // For now, we'll just update the local state
-            const baseConfig: BaseAnalysisRun = {
-                id: analysisId,
-                documentId: currentAnalysis.document_id,
-                type: currentAnalysis.analysis_code,
-                createdAt: currentAnalysis.created_at,
-                status: currentAnalysis.status as AnalysisStatus
-            };
-
-            const updatedConfig = { ...baseConfig, ...newConfigData };
-
-            // Update type-specific configs
-            if (get().isTableAnalysis) {
-                set({
-                    tableConfig: { ...get().tableConfig, ...updatedConfig } as TableAnalysisConfig,
-                    textConfig: null
-                });
-            } else if (get().isTextAnalysis) {
-                set({
-                    tableConfig: null,
-                    textConfig: { ...get().textConfig, ...updatedConfig } as TextAnalysisConfig
-                });
-            }
+            // In the future, this should call an API endpoint to update the analysis config
 
             // Update the current analysis with the new config
             set({
                 currentAnalysis: {
                     ...currentAnalysis,
-                    config: { ...currentAnalysis.config, ...newConfigData }
+                    ...newConfigData
                 }
             });
         } catch (error) {
@@ -693,7 +395,8 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
     setAnalysisId: (id) => {
         set({ analysisId: id });
         // Fetch the analysis if it's not already loaded
-        if (id && (!get().currentAnalysis || get().currentAnalysis.id !== id)) {
+        const currentAnalysis = get().currentAnalysis;
+        if (id && (!currentAnalysis || currentAnalysis.id !== id)) {
             get().fetchAnalysis(id);
         }
     },
@@ -715,8 +418,6 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
         documentId: '',
         analysisType: '',
         constants: null,
-        tableConfig: null,
-        textConfig: null,
         isTableAnalysis: false,
         isTextAnalysis: false
     }),

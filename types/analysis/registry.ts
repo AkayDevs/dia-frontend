@@ -1,70 +1,46 @@
-import { BaseAnalysisRun, BaseAnalysisStepResult } from './base';
-import { TableAnalysisConfig, TableAnalysisResult } from './types/table';
-import { TextAnalysisConfig, TextAnalysisResult } from './types/text';
+import { AnalysisRunInfo, StepResultResponse } from './base';
+import { AnalysisDefinitionCode, TableAnalysisStepCode } from '@/enums/analysis';
+
+// Import table analysis types
+import {
+    TableDetectionOutput,
+    TableStructureOutput,
+    TableDataOutput
+} from './definitions/table_analysis';
 
 /**
- * Analysis type codes
+ * Table analysis result interface
+ * Maps step codes to their output types
  */
-export enum AnalysisDefinitionCode {
-    TABLE_ANALYSIS = 'table_analysis',
-    TEXT_ANALYSIS = 'text_analysis',
-    // Add other analysis types as needed
+export interface TableAnalysisStepOutputRegistry {
+    [TableAnalysisStepCode.TABLE_DETECTION]: TableDetectionOutput;
+    [TableAnalysisStepCode.TABLE_STRUCTURE]: TableStructureOutput;
+    [TableAnalysisStepCode.TABLE_DATA]: TableDataOutput;
+}
+
+
+/**
+ * Type guard for table detection step result
+ */
+export function isTableDetectionResult(result: StepResultResponse): result is StepResultResponse & { result: TableDetectionOutput } {
+    return result.step_code === TableAnalysisStepCode.TABLE_DETECTION;
 }
 
 /**
- * Analysis configuration registry
- * Maps analysis type codes to their configuration types
+ * Type guard for table structure step result
  */
-export interface AnalysisConfigRegistry {
-    [AnalysisDefinitionCode.TABLE_ANALYSIS]: TableAnalysisConfig;
-    [AnalysisDefinitionCode.TEXT_ANALYSIS]: TextAnalysisConfig;
-    // Add other analysis types as needed
+export function isTableStructureResult(result: StepResultResponse): result is StepResultResponse & { result: TableStructureOutput } {
+    return result.step_code === TableAnalysisStepCode.TABLE_STRUCTURE;
 }
 
 /**
- * Analysis result registry
- * Maps analysis type codes to their result types
+ * Type guard for table data step result
  */
-export interface AnalysisResultRegistry {
-    [AnalysisDefinitionCode.TABLE_ANALYSIS]: TableAnalysisResult;
-    [AnalysisDefinitionCode.TEXT_ANALYSIS]: TextAnalysisResult;
-    // Add other analysis types as needed
+export function isTableDataResult(result: StepResultResponse): result is StepResultResponse & { result: TableDataOutput } {
+    return result.step_code === TableAnalysisStepCode.TABLE_DATA;
 }
 
 /**
- * Type guard for table analysis configuration
+ * Get the output type for a table analysis step code
  */
-export function isTableAnalysisConfig(config: BaseAnalysisRun): config is TableAnalysisConfig {
-    return config.type === AnalysisDefinitionCode.TABLE_ANALYSIS;
-}
-
-/**
- * Type guard for text analysis configuration
- */
-export function isTextAnalysisConfig(config: BaseAnalysisRun): config is TextAnalysisConfig {
-    return config.type === AnalysisDefinitionCode.TEXT_ANALYSIS;
-}
-
-/**
- * Type guard for table analysis result
- */
-export function isTableAnalysisResult(result: BaseAnalysisStepResult): result is TableAnalysisResult {
-    return result.type === AnalysisDefinitionCode.TABLE_ANALYSIS;
-}
-
-/**
- * Type guard for text analysis result
- */
-export function isTextAnalysisResult(result: BaseAnalysisStepResult): result is TextAnalysisResult {
-    return result.type === AnalysisDefinitionCode.TEXT_ANALYSIS;
-}
-
-/**
- * Get the configuration type for an analysis type code
- */
-export type AnalysisConfigType<T extends AnalysisDefinitionCode> = AnalysisConfigRegistry[T];
-
-/**
- * Get the result type for an analysis type code
- */
-export type AnalysisResultType<T extends AnalysisDefinitionCode> = AnalysisResultRegistry[T];
+export type TableAnalysisStepOutputType<T extends TableAnalysisStepCode> = TableAnalysisStepOutputRegistry[T];

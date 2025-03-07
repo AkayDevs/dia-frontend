@@ -11,24 +11,72 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, Save } from 'lucide-react';
+import { AnalysisRunConfig } from '@/types/analysis/base';
 
 export function Options({ analysisId, documentId }: OptionsProps) {
     const {
-        config: initialConfig,
-        tableConfig,
+        currentAnalysis,
         updateConfig,
         isLoading
     } = useAnalysisStore();
 
-    const [localConfig, setLocalConfig] = useState(tableConfig);
+    // Initialize with default values
+    const defaultConfig = {
+        steps: {},
+        notifications: {
+            notify_on_completion: true,
+            notify_on_failure: true
+        },
+        metadata: {
+            tableOptions: {
+                detectHeaderRows: true,
+                detectHeaderColumns: true,
+                minConfidence: 80,
+                includeRulings: true,
+                extractSpans: true,
+                mergeOverlappingCells: true
+            },
+            extractionOptions: {
+                outputFormat: 'csv',
+                includeConfidenceScores: true,
+                includeCoordinates: true,
+                normalizeWhitespace: true
+            }
+        }
+    };
+
+    // Get the current config or use default
+    const initialConfig = currentAnalysis?.config || defaultConfig;
+
+    // Ensure metadata contains our expected structure
+    if (!initialConfig.metadata.tableOptions) {
+        initialConfig.metadata.tableOptions = defaultConfig.metadata.tableOptions;
+    }
+
+    if (!initialConfig.metadata.extractionOptions) {
+        initialConfig.metadata.extractionOptions = defaultConfig.metadata.extractionOptions;
+    }
+
+    const [localConfig, setLocalConfig] = useState<AnalysisRunConfig>(initialConfig);
     const [activeTab, setActiveTab] = useState('detection');
     const [isSaving, setIsSaving] = useState(false);
 
     useEffect(() => {
-        if (tableConfig) {
-            setLocalConfig(tableConfig);
+        if (currentAnalysis?.config) {
+            // Ensure the config has our expected structure
+            const config = { ...currentAnalysis.config };
+
+            if (!config.metadata.tableOptions) {
+                config.metadata.tableOptions = defaultConfig.metadata.tableOptions;
+            }
+
+            if (!config.metadata.extractionOptions) {
+                config.metadata.extractionOptions = defaultConfig.metadata.extractionOptions;
+            }
+
+            setLocalConfig(config);
         }
-    }, [tableConfig]);
+    }, [currentAnalysis]);
 
     if (isLoading || !localConfig) {
         return (
@@ -42,11 +90,14 @@ export function Options({ analysisId, documentId }: OptionsProps) {
     const handleConfigChange = (path: string, value: any) => {
         const newConfig = { ...localConfig };
 
-        // Handle nested paths like 'tableOptions.detectHeaderRows'
+        // Handle nested paths like 'metadata.tableOptions.detectHeaderRows'
         const parts = path.split('.');
         let current: any = newConfig;
 
         for (let i = 0; i < parts.length - 1; i++) {
+            if (!current[parts[i]]) {
+                current[parts[i]] = {};
+            }
             current = current[parts[i]];
         }
 
@@ -57,13 +108,17 @@ export function Options({ analysisId, documentId }: OptionsProps) {
     const handleSave = async () => {
         setIsSaving(true);
         try {
-            await updateConfig(localConfig);
+            await updateConfig({ config: localConfig });
         } catch (error) {
             console.error('Failed to save configuration:', error);
         } finally {
             setIsSaving(false);
         }
     };
+
+    // Get the table options from metadata
+    const tableOptions = localConfig.metadata.tableOptions || {};
+    const extractionOptions = localConfig.metadata.extractionOptions || {};
 
     return (
         <Card>
@@ -83,8 +138,8 @@ export function Options({ analysisId, documentId }: OptionsProps) {
                                 <Label htmlFor="detectHeaderRows">Detect Header Rows</Label>
                                 <Switch
                                     id="detectHeaderRows"
-                                    checked={localConfig.tableOptions.detectHeaderRows}
-                                    onCheckedChange={(checked) => handleConfigChange('tableOptions.detectHeaderRows', checked)}
+                                    checked={tableOptions.detectHeaderRows}
+                                    onCheckedChange={(checked) => handleConfigChange('metadata.tableOptions.detectHeaderRows', checked)}
                                 />
                             </div>
 
@@ -92,22 +147,22 @@ export function Options({ analysisId, documentId }: OptionsProps) {
                                 <Label htmlFor="detectHeaderColumns">Detect Header Columns</Label>
                                 <Switch
                                     id="detectHeaderColumns"
-                                    checked={localConfig.tableOptions.detectHeaderColumns}
-                                    onCheckedChange={(checked) => handleConfigChange('tableOptions.detectHeaderColumns', checked)}
+                                    checked={tableOptions.detectHeaderColumns}
+                                    onCheckedChange={(checked) => handleConfigChange('metadata.tableOptions.detectHeaderColumns', checked)}
                                 />
                             </div>
 
                             <div className="space-y-2">
                                 <div className="flex items-center justify-between">
-                                    <Label htmlFor="minConfidence">Minimum Confidence: {localConfig.tableOptions.minConfidence}%</Label>
+                                    <Label htmlFor="minConfidence">Minimum Confidence: {tableOptions.minConfidence}%</Label>
                                 </div>
                                 <Slider
                                     id="minConfidence"
                                     min={0}
                                     max={100}
                                     step={5}
-                                    value={[localConfig.tableOptions.minConfidence]}
-                                    onValueChange={(value) => handleConfigChange('tableOptions.minConfidence', value[0])}
+                                    value={[tableOptions.minConfidence]}
+                                    onValueChange={(value) => handleConfigChange('metadata.tableOptions.minConfidence', value[0])}
                                 />
                             </div>
 
@@ -115,8 +170,8 @@ export function Options({ analysisId, documentId }: OptionsProps) {
                                 <Label htmlFor="includeRulings">Include Rulings</Label>
                                 <Switch
                                     id="includeRulings"
-                                    checked={localConfig.tableOptions.includeRulings}
-                                    onCheckedChange={(checked) => handleConfigChange('tableOptions.includeRulings', checked)}
+                                    checked={tableOptions.includeRulings}
+                                    onCheckedChange={(checked) => handleConfigChange('metadata.tableOptions.includeRulings', checked)}
                                 />
                             </div>
 
@@ -124,8 +179,8 @@ export function Options({ analysisId, documentId }: OptionsProps) {
                                 <Label htmlFor="extractSpans">Extract Spans</Label>
                                 <Switch
                                     id="extractSpans"
-                                    checked={localConfig.tableOptions.extractSpans}
-                                    onCheckedChange={(checked) => handleConfigChange('tableOptions.extractSpans', checked)}
+                                    checked={tableOptions.extractSpans}
+                                    onCheckedChange={(checked) => handleConfigChange('metadata.tableOptions.extractSpans', checked)}
                                 />
                             </div>
 
@@ -133,8 +188,8 @@ export function Options({ analysisId, documentId }: OptionsProps) {
                                 <Label htmlFor="mergeOverlappingCells">Merge Overlapping Cells</Label>
                                 <Switch
                                     id="mergeOverlappingCells"
-                                    checked={localConfig.tableOptions.mergeOverlappingCells}
-                                    onCheckedChange={(checked) => handleConfigChange('tableOptions.mergeOverlappingCells', checked)}
+                                    checked={tableOptions.mergeOverlappingCells}
+                                    onCheckedChange={(checked) => handleConfigChange('metadata.tableOptions.mergeOverlappingCells', checked)}
                                 />
                             </div>
                         </div>
@@ -145,8 +200,8 @@ export function Options({ analysisId, documentId }: OptionsProps) {
                             <div className="space-y-2">
                                 <Label htmlFor="outputFormat">Output Format</Label>
                                 <Select
-                                    value={localConfig.extractionOptions.outputFormat}
-                                    onValueChange={(value) => handleConfigChange('extractionOptions.outputFormat', value)}
+                                    value={extractionOptions.outputFormat}
+                                    onValueChange={(value) => handleConfigChange('metadata.extractionOptions.outputFormat', value)}
                                 >
                                     <SelectTrigger id="outputFormat">
                                         <SelectValue placeholder="Select format" />
@@ -163,8 +218,8 @@ export function Options({ analysisId, documentId }: OptionsProps) {
                                 <Label htmlFor="includeConfidenceScores">Include Confidence Scores</Label>
                                 <Switch
                                     id="includeConfidenceScores"
-                                    checked={localConfig.extractionOptions.includeConfidenceScores}
-                                    onCheckedChange={(checked) => handleConfigChange('extractionOptions.includeConfidenceScores', checked)}
+                                    checked={extractionOptions.includeConfidenceScores}
+                                    onCheckedChange={(checked) => handleConfigChange('metadata.extractionOptions.includeConfidenceScores', checked)}
                                 />
                             </div>
 
@@ -172,8 +227,8 @@ export function Options({ analysisId, documentId }: OptionsProps) {
                                 <Label htmlFor="includeCoordinates">Include Coordinates</Label>
                                 <Switch
                                     id="includeCoordinates"
-                                    checked={localConfig.extractionOptions.includeCoordinates}
-                                    onCheckedChange={(checked) => handleConfigChange('extractionOptions.includeCoordinates', checked)}
+                                    checked={extractionOptions.includeCoordinates}
+                                    onCheckedChange={(checked) => handleConfigChange('metadata.extractionOptions.includeCoordinates', checked)}
                                 />
                             </div>
 
@@ -181,8 +236,8 @@ export function Options({ analysisId, documentId }: OptionsProps) {
                                 <Label htmlFor="normalizeWhitespace">Normalize Whitespace</Label>
                                 <Switch
                                     id="normalizeWhitespace"
-                                    checked={localConfig.extractionOptions.normalizeWhitespace}
-                                    onCheckedChange={(checked) => handleConfigChange('extractionOptions.normalizeWhitespace', checked)}
+                                    checked={extractionOptions.normalizeWhitespace}
+                                    onCheckedChange={(checked) => handleConfigChange('metadata.extractionOptions.normalizeWhitespace', checked)}
                                 />
                             </div>
                         </div>

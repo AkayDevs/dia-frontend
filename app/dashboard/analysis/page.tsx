@@ -3,8 +3,9 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Document, DocumentType } from '@/types/document';
-import { AnalysisStatus, AnalysisDefinitionInfo, StepDefinitionInfo, AnalysisMode } from '@/types/analysis_configs';
-import { AnalysisRunWithResults, StepExecutionResultInfo } from '@/types/analysis_execution';
+import { AnalysisStatus, AnalysisMode } from '@/enums/analysis';
+import { AnalysisDefinitionInfo, AnalysisStepInfo } from '@/types/analysis/configs';
+import { AnalysisRunWithResults, StepResultResponse } from '@/types/analysis/base';
 import { useDocumentStore } from '@/store/useDocumentStore';
 import { useAnalysisStore } from '@/store/useAnalysisStore';
 import { useToast } from '@/hooks/use-toast';
@@ -54,7 +55,7 @@ interface AnalysisType {
     name: string;
     description: string;
     supported_document_types: DocumentType[];
-    steps: StepDefinitionInfo[];
+    steps: AnalysisStepInfo[];
 }
 
 interface DashboardAnalysis extends AnalysisRunWithResults {
@@ -172,7 +173,7 @@ const RecentAnalysisCard = ({ document, analyses }: RecentAnalysisProps) => {
     );
 };
 
-const StepResultCard = ({ result }: { result: StepExecutionResultInfo }) => {
+const StepResultCard = ({ result }: { result: StepResultResponse }) => {
     return (
         <div className="p-4 bg-muted/50 rounded-lg">
             <div className="flex items-center justify-between mb-2">

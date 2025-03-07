@@ -4,20 +4,23 @@ export * from './base';
 // Export registry
 export * from './registry';
 
-// Export specific analysis types
-export * from './types/table';
-export * from './types/text';
+// Export configs
+export * from './configs';
+
+// Export table analysis definitions
+export * from './definitions/table_analysis';
 
 // Re-export common types for convenience
-import { AnalysisTypeCode } from './registry';
-import { BaseAnalysisRun, BaseAnalysisStepResult, AnalysisStatus, AnalysisMode } from './base';
+import { AnalysisDefinitionCode, TableAnalysisStepCode, AnalysisStatus, AnalysisMode } from '@/enums/analysis';
+import { AnalysisRunInfo, AnalysisRunWithResults, StepResultResponse } from './base';
 
 // Use 'export type' for type re-exports
-export { AnalysisTypeCode };
+export { AnalysisDefinitionCode, TableAnalysisStepCode };
 
 export type {
-    BaseAnalysisRun,
-    BaseAnalysisStepResult,
+    AnalysisRunInfo,
+    AnalysisRunWithResults,
+    StepResultResponse,
     AnalysisStatus,
     AnalysisMode
 }; 

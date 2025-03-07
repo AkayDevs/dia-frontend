@@ -1,22 +1,45 @@
 import { API_URL, API_VERSION } from '@/lib/constants';
 import { AUTH_TOKEN_KEY } from '@/lib/constants';
 import { fetchWithAuth } from '@/lib/fetch';
-import { DocumentType } from '@/types/document';
+import { DocumentType } from '@/enums/document';
+import {
+    AnalysisDefinitionCode,
+    TableAnalysisStepCode,
+    AnalysisStatus,
+    AnalysisMode
+} from '@/enums/analysis';
 import {
     AnalysisDefinitionInfo,
-    AnalysisDefinitionWithStepsAndAlgorithms,
-    AlgorithmDefinitionInfo,
-    AnalysisMode,
-    AnalysisRunConfig
-} from '@/types/analysis_configs';
+    AnalysisDefinition,
+    AnalysisStepInfo,
+    AnalysisAlgorithmInfo
+} from '@/types/analysis/configs';
 import {
     AnalysisRunInfo,
     AnalysisRunWithResults,
-    StepExecutionResultInfo,
-    AnalysisRunCreate,
-    AnalysisRunUpdate,
-    AnalysisRunListParams
-} from '@/types/analysis_execution';
+    StepResultResponse,
+    AnalysisRunConfig,
+    AnalysisRunRequest
+} from '@/types/analysis/base';
+
+// Define types that were previously in analysis_execution
+interface AnalysisRunCreate extends AnalysisRunRequest { }
+
+interface AnalysisRunUpdate {
+    status?: AnalysisStatus;
+    config?: Partial<AnalysisRunConfig>;
+    metadata?: Record<string, any>;
+}
+
+interface AnalysisRunListParams {
+    status?: string;
+    analysis_definition_id?: string;
+    document_type?: string;
+    start_date?: string;
+    end_date?: string;
+    skip?: number;
+    limit?: number;
+}
 
 class AnalysisService {
     private baseUrl = `${API_URL}${API_VERSION}/analysis`;
@@ -69,23 +92,23 @@ class AnalysisService {
     /**
      * Get detailed analysis definition with steps and algorithms
      */
-    async getAnalysisDefinition(definitionId: string): Promise<AnalysisDefinitionWithStepsAndAlgorithms> {
+    async getAnalysisDefinition(definitionId: string): Promise<AnalysisDefinition> {
         const response = await fetch(`${this.baseUrl}/definitions/${definitionId}`, {
             headers: this.getHeaders(),
         });
 
-        return this.handleResponse<AnalysisDefinitionWithStepsAndAlgorithms>(response);
+        return this.handleResponse<AnalysisDefinition>(response);
     }
 
     /**
      * Get algorithms for a specific step
      */
-    async getStepAlgorithms(stepId: string): Promise<AlgorithmDefinitionInfo[]> {
+    async getStepAlgorithms(stepId: string): Promise<AnalysisAlgorithmInfo[]> {
         const response = await fetch(`${this.baseUrl}/steps/${stepId}/algorithms`, {
             headers: this.getHeaders(),
         });
 
-        return this.handleResponse<AlgorithmDefinitionInfo[]>(response);
+        return this.handleResponse<AnalysisAlgorithmInfo[]>(response);
     }
 
     /**
@@ -139,7 +162,7 @@ class AnalysisService {
         stepId: string,
         algorithmId: string,
         parameters?: Record<string, any>
-    ): Promise<StepExecutionResultInfo> {
+    ): Promise<StepResultResponse> {
         const response = await fetch(
             `${this.baseUrl}/analyses/${analysisId}/steps/${stepId}/execute`,
             {
@@ -152,7 +175,7 @@ class AnalysisService {
             }
         );
 
-        return this.handleResponse<StepExecutionResultInfo>(response);
+        return this.handleResponse<StepResultResponse>(response);
     }
 
     /**
@@ -162,7 +185,7 @@ class AnalysisService {
         analysisId: string,
         stepId: string,
         corrections: Record<string, any>
-    ): Promise<StepExecutionResultInfo> {
+    ): Promise<StepResultResponse> {
         const response = await fetch(
             `${this.baseUrl}/analyses/${analysisId}/steps/${stepId}/corrections`,
             {
@@ -172,7 +195,7 @@ class AnalysisService {
             }
         );
 
-        return this.handleResponse<StepExecutionResultInfo>(response);
+        return this.handleResponse<StepResultResponse>(response);
     }
 
     /**
