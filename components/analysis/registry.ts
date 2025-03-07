@@ -1,20 +1,19 @@
-import { AnalysisDefinitionCode } from '@/types/analysis/registry';
+import { AnalysisDefinitionCode } from '@/enums/analysis';
 import { AnalysisComponentMap } from './interfaces';
+import dynamic from 'next/dynamic';
+import React from 'react';
 
 // Import lazy-loaded components
-import dynamic from 'next/dynamic';
-
 // Table analysis components
-const TableStepper = dynamic(() => import('./types/table/Stepper').then(mod => mod.Stepper));
-const TableResults = dynamic(() => import('./types/table/Results').then(mod => mod.Results));
-const TableOptions = dynamic(() => import('./types/table/Options').then(mod => mod.Options));
-const TableSummary = dynamic(() => import('./types/table/Summary').then(mod => mod.Summary));
+const TableStepper = dynamic(() => import('./definitions/table_analysis/Stepper').then(mod => mod.Stepper));
+const TableResults = dynamic(() => import('./definitions/table_analysis/Results').then(mod => mod.Results));
+const TableOptions = dynamic(() => import('./definitions/table_analysis/Options').then(mod => mod.Options));
+const TableSummary = dynamic(() => import('./definitions/table_analysis/Summary').then(mod => mod.Summary));
 
-// Text analysis components
-const TextStepper = dynamic(() => import('./types/text/Stepper').then(mod => mod.Stepper));
-const TextResults = dynamic(() => import('./types/text/Results').then(mod => mod.Results));
-const TextOptions = dynamic(() => import('./types/text/Options').then(mod => mod.Options));
-const TextSummary = dynamic(() => import('./types/text/Summary').then(mod => mod.Summary));
+// Text analysis components will be implemented later
+const PlaceholderComponent = dynamic(() =>
+    Promise.resolve(() => React.createElement('div', {}, 'Coming soon'))
+);
 
 /**
  * Component registry
@@ -28,10 +27,11 @@ export const COMPONENT_REGISTRY: Record<string, AnalysisComponentMap> = {
         Summary: TableSummary
     },
     [AnalysisDefinitionCode.TEXT_ANALYSIS]: {
-        Stepper: TextStepper,
-        Results: TextResults,
-        Options: TextOptions,
-        Summary: TextSummary
+        // Placeholder components until text analysis is implemented
+        Stepper: PlaceholderComponent as any,
+        Results: PlaceholderComponent as any,
+        Options: PlaceholderComponent as any,
+        Summary: PlaceholderComponent as any
     }
     // Add other analysis types as needed
 };
@@ -40,21 +40,18 @@ export const COMPONENT_REGISTRY: Record<string, AnalysisComponentMap> = {
  * Get a component for a specific analysis type
  */
 export function getAnalysisComponent(analysisType: string, componentName: string) {
-    if (!Object.values(AnalysisDefinitionCode).includes(analysisType as AnalysisDefinitionCode)) {
-        throw new Error(`Invalid analysis type: ${analysisType}`);
+    // Check if the analysis type exists in the registry
+    if (!COMPONENT_REGISTRY[analysisType]) {
+        console.warn(`Analysis type not found in registry: ${analysisType}`);
+        return PlaceholderComponent;
     }
 
-    const componentMap = COMPONENT_REGISTRY[analysisType];
-
-    if (!componentMap) {
-        throw new Error(`Component map not found for analysis type: ${analysisType}`);
+    // Check if the component exists for this analysis type
+    const component = COMPONENT_REGISTRY[analysisType][componentName as keyof AnalysisComponentMap];
+    if (!component) {
+        console.warn(`Component ${componentName} not found for analysis type: ${analysisType}`);
+        return PlaceholderComponent;
     }
 
-    const Component = componentMap[componentName];
-
-    if (!Component) {
-        throw new Error(`Component "${componentName}" not found for analysis type: ${analysisType}`);
-    }
-
-    return Component;
+    return component;
 } 

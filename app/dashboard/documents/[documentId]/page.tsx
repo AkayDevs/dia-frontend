@@ -352,7 +352,7 @@ export default function DocumentPage({ params }: DocumentPageProps) {
                             <DropdownMenuItem onClick={() => setIsEditing(true)}>
                                 Edit Document
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => router.push(`/dashboard/analysis/${currentDocument.id}`)}>
+                            <DropdownMenuItem onClick={() => router.push(`/dashboard/analysis/document/${currentDocument.id}`)}>
                                 Analyze Document
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
@@ -485,7 +485,7 @@ export default function DocumentPage({ params }: DocumentPageProps) {
                             <DocumentAnalysisList
                                 analyses={dashboardAnalyses}
                                 onViewAnalysis={(analysisId) => router.push(`/dashboard/analysis/${analysisId}`)}
-                                onStartAnalysis={() => router.push(`/dashboard/analysis/${currentDocument.id}`)}
+                                onStartAnalysis={() => router.push(`/dashboard/analysis/document/${currentDocument.id}`)}
                                 documentId={currentDocument.id}
                             />
                         </TabsContent>
