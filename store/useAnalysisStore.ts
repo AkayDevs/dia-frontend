@@ -10,7 +10,8 @@ import {
     AnalysisRunInfo,
     AnalysisRunWithResults,
     StepResultResponse,
-    AnalysisRunConfig
+    AnalysisRunConfig,
+    AnalysisRunWithResultsInfo
 } from '@/types/analysis/base';
 import { DocumentType } from '@/enums/document';
 import {
@@ -41,8 +42,8 @@ interface AnalysisState {
     availableAlgorithms: Record<string, AnalysisAlgorithmInfo[]>;
 
     // Analysis state
-    analyses: Record<string, AnalysisRunWithResults>;
-    currentAnalysis: AnalysisRunWithResults | null;
+    analyses: Record<string, AnalysisRunWithResultsInfo | AnalysisRunWithResults>;
+    currentAnalysis: AnalysisRunWithResultsInfo | AnalysisRunWithResults | null;
     currentStepResult: StepResultResponse & StepResult | null;
 
     // Cache control
@@ -312,7 +313,7 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
             const analyses = await analysisService.getUserAnalyses(params);
 
             // Convert array to record
-            const analysesRecord: Record<string, AnalysisRunWithResults> = {};
+            const analysesRecord: Record<string, AnalysisRunWithResultsInfo> = {};
             analyses.forEach(analysis => {
                 if (analysis.id) {
                     analysesRecord[analysis.id] = analysis;

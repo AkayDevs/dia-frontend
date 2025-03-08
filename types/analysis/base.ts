@@ -1,4 +1,4 @@
-import { AnalysisStatus, AnalysisMode } from '@/enums/analysis';
+import { AnalysisStatus, AnalysisMode, StepStatus } from '@/enums/analysis';
 
 export interface AnalysisRunRequest {
   document_id: string;
@@ -56,26 +56,34 @@ export interface AnalysisRunWithResults extends AnalysisRunInfo {
   step_results: StepResultResponse[];
 }
 
+export interface AnalysisRunWithResultsInfo extends AnalysisRunInfo {
+  step_results: StepResultInfo[];
+}
+
+
+export interface StepResultInfo {
+  step_code: string;
+  algorithm_code: string;
+  status: StepStatus;
+  id: string;
+  started_at?: string;
+  completed_at?: string;
+  error_message?: string;
+}
+
+
 
 /**
  * Analysis result response
  * This is the response from the server for an analysis result request
  */
-
-export interface StepResultResponse {
-  id: string;
-  step_code: string;
-  algorithm_code: string;
-  status: AnalysisStatus;
+export interface StepResultResponse extends StepResultInfo {
   parameters: Record<string, any>;
   result: Record<string, any>;
   user_corrections: Record<string, any>;
   retry_count: number;
   created_at: string;
   updated_at?: string;
-  started_at?: string;
-  completed_at?: string;
-  error_message?: string;
 }
 
 

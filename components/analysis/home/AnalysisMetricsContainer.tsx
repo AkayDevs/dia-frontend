@@ -2,12 +2,12 @@ import { useState } from 'react';
 import { BarChart4, LayoutDashboard, LineChart } from 'lucide-react';
 import { AnalysisMetricsOverview } from './AnalysisMetricsOverview';
 import { AnalysisAlgorithmAccuracy } from './AnalysisAlgorithmAccuracy';
-import { AnalysisRunWithResults } from '@/types/analysis/base';
+import { AnalysisRunWithResults, AnalysisRunWithResultsInfo } from '@/types/analysis/base';
 import { Skeleton } from '@/components/ui/skeleton';
 
 interface AnalysisMetricsContainerProps {
     documents: any[];
-    analysesArray: AnalysisRunWithResults[];
+    analysesArray: (AnalysisRunWithResults | AnalysisRunWithResultsInfo)[];
     analysisDefinitions: any[];
     getAlgorithmAccuracyData: (analysisTypeId: string | null) => any[];
     isLoading?: boolean;

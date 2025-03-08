@@ -1,46 +1,54 @@
-import { AnalysisDefinitionCode } from '@/enums/analysis';
 import * as TableConstants from './definitions/table-analysis';
 import * as TextConstants from './definitions/text-analysis';
+import { BaseAnalysisDefinition } from './definitions/base-analysis';
+import { TableAnalysisDefinition } from './definitions/table-analysis';
+import { TextAnalysisDefinition } from './definitions/text-analysis';
 
-// Define interfaces for the constants
-interface TableAnalysisConstants {
-    TABLE_ANALYSIS_STEPS: any[];
-    DEFAULT_TABLE_DETECTION_OPTIONS: any;
-    DEFAULT_TABLE_EXTRACTION_OPTIONS: any;
-    TABLE_CONFIDENCE_THRESHOLDS: any;
-    TABLE_ANALYSIS_ERROR_MESSAGES: any;
-    TABLE_ANALYSIS_SUCCESS_MESSAGES: any;
+/**
+ * Analysis definition code enum
+ */
+export enum AnalysisDefinitionCode {
+    TABLE_ANALYSIS = 'table_analysis',
+    TEXT_ANALYSIS = 'text_analysis'
 }
 
-interface TextAnalysisConstants {
-    TEXT_ANALYSIS_STEPS: any[];
-    DEFAULT_TEXT_EXTRACTION_OPTIONS: any;
-    DEFAULT_TEXT_PROCESSING_OPTIONS: any;
-    TEXT_CONFIDENCE_THRESHOLDS: any;
-    TEXT_ANALYSIS_ERROR_MESSAGES: any;
-    TEXT_ANALYSIS_SUCCESS_MESSAGES: any;
-    SUPPORTED_LANGUAGES: any[];
-}
-
+// Type for the analysis constants map
 type AnalysisConstantsMap = {
-    [AnalysisDefinitionCode.TABLE_ANALYSIS]: TableAnalysisConstants;
-    [AnalysisDefinitionCode.TEXT_ANALYSIS]: TextAnalysisConstants;
+    [AnalysisDefinitionCode.TABLE_ANALYSIS]: TableAnalysisDefinition;
+    [AnalysisDefinitionCode.TEXT_ANALYSIS]: TextAnalysisDefinition;
 };
 
 /**
  * Analysis constants registry
  * Maps analysis type codes to their constants
  */
-export const ANALYSIS_CONSTANTS_REGISTRY = {
-    [AnalysisDefinitionCode.TABLE_ANALYSIS]: TableConstants as unknown as TableAnalysisConstants,
-    [AnalysisDefinitionCode.TEXT_ANALYSIS]: TextConstants as unknown as TextAnalysisConstants,
-    // Add other analysis types as needed
+export const ANALYSIS_CONSTANTS_REGISTRY: AnalysisConstantsMap = {
+    [AnalysisDefinitionCode.TABLE_ANALYSIS]: {
+        ANALYSIS_DEFINITION_NAME: TableConstants.TABLE_ANALYSIS_DEFINITION_NAME,
+        ANALYSIS_STEPS: TableConstants.TABLE_ANALYSIS_STEPS,
+        ANALYSIS_DEFINITION_ICON: TableConstants.TABLE_ANALYSIS_DEFINITION_ICON,
+        ERROR_MESSAGES: TableConstants.TABLE_ANALYSIS_ERROR_MESSAGES,
+        SUCCESS_MESSAGES: TableConstants.TABLE_ANALYSIS_SUCCESS_MESSAGES,
+        TABLE_CONFIDENCE_THRESHOLDS: TableConstants.TABLE_CONFIDENCE_THRESHOLDS,
+    } as TableAnalysisDefinition,
+
+    [AnalysisDefinitionCode.TEXT_ANALYSIS]: {
+        ANALYSIS_DEFINITION_NAME: TextConstants.TEXT_ANALYSIS_DEFINITION_NAME,
+        ANALYSIS_STEPS: TextConstants.TEXT_ANALYSIS_STEPS,
+        ANALYSIS_DEFINITION_ICON: TextConstants.TEXT_ANALYSIS_DEFINITION_ICON,
+        ERROR_MESSAGES: TextConstants.TEXT_ANALYSIS_ERROR_MESSAGES,
+        SUCCESS_MESSAGES: TextConstants.TEXT_ANALYSIS_SUCCESS_MESSAGES,
+        DEFAULT_TEXT_EXTRACTION_OPTIONS: TextConstants.DEFAULT_TEXT_EXTRACTION_OPTIONS,
+        DEFAULT_TEXT_PROCESSING_OPTIONS: TextConstants.DEFAULT_TEXT_PROCESSING_OPTIONS,
+        TEXT_CONFIDENCE_THRESHOLDS: TextConstants.TEXT_CONFIDENCE_THRESHOLDS,
+        SUPPORTED_LANGUAGES: TextConstants.SUPPORTED_LANGUAGES,
+    } as TextAnalysisDefinition
 };
 
 /**
  * Get constants for a specific analysis type
  */
-export function getAnalysisConstants(analysisType: string): TableAnalysisConstants | TextAnalysisConstants {
+export function getAnalysisConstants<T extends BaseAnalysisDefinition>(analysisType: string): T {
     if (!Object.values(AnalysisDefinitionCode).includes(analysisType as AnalysisDefinitionCode)) {
         throw new Error(`Invalid analysis type: ${analysisType}`);
     }
@@ -51,43 +59,46 @@ export function getAnalysisConstants(analysisType: string): TableAnalysisConstan
         throw new Error(`Constants not found for analysis type: ${analysisType}`);
     }
 
-    return constants;
+    // Use unknown as an intermediate type to avoid TypeScript error
+    return constants as unknown as T;
+}
+
+/**
+ * Get the name of a specific analysis type
+ */
+export function getAnalysisName(analysisType: string) {
+    const constants = getAnalysisConstants<BaseAnalysisDefinition>(analysisType);
+    return constants.ANALYSIS_DEFINITION_NAME;
 }
 
 /**
  * Get steps for a specific analysis type
  */
 export function getAnalysisSteps(analysisType: string) {
-    const constants = getAnalysisConstants(analysisType);
-
-    switch (analysisType) {
-        case AnalysisDefinitionCode.TABLE_ANALYSIS:
-            return (constants as TableAnalysisConstants).TABLE_ANALYSIS_STEPS;
-        case AnalysisDefinitionCode.TEXT_ANALYSIS:
-            return (constants as TextAnalysisConstants).TEXT_ANALYSIS_STEPS;
-        default:
-            throw new Error(`Steps not found for analysis type: ${analysisType}`);
-    }
+    const constants = getAnalysisConstants<BaseAnalysisDefinition>(analysisType);
+    return constants.ANALYSIS_STEPS;
 }
 
 /**
- * Get default options for a specific analysis type
+ * Get the icon for a specific analysis type
  */
-export function getDefaultAnalysisOptions(analysisType: string) {
-    const constants = getAnalysisConstants(analysisType);
+export function getAnalysisIcon(analysisType: string) {
+    const constants = getAnalysisConstants<BaseAnalysisDefinition>(analysisType);
+    return constants.ANALYSIS_DEFINITION_ICON;
+}   
 
-    switch (analysisType) {
-        case AnalysisDefinitionCode.TABLE_ANALYSIS:
-            return {
-                tableOptions: (constants as TableAnalysisConstants).DEFAULT_TABLE_DETECTION_OPTIONS,
-                extractionOptions: (constants as TableAnalysisConstants).DEFAULT_TABLE_EXTRACTION_OPTIONS
-            };
-        case AnalysisDefinitionCode.TEXT_ANALYSIS:
-            return {
-                extractionOptions: (constants as TextAnalysisConstants).DEFAULT_TEXT_EXTRACTION_OPTIONS,
-                processingOptions: (constants as TextAnalysisConstants).DEFAULT_TEXT_PROCESSING_OPTIONS
-            };
-        default:
-            throw new Error(`Default options not found for analysis type: ${analysisType}`);
-    }
+/**
+ * Get error messages for a specific analysis type
+ */
+export function getAnalysisErrorMessages(analysisType: string) {
+    const constants = getAnalysisConstants<BaseAnalysisDefinition>(analysisType);
+    return constants.ERROR_MESSAGES;
+}
+
+/**
+ * Get success messages for a specific analysis type
+ */
+export function getAnalysisSuccessMessages(analysisType: string) {
+    const constants = getAnalysisConstants<BaseAnalysisDefinition>(analysisType);
+    return constants.SUCCESS_MESSAGES;
 }

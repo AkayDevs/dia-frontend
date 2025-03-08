@@ -12,7 +12,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { FolderIcon, ArrowUpTrayIcon } from '@heroicons/react/24/outline';
 import { motion } from 'framer-motion';
-import { AnalysisRunWithResults } from '@/types/analysis/base';
+import { AnalysisRunWithResults, AnalysisRunWithResultsInfo } from '@/types/analysis/base';
 import {
     DocumentTypeIcon,
     StatusBadge,
@@ -71,42 +71,50 @@ export default function DocumentsPage() {
     } = useDocumentStore();
 
     const {
-        analyses = [],
+        analyses = {},
         isLoading: isLoadingAnalyses,
         fetchUserAnalyses
     } = useAnalysisStore();
 
+    // Convert analyses object to array for processing
+    const analysesArray = useMemo(() => Object.values(analyses), [analyses]);
+
     // Create a map of document IDs to their latest analysis status
     const documentAnalysisStatus = useMemo(() => {
         const statusMap = new Map<string, AnalysisStatus>();
-        analyses.forEach(analysis => {
-            const currentStatus = statusMap.get(analysis.document_id);
+        const timestampMap = new Map<string, Date>();
+
+        analysesArray.forEach(analysis => {
+            const currentTimestamp = timestampMap.get(analysis.document_id);
+            const analysisDate = new Date(analysis.created_at);
+
             // Only update if there's no status yet or if this analysis is more recent
-            if (!currentStatus || new Date(analysis.created_at) > new Date(analysis.created_at)) {
+            if (!currentTimestamp || analysisDate > currentTimestamp) {
                 if (analysis.status) {
                     statusMap.set(analysis.document_id, analysis.status);
+                    timestampMap.set(analysis.document_id, analysisDate);
                 }
             }
         });
         return statusMap;
-    }, [analyses]);
+    }, [analysesArray]);
 
     // Create a map of document IDs to their analyses
     const documentAnalyses = useMemo(() => {
         const analysesMap = new Map<string, AnalysisRunWithResults[]>();
 
-        analyses.forEach(analysis => {
+        analysesArray.forEach(analysis => {
             if (!analysesMap.has(analysis.document_id)) {
                 analysesMap.set(analysis.document_id, []);
             }
 
             const documentAnalyses = analysesMap.get(analysis.document_id) || [];
-            documentAnalyses.push(analysis);
+            documentAnalyses.push(analysis as unknown as AnalysisRunWithResults);
             analysesMap.set(analysis.document_id, documentAnalyses);
         });
 
         return analysesMap;
-    }, [analyses]);
+    }, [analysesArray]);
 
     // Initialize page with documents and analyses
     useEffect(() => {

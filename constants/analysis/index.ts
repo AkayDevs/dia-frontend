@@ -1,5 +1,10 @@
+import { Loader2, ClockIcon, CheckCircleIcon, XCircleIcon } from 'lucide-react';
+
 // Export registry functions
 export * from './registry';
+
+// Export base analysis definition
+export * from './definitions/base-analysis';
 
 // Export specific analysis constants
 export * from './definitions/table-analysis';
@@ -22,22 +27,15 @@ export const ANALYSIS_STATUS_COLORS = {
     cancelled: 'bg-gray-100 text-gray-800'
 };
 
+// export const ANALYSIS_STATUS_ICONS = {
+//     pending: <Loader2 className="h-4 w-4 animate-spin" />,
+//     in_progress: <ClockIcon className="h-4 w-4 animate-spin" />,
+//     completed: <CheckCircleIcon className="h-4 w-4 text-green-500" />,
+//     failed: <XCircleIcon className="h-4 w-4 text-red-500" />,
+//     cancelled: <XCircleIcon className="h-4 w-4 text-red-500" />
+// };
+
 export const ANALYSIS_MODE_LABELS = {
     automatic: 'Automatic',
     step_by_step: 'Step by Step'
 };
-
-export const ANALYSIS_TYPE_LABELS = {
-    table_detection: 'Table Detection',
-    text_extraction: 'Text Extraction'
-};
-
-export const ANALYSIS_TYPE_DESCRIPTIONS = {
-    table_detection: 'Detect and extract data from tables in documents',
-    text_extraction: 'Extract and analyze text content from documents'
-};
-
-export const ANALYSIS_TYPE_ICONS = {
-    table_detection: 'TableCellsIcon',
-    text_extraction: 'DocumentTextIcon'
-}; 

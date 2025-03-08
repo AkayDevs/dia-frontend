@@ -13,7 +13,7 @@ export * from './Summary';
 // Export UI components
 export { AnalysisTypeIcon } from './AnalysisTypeIcon';
 export { AnalysisCard } from './AnalysisCard';
-export { RecentAnalysisCard } from './RecentAnalysisCard';
+export { RecentAnalysisCard } from './home/AnalysisOverviewCard';
 export { StepResultCard } from './StepResultCard';
 export { AnalysisHeader } from './AnalysisHeader';
 export { AnalysisEmptyState } from './AnalysisEmptyState';

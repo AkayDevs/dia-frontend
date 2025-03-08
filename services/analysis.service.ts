@@ -19,7 +19,8 @@ import {
     AnalysisRunWithResults,
     StepResultResponse,
     AnalysisRunConfig,
-    AnalysisRunRequest
+    AnalysisRunRequest,
+    AnalysisRunWithResultsInfo
 } from '@/types/analysis/base';
 
 // Define types that were previously in analysis_execution
@@ -201,7 +202,7 @@ class AnalysisService {
     /**
      * Get all analyses for the current user with optional filters
      */
-    async getUserAnalyses(params?: AnalysisRunListParams): Promise<AnalysisRunWithResults[]> {
+    async getUserAnalyses(params?: AnalysisRunListParams): Promise<AnalysisRunWithResultsInfo[]> {
         const queryParams = new URLSearchParams();
         if (params) {
             if (params.status) queryParams.append('status', params.status);
@@ -218,7 +219,7 @@ class AnalysisService {
             headers: this.getHeaders(),
         });
 
-        return this.handleResponse<AnalysisRunWithResults[]>(response);
+        return this.handleResponse<AnalysisRunWithResultsInfo[]>(response);
     }
 
     /**

@@ -1,9 +1,6 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { AnalysisStatus } from '@/enums/analysis';
-import { AnalysisStepInfo } from '@/types/analysis/configs';
 import { useDocumentStore } from '@/store/useDocumentStore';
 import { useAnalysisStore } from '@/store/useAnalysisStore';
 import { useToast } from '@/hooks/use-toast';
@@ -15,6 +12,7 @@ import {
     AnalysisRecentTab,
     AnalysisTypesTab,
 } from '@/components/analysis/home';
+import { Document } from '@/types/document';
 
 // Interfaces for algorithm accuracy data
 interface AlgorithmMetric {
@@ -36,8 +34,6 @@ interface AnalysisStep {
 }
 
 export default function AnalysisPage() {
-    const router = useRouter();
-    const searchParams = useSearchParams();
     const { toast } = useToast();
     const [activeTab, setActiveTab] = useState('recent');
     const [isLoading, setIsLoading] = useState(false);
@@ -59,6 +55,15 @@ export default function AnalysisPage() {
 
     // Convert analyses record to array for easier use in the UI
     const analysesArray = useMemo(() => Object.values(analyses), [analyses]);
+
+    // Create a map of document IDs to documents for easier lookup
+    const documentsMap = useMemo(() => {
+        const map = new Map<string, Document>();
+        documents.forEach(doc => {
+            map.set(doc.id, doc);
+        });
+        return map;
+    }, [documents]);
 
     // Load data on component mount
     useEffect(() => {
@@ -84,24 +89,6 @@ export default function AnalysisPage() {
 
         loadData();
     }, [fetchDocuments, fetchAnalysisDefinitions, fetchUserAnalyses, toast]);
-
-    // Group analyses by document
-    const analysesByDocument = useMemo(() => {
-        return analysesArray.reduce<Record<string, any[]>>((acc, analysis) => {
-            if (!acc[analysis.document_id]) {
-                acc[analysis.document_id] = [];
-            }
-            acc[analysis.document_id].push(analysis);
-            return acc;
-        }, {});
-    }, [analysesArray]);
-
-    // Filter documents that have analyses
-    const documentsWithAnalyses = useMemo(() => {
-        return documents.filter(doc =>
-            analysesByDocument[doc.id] && analysesByDocument[doc.id].length > 0
-        );
-    }, [documents, analysesByDocument]);
 
     // Handle refresh
     const handleRefresh = async () => {
@@ -201,9 +188,8 @@ export default function AnalysisPage() {
                 {/* Recent Analyses Tab */}
                 <TabsContent value="recent">
                     <AnalysisRecentTab
-                        documents={documents}
-                        analysesByDocument={analysesByDocument}
-                        documentsWithAnalyses={documentsWithAnalyses}
+                        analyses={analysesArray}
+                        documentsMap={documentsMap}
                         handleRefresh={handleRefresh}
                         isLoading={isLoading || initialLoading}
                     />

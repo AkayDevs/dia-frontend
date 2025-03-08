@@ -1,65 +1,52 @@
-import { TextExtractionOptions, TextProcessingOptions } from '@/types/analysis/definitions/text_analysis';
-
-/**
- * Default text extraction options
- */
-export const DEFAULT_TEXT_EXTRACTION_OPTIONS: TextExtractionOptions = {
-    preserveFormatting: true,
-    extractStructuredContent: true,
-    detectLanguage: true,
-    ocrQuality: 'high',
-    includeConfidenceScores: true
-};
-
-/**
- * Default text processing options
- */
-export const DEFAULT_TEXT_PROCESSING_OPTIONS: TextProcessingOptions = {
-    removeHeadersFooters: true,
-    normalizeWhitespace: true,
-    detectParagraphs: true,
-    detectLists: true,
-    detectTables: false,
-    extractMetadata: true
-};
-
 /**
  * Text analysis steps
  */
-export const TEXT_ANALYSIS_STEPS = [
+import { AnalysisDefinitionIcon, AnalysisDefinitionName, AnalysisStep, BaseAnalysisDefinition, ErrorMessages, SuccessMessages } from './base-analysis';
+
+// Define the interface for text analysis constants
+export interface TextAnalysisDefinition extends BaseAnalysisDefinition {
+    // Base properties are inherited
+
+    // Text-specific properties
+    DEFAULT_TEXT_EXTRACTION_OPTIONS: any;
+    DEFAULT_TEXT_PROCESSING_OPTIONS: any;
+    TEXT_CONFIDENCE_THRESHOLDS: any;
+    SUPPORTED_LANGUAGES: string[];
+}
+
+export const TEXT_ANALYSIS_DEFINITION_NAME: AnalysisDefinitionName = {
+    name: 'Text Analysis'
+};
+
+export const TEXT_ANALYSIS_STEPS: AnalysisStep[] = [
     {
-        id: 'text_extraction',
+        step_code: 'text_analysis.text_extraction',
         name: 'Text Extraction',
         description: 'Extract text from the document',
         order: 1
     },
     {
-        id: 'text_processing',
+        step_code: 'text_analysis.text_processing',
         name: 'Text Processing',
         description: 'Process and structure extracted text',
         order: 2
     },
     {
-        id: 'text_analysis',
+        step_code: 'text_analysis.text_analysis',
         name: 'Text Analysis',
         description: 'Analyze processed text',
         order: 3
     }
 ];
 
-/**
- * Text confidence thresholds
- */
-export const TEXT_CONFIDENCE_THRESHOLDS = {
-    LOW: 0.6,
-    MEDIUM: 0.8,
-    HIGH: 0.95
+export const TEXT_ANALYSIS_DEFINITION_ICON: AnalysisDefinitionIcon = {
+    icon: 'DocumentTextIcon'
 };
 
 /**
  * Text analysis error messages
  */
-export const TEXT_ANALYSIS_ERROR_MESSAGES = {
+export const TEXT_ANALYSIS_ERROR_MESSAGES: ErrorMessages = {
     NO_TEXT_FOUND: 'No text was extracted from the document',
     LOW_CONFIDENCE: 'Text was extracted with low confidence',
     PROCESSING_FAILED: 'Failed to process extracted text',
@@ -69,24 +56,40 @@ export const TEXT_ANALYSIS_ERROR_MESSAGES = {
 /**
  * Text analysis success messages
  */
-export const TEXT_ANALYSIS_SUCCESS_MESSAGES = {
+export const TEXT_ANALYSIS_SUCCESS_MESSAGES: SuccessMessages = {
     TEXT_EXTRACTED: 'Text successfully extracted',
     TEXT_PROCESSED: 'Text successfully processed',
     ANALYSIS_COMPLETED: 'Text analysis completed'
 };
 
 /**
+ * Default text extraction options
+ */
+export const DEFAULT_TEXT_EXTRACTION_OPTIONS = {
+    confidence_threshold: 0.7,
+    include_layout: true
+};
+
+/**
+ * Default text processing options
+ */
+export const DEFAULT_TEXT_PROCESSING_OPTIONS = {
+    normalize: true,
+    remove_special_chars: false
+};
+
+/**
+ * Text confidence thresholds
+ */
+export const TEXT_CONFIDENCE_THRESHOLDS = {
+    high: 0.9,
+    medium: 0.7,
+    low: 0.5
+};
+
+/**
  * Supported languages
  */
 export const SUPPORTED_LANGUAGES = [
-    { code: 'en', name: 'English' },
-    { code: 'es', name: 'Spanish' },
-    { code: 'fr', name: 'French' },
-    { code: 'de', name: 'German' },
-    { code: 'it', name: 'Italian' },
-    { code: 'pt', name: 'Portuguese' },
-    { code: 'zh', name: 'Chinese' },
-    { code: 'ja', name: 'Japanese' },
-    { code: 'ko', name: 'Korean' },
-    { code: 'ru', name: 'Russian' }
+    'en', 'fr', 'de', 'es', 'it'
 ]; 

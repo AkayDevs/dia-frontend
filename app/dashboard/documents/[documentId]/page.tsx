@@ -47,6 +47,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { getAnalysisName } from '@/constants/analysis/registry';
 
 interface DashboardAnalysis extends AnalysisRunWithResults {
     type: string;
@@ -225,8 +226,18 @@ export default function DocumentPage({ params }: DocumentPageProps) {
         });
     };
 
+    // Convert analyses object to array for processing
+    const analysesArray =  Object.values(analyses);
+
     // Cast analyses to DashboardAnalysis[]
-    const dashboardAnalyses = analyses as DashboardAnalysis[];
+    const dashboardAnalyses = analysesArray.map(analysis => ({
+        ...analysis,
+        type: analysis.analysis_code || 'unknown',
+        definition: {
+                name: analysis.analysis_code ? getAnalysisName(analysis.analysis_code)?.name : 'Unknown',
+                code: analysis.analysis_code
+            }
+    }));
 
     // Get analysis status summary
     const getAnalysisStatusSummary = () => {

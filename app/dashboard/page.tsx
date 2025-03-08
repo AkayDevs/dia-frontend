@@ -16,6 +16,7 @@ import { UploadSection } from '@/components/dashboard/upload-section';
 import { RecentAnalyses } from '@/components/dashboard/recent-analyses';
 import { RecentDocuments } from '@/components/dashboard/recent-documents';
 import { ErrorDisplay } from '@/components/dashboard/error-display';
+import { AnalysisRunWithResults } from '@/types/analysis/base';
 
 export default function DashboardPage() {
     const router = useRouter();
@@ -66,7 +67,9 @@ export default function DashboardPage() {
         loadData();
     }, [isAuthenticated, setFilters, fetchDocuments, fetchUserAnalyses, fetchAnalysisDefinitions, logout, router]);
 
-    const stats = useDashboardStats(documents, analyses, analysisDefinitions);
+    // Convert analyses object to array for useDashboardStats
+    const analysesArray = Object.values(analyses) as AnalysisRunWithResults[];
+    const stats = useDashboardStats(documents, analysesArray, analysisDefinitions);
 
     const handleUploadSuccess = useCallback(async (file: File) => {
         try {
