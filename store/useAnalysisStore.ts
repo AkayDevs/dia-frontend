@@ -21,11 +21,6 @@ import {
 } from '@/enums/analysis';
 import { getAnalysisConstants } from '@/constants/analysis/registry';
 import {
-    isTableDetectionResult,
-    isTableStructureResult,
-    isTableDataResult,
-} from '@/types/analysis/registry';
-import {
     TableDetectionOutput,
     TableStructureOutput,
     TableDataOutput
@@ -46,9 +41,12 @@ interface AnalysisState {
     availableAlgorithms: Record<string, AnalysisAlgorithmInfo[]>;
 
     // Analysis state
-    analyses: AnalysisRunWithResults[];
+    analyses: Record<string, AnalysisRunWithResults>;
     currentAnalysis: AnalysisRunWithResults | null;
     currentStepResult: StepResultResponse & StepResult | null;
+
+    // Cache control
+    lastFetchTimestamps: Record<string, number>;
 
     // UI state
     isLoading: boolean;
@@ -77,9 +75,9 @@ interface AnalysisState {
         mode?: AnalysisMode,
         config?: AnalysisRunConfig
     ) => Promise<void>;
-    fetchDocumentAnalyses: (documentId: string) => Promise<void>;
-    fetchUserAnalyses: (params?: any) => Promise<void>;
-    fetchAnalysis: (analysisId: string) => Promise<void>;
+    fetchDocumentAnalyses: (documentId: string, forceRefresh?: boolean) => Promise<void>;
+    fetchUserAnalyses: (params?: any, forceRefresh?: boolean) => Promise<void>;
+    fetchAnalysis: (analysisId: string, forceRefresh?: boolean) => Promise<void>;
     getAnalysisResult: (analysisId: string) => Promise<StepResultResponse | null>;
     executeStep: (
         analysisId: string,
@@ -111,9 +109,10 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
     analysisDefinitions: [],
     currentDefinition: null,
     availableAlgorithms: {},
-    analyses: [],
+    analyses: {},
     currentAnalysis: null,
     currentStepResult: null,
+    lastFetchTimestamps: {},
     isLoading: false,
     error: null,
 
@@ -217,7 +216,10 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
 
             set({
                 currentAnalysis: fullAnalysis,
-                analyses: [...get().analyses, fullAnalysis],
+                analyses: {
+                    ...get().analyses,
+                    [fullAnalysis.id || '']: fullAnalysis
+                },
                 isLoading: false,
                 // Update derived state
                 analysisId: fullAnalysis.id || '',
@@ -235,13 +237,48 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
         }
     },
 
-    fetchDocumentAnalyses: async (documentId) => {
+    fetchDocumentAnalyses: async (documentId, forceRefresh = false) => {
+        const state = get();
+        const now = Date.now();
+        const cacheKey = `document_${documentId}`;
+        const lastFetchTime = state.lastFetchTimestamps[cacheKey] || 0;
+        const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
+
+        // Check if we can use cached data
+        if (!forceRefresh && now - lastFetchTime < CACHE_DURATION) {
+            // Data is fresh enough, return existing analyses for this document
+            const documentAnalyses = Object.values(state.analyses)
+                .filter(analysis => analysis.document_id === documentId);
+
+            if (documentAnalyses.length > 0) {
+                // We have cached analyses for this document
+                return;
+            }
+        }
+
+        // Need to fetch fresh data
         set({ isLoading: true, error: null });
+
         try {
             // Use the analysis service to fetch analyses for a document
             const analyses = await analysisService.getDocumentAnalyses(documentId);
+
+            // Convert array to record and merge with existing analyses
+            const analysesRecord = { ...state.analyses };
+
+            // Add or update analyses in the record
+            analyses.forEach(analysis => {
+                if (analysis.id) {
+                    analysesRecord[analysis.id] = analysis;
+                }
+            });
+
             set({
-                analyses,
+                analyses: analysesRecord,
+                lastFetchTimestamps: {
+                    ...state.lastFetchTimestamps,
+                    [cacheKey]: now
+                },
                 isLoading: false
             });
         } catch (error) {
@@ -252,13 +289,42 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
         }
     },
 
-    fetchUserAnalyses: async (params) => {
+    fetchUserAnalyses: async (params, forceRefresh = false) => {
+        const state = get();
+        const now = Date.now();
+        const cacheKey = 'user_analyses';
+        const lastFetchTime = state.lastFetchTimestamps[cacheKey] || 0;
+        const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
+
+        // Check if we can use cached data
+        if (!forceRefresh && now - lastFetchTime < CACHE_DURATION) {
+            // Data is fresh enough and we have analyses
+            if (Object.keys(state.analyses).length > 0) {
+                return;
+            }
+        }
+
+        // Need to fetch fresh data
         set({ isLoading: true, error: null });
+
         try {
-            // Use the analysis service to fetch user analyses
+            // Use the analysis service to fetch all analyses for the user
             const analyses = await analysisService.getUserAnalyses(params);
+
+            // Convert array to record
+            const analysesRecord: Record<string, AnalysisRunWithResults> = {};
+            analyses.forEach(analysis => {
+                if (analysis.id) {
+                    analysesRecord[analysis.id] = analysis;
+                }
+            });
+
             set({
-                analyses,
+                analyses: analysesRecord,
+                lastFetchTimestamps: {
+                    ...state.lastFetchTimestamps,
+                    [cacheKey]: now
+                },
                 isLoading: false
             });
         } catch (error) {
@@ -269,13 +335,55 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
         }
     },
 
-    fetchAnalysis: async (analysisId) => {
+    fetchAnalysis: async (analysisId, forceRefresh = false) => {
+        const state = get();
+        const now = Date.now();
+        const cacheKey = `analysis_${analysisId}`;
+        const lastFetchTime = state.lastFetchTimestamps[cacheKey] || 0;
+        const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
+
+        // Check if we can use cached data
+        if (!forceRefresh && now - lastFetchTime < CACHE_DURATION) {
+            // Check if the analysis is already in our record
+            const cachedAnalysis = state.analyses[analysisId];
+            if (cachedAnalysis) {
+                // If we already have this analysis and it's current, use it
+                if (state.currentAnalysis?.id !== analysisId) {
+                    // Only update if it's not already the current analysis
+                    set({
+                        currentAnalysis: cachedAnalysis,
+                        // Update derived state
+                        analysisId: cachedAnalysis.id || '',
+                        documentId: cachedAnalysis.document_id,
+                        analysisType: cachedAnalysis.analysis_code,
+                        isTableAnalysis: cachedAnalysis.analysis_code === AnalysisDefinitionCode.TABLE_ANALYSIS,
+                        isTextAnalysis: cachedAnalysis.analysis_code === AnalysisDefinitionCode.TEXT_ANALYSIS,
+                        constants: getAnalysisConstants(cachedAnalysis.analysis_code)
+                    });
+                }
+                return;
+            }
+        }
+
+        // Need to fetch fresh data
         set({ isLoading: true, error: null });
         try {
             // Use the analysis service to fetch a specific analysis
             const analysis = await analysisService.getAnalysis(analysisId);
+
+            // Update the analyses record with this analysis
+            const updatedAnalyses = { ...state.analyses };
+            if (analysis.id) {
+                updatedAnalyses[analysis.id] = analysis;
+            }
+
             set({
                 currentAnalysis: analysis,
+                analyses: updatedAnalyses,
+                lastFetchTimestamps: {
+                    ...state.lastFetchTimestamps,
+                    [cacheKey]: now
+                },
                 isLoading: false,
                 // Update derived state
                 analysisId: analysis.id || '',
@@ -433,7 +541,7 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
         // Fetch the analysis if it's not already loaded
         const currentAnalysis = get().currentAnalysis;
         if (id && (!currentAnalysis || currentAnalysis.id !== id)) {
-            get().fetchAnalysis(id);
+            get().fetchAnalysis(id, false); // Use cache by default
         }
     },
 
@@ -459,12 +567,23 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
     }),
 
     refreshData: async () => {
-        const { analysisId } = get();
-        if (!analysisId) {
-            set({ error: 'Missing analysis ID' });
-            return;
-        }
+        const state = get();
 
-        await get().fetchAnalysis(analysisId);
+        try {
+            // Force refresh all data
+            await Promise.all([
+                state.fetchAnalysisDefinitions(),
+                state.fetchUserAnalyses(undefined, true)
+            ]);
+
+            // If we have a current analysis, refresh it too
+            if (state.analysisId) {
+                await state.fetchAnalysis(state.analysisId, true); // Force refresh the current analysis
+            }
+        } catch (error) {
+            set({
+                error: error instanceof Error ? error.message : 'Failed to refresh data',
+            });
+        }
     }
-})); 
+}));

@@ -3,27 +3,31 @@
 import { useEffect } from 'react';
 import { useAnalysisStore } from '@/store/useAnalysisStore';
 import { Document } from '@/types/document';
-import { AnalysisType } from '@/types/analysis';
+import { AnalysisDefinition, AnalysisDefinitionInfo } from '@/types/analysis/configs';
 import { Card } from '@/components/ui/card';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { DocumentType } from '@/enums/document';
 import {
     TableCellsIcon,
     DocumentTextIcon,
-    DocumentDuplicateIcon
+    DocumentDuplicateIcon,
+    ChartBarIcon
 } from '@heroicons/react/24/outline';
 
 interface AnalysisTypeSelectionProps {
     selectedDocument: Document | null;
-    selectedAnalysisType: AnalysisType | null;
-    onSelect: (analysisType: AnalysisType) => void;
+    selectedAnalysisType: AnalysisDefinition | null;
+    onSelect: (analysisType: AnalysisDefinition) => void;
 }
 
 const analysisTypeIcons: Record<string, any> = {
-    'table_detection': TableCellsIcon,
+    'table_analysis': TableCellsIcon,
     'text_extraction': DocumentTextIcon,
     'template_conversion': DocumentDuplicateIcon,
+    'data_analysis': ChartBarIcon,
 };
 
 export function AnalysisTypeSelection({
@@ -32,19 +36,19 @@ export function AnalysisTypeSelection({
     onSelect,
 }: AnalysisTypeSelectionProps) {
     const {
-        analysisTypes,
+        analysisDefinitions,
         isLoading,
         error,
-        fetchAnalysisTypes,
+        fetchAnalysisDefinitions,
     } = useAnalysisStore();
 
     useEffect(() => {
-        fetchAnalysisTypes();
-    }, [fetchAnalysisTypes]);
+        fetchAnalysisDefinitions();
+    }, [fetchAnalysisDefinitions]);
 
-    const isAnalysisTypeCompatible = (analysisType: AnalysisType) => {
+    const isAnalysisTypeCompatible = (analysisType: AnalysisDefinitionInfo): boolean => {
         if (!selectedDocument) return false;
-        return analysisType.supported_document_types.includes(selectedDocument.type);
+        return analysisType.supported_document_types.includes(selectedDocument.type as DocumentType);
     };
 
     if (isLoading) {
@@ -82,58 +86,73 @@ export function AnalysisTypeSelection({
                 </p>
             </div>
 
-            <RadioGroup
-                value={selectedAnalysisType?.id}
-                onValueChange={(value) => {
-                    const analysisType = analysisTypes.find(type => type.id === value);
-                    if (analysisType) {
-                        onSelect(analysisType);
-                    }
-                }}
-            >
-                <div className="space-y-3">
-                    {analysisTypes.map((analysisType) => {
-                        const Icon = analysisTypeIcons[analysisType.name] || DocumentTextIcon;
-                        const isCompatible = isAnalysisTypeCompatible(analysisType);
+            <ScrollArea className="h-[400px] pr-4">
+                <RadioGroup
+                    value={selectedAnalysisType?.id}
+                    onValueChange={(value) => {
+                        const analysisType = analysisDefinitions.find((type: AnalysisDefinitionInfo) => type.id === value);
+                        if (analysisType) {
+                            onSelect(analysisType as AnalysisDefinition);
+                        }
+                    }}
+                >
+                    <div className="space-y-3">
+                        {analysisDefinitions.map((analysisType: AnalysisDefinitionInfo) => {
+                            const Icon = analysisTypeIcons[analysisType.code] || DocumentTextIcon;
+                            const isCompatible = isAnalysisTypeCompatible(analysisType);
 
-                        return (
-                            <Label
-                                key={analysisType.id}
-                                className={`flex items-start space-x-4 p-4 rounded-lg border cursor-pointer transition-colors ${!isCompatible
-                                    ? 'opacity-50 cursor-not-allowed'
-                                    : 'hover:bg-muted/50'
-                                    }`}
-                            >
-                                <RadioGroupItem
-                                    value={analysisType.id}
-                                    disabled={!isCompatible}
-                                    className="mt-1"
-                                />
-                                <div className="flex-1 space-y-1">
-                                    <div className="flex items-center">
-                                        <Icon className="w-5 h-5 mr-2 text-muted-foreground" />
-                                        <span className="font-medium">
-                                            {analysisType.name.split('_').map(word =>
-                                                word.charAt(0).toUpperCase() + word.slice(1)
-                                            ).join(' ')}
-                                        </span>
+                            return (
+                                <Label
+                                    key={analysisType.id}
+                                    className={`flex items-start space-x-4 p-4 rounded-lg border cursor-pointer transition-colors ${!isCompatible
+                                        ? 'opacity-50 cursor-not-allowed'
+                                        : 'hover:bg-muted/50'
+                                        }`}
+                                >
+                                    <RadioGroupItem
+                                        value={analysisType.id}
+                                        disabled={!isCompatible}
+                                        className="mt-1"
+                                    />
+                                    <div className="flex-1 space-y-1">
+                                        <div className="flex items-center">
+                                            <Icon className="w-5 h-5 mr-2 text-muted-foreground" />
+                                            <span className="font-medium">
+                                                {analysisType.name.split('_').map((word: string) =>
+                                                    word.charAt(0).toUpperCase() + word.slice(1)
+                                                ).join(' ')}
+                                            </span>
+                                        </div>
+                                        {analysisType.description && (
+                                            <p className="text-sm text-muted-foreground">
+                                                {analysisType.description}
+                                            </p>
+                                        )}
+                                        <div className="flex flex-wrap gap-1 mt-2">
+                                            {analysisType.supported_document_types.map((type: DocumentType) => (
+                                                <span
+                                                    key={type}
+                                                    className={`text-xs px-2 py-0.5 rounded-full ${selectedDocument?.type === type
+                                                        ? 'bg-primary/10 text-primary'
+                                                        : 'bg-muted text-muted-foreground'
+                                                        }`}
+                                                >
+                                                    {type.toString().toUpperCase()}
+                                                </span>
+                                            ))}
+                                        </div>
+                                        {!isCompatible && (
+                                            <p className="text-sm text-destructive mt-2">
+                                                Not compatible with {selectedDocument?.type.toString().toUpperCase()} files
+                                            </p>
+                                        )}
                                     </div>
-                                    {analysisType.description && (
-                                        <p className="text-sm text-muted-foreground">
-                                            {analysisType.description}
-                                        </p>
-                                    )}
-                                    {!isCompatible && (
-                                        <p className="text-sm text-destructive">
-                                            Not compatible with {selectedDocument?.type.toUpperCase()} files
-                                        </p>
-                                    )}
-                                </div>
-                            </Label>
-                        );
-                    })}
-                </div>
-            </RadioGroup>
+                                </Label>
+                            );
+                        })}
+                    </div>
+                </RadioGroup>
+            </ScrollArea>
         </div>
     );
 } 

@@ -2,9 +2,12 @@
 
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
+import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import {
     BoltIcon,
-    ListBulletIcon
+    ListBulletIcon,
+    CheckIcon
 } from '@heroicons/react/24/outline';
 
 interface ModeSelectionProps {
@@ -59,41 +62,52 @@ export function ModeSelection({ selectedMode, onSelect }: ModeSelectionProps) {
                         const isSelected = selectedMode === mode.id;
 
                         return (
-                            <Label
+                            <Card
                                 key={mode.id}
-                                className={`flex flex-col h-full p-6 rounded-lg border-2 cursor-pointer transition-all ${isSelected
-                                    ? 'border-primary bg-primary/5'
+                                className={`relative overflow-hidden transition-all ${isSelected
+                                    ? 'border-primary shadow-sm'
                                     : 'hover:border-primary/50'
                                     }`}
                             >
-                                <RadioGroupItem
-                                    value={mode.id}
-                                    className="sr-only"
-                                />
-                                <div className="space-y-4">
-                                    <div className="flex items-center space-x-2">
-                                        <Icon className={`w-6 h-6 ${isSelected ? 'text-primary' : 'text-muted-foreground'
-                                            }`} />
-                                        <span className="font-medium">{mode.title}</span>
+                                <Label className="flex flex-col h-full p-6 cursor-pointer">
+                                    <RadioGroupItem
+                                        value={mode.id}
+                                        className="sr-only"
+                                    />
+
+                                    {isSelected && (
+                                        <Badge className="absolute top-2 right-2 bg-primary text-primary-foreground">
+                                            <CheckIcon className="h-3 w-3 mr-1" />
+                                            Selected
+                                        </Badge>
+                                    )}
+
+                                    <div className="space-y-4">
+                                        <div className="flex items-center space-x-2">
+                                            <div className={`p-2 rounded-md ${isSelected ? 'bg-primary/10' : 'bg-muted'}`}>
+                                                <Icon className={`w-5 h-5 ${isSelected ? 'text-primary' : 'text-muted-foreground'}`} />
+                                            </div>
+                                            <span className="font-medium">{mode.title}</span>
+                                        </div>
+
+                                        <p className="text-sm text-muted-foreground">
+                                            {mode.description}
+                                        </p>
+
+                                        <ul className="space-y-2">
+                                            {mode.features.map((feature, index) => (
+                                                <li
+                                                    key={index}
+                                                    className="text-sm flex items-center text-muted-foreground"
+                                                >
+                                                    <span className={`w-1.5 h-1.5 rounded-full mr-2 ${isSelected ? 'bg-primary' : 'bg-primary/60'}`} />
+                                                    {feature}
+                                                </li>
+                                            ))}
+                                        </ul>
                                     </div>
-
-                                    <p className="text-sm text-muted-foreground">
-                                        {mode.description}
-                                    </p>
-
-                                    <ul className="space-y-2">
-                                        {mode.features.map((feature, index) => (
-                                            <li
-                                                key={index}
-                                                className="text-sm flex items-center text-muted-foreground"
-                                            >
-                                                <span className="w-1.5 h-1.5 rounded-full bg-primary/60 mr-2" />
-                                                {feature}
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            </Label>
+                                </Label>
+                            </Card>
                         );
                     })}
                 </div>

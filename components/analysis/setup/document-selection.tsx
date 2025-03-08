@@ -11,12 +11,14 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { formatDistanceToNow } from 'date-fns';
+import { motion } from 'framer-motion';
 import {
     DocumentIcon,
     MagnifyingGlassIcon,
     DocumentTextIcon,
     PhotoIcon,
-    TableCellsIcon
+    TableCellsIcon,
+    CheckCircleIcon
 } from '@heroicons/react/24/outline';
 
 interface DocumentSelectionProps {
@@ -75,16 +77,22 @@ export function DocumentSelection({ selectedDocument, onSelect }: DocumentSelect
 
         return (
             <Card
-                className={`p-4 cursor-pointer transition-all hover:border-primary ${isSelected ? 'border-primary bg-primary/5' : ''
-                    }`}
+                className={`p-4 cursor-pointer transition-all hover:shadow-sm ${isSelected ? 'border-primary shadow-sm' : 'hover:border-primary/50'}`}
                 onClick={() => onSelect(document)}
             >
                 <div className="flex items-start space-x-4">
-                    <Icon className="w-8 h-8 text-muted-foreground" />
+                    <div className={`p-2 rounded-md ${isSelected ? 'bg-primary/10' : 'bg-muted'}`}>
+                        <Icon className={`w-5 h-5 ${isSelected ? 'text-primary' : 'text-muted-foreground'}`} />
+                    </div>
                     <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-foreground truncate">
-                            {document.name}
-                        </p>
+                        <div className="flex items-center justify-between">
+                            <p className="text-sm font-medium text-foreground truncate">
+                                {document.name}
+                            </p>
+                            {isSelected && (
+                                <CheckCircleIcon className="h-4 w-4 text-primary ml-2 flex-shrink-0" />
+                            )}
+                        </div>
                         <div className="flex items-center space-x-2 mt-1">
                             <Badge variant="secondary" className="text-xs">
                                 {document.type.toUpperCase()}
@@ -101,24 +109,18 @@ export function DocumentSelection({ selectedDocument, onSelect }: DocumentSelect
 
     return (
         <div className="space-y-6">
-            <Tabs defaultValue="upload">
-                <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="upload">Upload New Document</TabsTrigger>
-                    <TabsTrigger value="browse">Browse Documents</TabsTrigger>
-                </TabsList>
+            <div className="space-y-2">
+                <h2 className="text-lg font-medium">Select Document</h2>
+                <p className="text-sm text-muted-foreground">
+                    Choose a document to analyze or upload a new one.
+                </p>
+            </div>
 
-                <TabsContent value="upload" className="mt-6">
-                    <UploadHandler
-                        onSuccess={handleUploadSuccess}
-                        accept={{
-                            'application/pdf': ['.pdf'],
-                            'image/*': ['.png', '.jpg', '.jpeg'],
-                            'application/msword': ['.doc', '.docx'],
-                            'application/vnd.ms-excel': ['.xls', '.xlsx'],
-                        }}
-                        maxSize={10 * 1024 * 1024} // 10MB
-                    />
-                </TabsContent>
+            <Tabs defaultValue="browse">
+                <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="browse">Browse Documents</TabsTrigger>
+                    <TabsTrigger value="upload">Upload New Document</TabsTrigger>
+                </TabsList>
 
                 <TabsContent value="browse" className="mt-6">
                     <div className="space-y-4">
@@ -132,14 +134,40 @@ export function DocumentSelection({ selectedDocument, onSelect }: DocumentSelect
                             />
                         </div>
 
-                        <ScrollArea className="h-[400px] pr-4">
-                            <div className="space-y-3">
-                                {filteredDocuments.map((document) => (
-                                    <DocumentCard key={document.id} document={document} />
-                                ))}
+                        <ScrollArea className="h-[400px]">
+                            <div className="space-y-3 pr-4">
+                                {filteredDocuments.length > 0 ? (
+                                    filteredDocuments.map((document, index) => (
+                                        <motion.div
+                                            key={document.id}
+                                            initial={{ opacity: 0, y: 10 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            transition={{ delay: index * 0.05 }}
+                                        >
+                                            <DocumentCard document={document} />
+                                        </motion.div>
+                                    ))
+                                ) : (
+                                    <div className="text-center py-8">
+                                        <p className="text-muted-foreground">No documents found</p>
+                                    </div>
+                                )}
                             </div>
                         </ScrollArea>
                     </div>
+                </TabsContent>
+
+                <TabsContent value="upload" className="mt-6">
+                    <UploadHandler
+                        onSuccess={handleUploadSuccess}
+                        accept={{
+                            'application/pdf': ['.pdf'],
+                            'image/*': ['.png', '.jpg', '.jpeg'],
+                            'application/msword': ['.doc', '.docx'],
+                            'application/vnd.ms-excel': ['.xls', '.xlsx'],
+                        }}
+                        maxSize={10 * 1024 * 1024} // 10MB
+                    />
                 </TabsContent>
             </Tabs>
         </div>
