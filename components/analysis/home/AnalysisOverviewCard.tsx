@@ -25,7 +25,8 @@ import { ANALYSIS_STATUS_ICONS } from '@/constants/icons';
 import {
     getAnalysisName,
     getAnalysisIcon,
-    getAnalysisConstants
+    getAnalysisConstants,
+    getAnalysisSteps
 } from '@/constants/analysis/registry';
 import { getDocumentTypeIcon } from '@/constants/icons';
 
@@ -34,8 +35,9 @@ interface AnalysisOverviewCardProps {
     analyses: AnalysisRunWithResultsInfo[];
     onViewAnalysis: (analysisId: string) => void;
     onViewDocument: (documentId: string) => void;
-    variant?: 'default' | 'compact' | 'modern';
+    variant?: 'default' | 'compact' | 'modern' | 'analysis_type';
     groupBy?: 'document' | 'analysis_definition';
+    analysisType?: string;
 }
 
 export const AnalysisOverviewCard = ({
@@ -44,7 +46,8 @@ export const AnalysisOverviewCard = ({
     onViewAnalysis,
     onViewDocument,
     variant = 'default',
-    groupBy = 'document'
+    groupBy = 'document',
+    analysisType
 }: AnalysisOverviewCardProps) => {
     // Sort analyses by created_at (newest first)
     const sortedAnalyses = useMemo(() => {
@@ -113,6 +116,156 @@ export const AnalysisOverviewCard = ({
         return getDocumentTypeIcon(document.type.toString().toLowerCase());
     }, [document.type]);
 
+    // Render analysis_type variant (2-column layout for analysis type details)
+    if (variant === 'analysis_type' && analysisType) {
+        // Get analysis definition details from registry
+        const analysisName = getAnalysisName(analysisType);
+        const analysisSteps = getAnalysisSteps(analysisType);
+        const analysisIcon = getAnalysisIcon(analysisType);
+
+        // Get status counts
+        const completedCount = analyses.filter(a => a.status === AnalysisStatus.COMPLETED).length;
+        const inProgressCount = analyses.filter(a => a.status === AnalysisStatus.IN_PROGRESS).length;
+        const failedCount = analyses.filter(a => a.status === AnalysisStatus.FAILED).length;
+
+        return (
+            <Card className="overflow-hidden hover:shadow-md transition-all border border-border/60 shadow-sm">
+                <div className="flex flex-col md:flex-row">
+                    {/* First column: Analysis Type Details (1/3 or 2/5 width) */}
+                    <div className="p-6 md:w-2/5 border-r bg-muted/5 flex flex-col">
+                        {/* Header with icon and title */}
+                        <div className="flex items-center gap-4 mb-6">
+                            <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center shadow-sm">
+                                {analysisIcon?.icon ? (
+                                    <div dangerouslySetInnerHTML={{
+                                        __html: analysisIcon.icon
+                                    }} />
+                                ) : (
+                                    <BarChart4 className="h-6 w-6 text-primary" />
+                                )}
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-semibold text-foreground">{analysisName.name}</h3>
+                                <Badge variant="outline" className="mt-1.5 px-2.5 py-0.5 font-medium">
+                                    {analyses.length} {analyses.length === 1 ? 'run' : 'runs'}
+                                </Badge>
+                            </div>
+                        </div>
+
+                        {/* Analysis Steps Section */}
+                        <div className="mb-6">
+                            <h4 className="text-sm font-medium text-muted-foreground mb-3 flex items-center">
+                                <Layers className="h-4 w-4 mr-1.5 text-primary/70" />
+                                Analysis Steps
+                            </h4>
+                            <div className="space-y-3 pl-1">
+                                {analysisSteps.map((step, index) => (
+                                    <div key={step.step_code} className="flex items-center gap-3">
+                                        <div className="h-6 w-6 rounded-full bg-primary/15 text-primary flex items-center justify-center text-xs font-medium shadow-sm">
+                                            {index + 1}
+                                        </div>
+                                        <div>
+                                            <span className="text-sm font-medium">{step.name}</span>
+                                            <p className="text-xs text-muted-foreground mt-0.5">{step.description}</p>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Status Summary Section */}
+                        <div className="mt-auto pt-4 border-t border-border/50">
+                            <h4 className="text-sm font-medium text-muted-foreground mb-3 flex items-center">
+                                <BarChart4 className="h-4 w-4 mr-1.5 text-primary/70" />
+                                Status Summary
+                            </h4>
+                            <div className="grid grid-cols-3 gap-3">
+                                <div className="flex flex-col items-center p-3 rounded-md bg-green-50/50 border border-green-100 shadow-sm">
+                                    <CheckCircle className="h-5 w-5 text-green-500 mb-1.5" />
+                                    <span className="text-sm font-medium text-green-700">{completedCount}</span>
+                                    <span className="text-xs text-green-600/80 mt-0.5">Completed</span>
+                                </div>
+                                <div className="flex flex-col items-center p-3 rounded-md bg-amber-50/50 border border-amber-100 shadow-sm">
+                                    <Clock className="h-5 w-5 text-amber-500 mb-1.5" />
+                                    <span className="text-sm font-medium text-amber-700">{inProgressCount}</span>
+                                    <span className="text-xs text-amber-600/80 mt-0.5">In Progress</span>
+                                </div>
+                                <div className="flex flex-col items-center p-3 rounded-md bg-red-50/50 border border-red-100 shadow-sm">
+                                    <XCircle className="h-5 w-5 text-red-500 mb-1.5" />
+                                    <span className="text-sm font-medium text-red-700">{failedCount}</span>
+                                    <span className="text-xs text-red-600/80 mt-0.5">Failed</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Second column: Analysis Runs (2/3 or 3/5 width) */}
+                    <div className="p-6 md:w-3/5">
+                        <div className="flex items-center justify-between mb-4">
+                            <h4 className="text-sm font-medium text-muted-foreground flex items-center">
+                                <Calendar className="h-4 w-4 mr-1.5 text-primary/70" />
+                                Recent Analysis Runs
+                            </h4>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 text-xs font-medium px-3"
+                                onClick={() => onViewDocument(document.id)}
+                            >
+                                View All
+                            </Button>
+                        </div>
+
+                        <ScrollArea className="h-[320px] pr-4">
+                            <div className="space-y-3">
+                                {sortedAnalyses.map((analysis) => (
+                                    <div
+                                        key={analysis.id || `analysis-${Math.random()}`}
+                                        className="p-3 border rounded-md hover:bg-muted/10 transition-colors cursor-pointer shadow-sm"
+                                        onClick={() => analysis.id && onViewAnalysis(analysis.id)}
+                                    >
+                                        <div className="flex items-center justify-between mb-2">
+                                            <div className="flex items-center gap-2">
+                                                {getStatusIcon(analysis.status)}
+                                                <span className="font-medium text-sm">
+                                                    {format(new Date(analysis.created_at), 'MMM d, yyyy')}
+                                                </span>
+                                            </div>
+                                            <Badge variant="outline" className={`px-2 ${getStatusColorClass(analysis.status)}`}>
+                                                {getStatusLabel(analysis.status)}
+                                            </Badge>
+                                        </div>
+
+                                        <div className="flex items-center text-xs text-muted-foreground mt-2">
+                                            <span className="mr-1.5">
+                                                {documentTypeIcon}
+                                            </span>
+                                            <span className="line-clamp-1">{document.name}</span>
+                                        </div>
+
+                                        {analysis.step_results && analysis.step_results.length > 0 && (
+                                            <div className="mt-2 pt-2 border-t border-border/30 flex flex-wrap gap-1.5">
+                                                {analysis.step_results.map((step, idx) => (
+                                                    <Badge
+                                                        key={step.id || idx}
+                                                        variant="outline"
+                                                        className="text-[9px] h-5 px-1.5 bg-primary/5 border-primary/20"
+                                                    >
+                                                        {step.step_code.split('.').pop()}
+                                                    </Badge>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </ScrollArea>
+                    </div>
+                </div>
+            </Card>
+        );
+    }
+
     // Render compact variant
     if (variant === 'compact') {
         return (
@@ -123,7 +276,7 @@ export const AnalysisOverviewCard = ({
                             <Avatar className="h-10 w-10 rounded-md bg-primary/10 flex items-center justify-center">
                                 {latestAnalysis?.analysis_code ? (
                                     <div dangerouslySetInnerHTML={{
-                                        __html: getAnalysisIcon(latestAnalysis.analysis_code) || '<BarChart4 className="h-5 w-5 text-primary" />'
+                                        __html: getAnalysisIcon(latestAnalysis.analysis_code)?.icon || ''
                                     }} />
                                 ) : (
                                     <BarChart4 className="h-5 w-5 text-primary" />

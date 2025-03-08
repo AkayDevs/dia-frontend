@@ -14,7 +14,9 @@ import {
     FolderOpen,
     AlertCircle,
     FileText,
-    Clock
+    Clock,
+    CheckCircle,
+    XCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AnalysisEmptyState } from '@/components/analysis';
@@ -37,10 +39,13 @@ import {
 import { ANALYSIS_STATUS_ICONS } from '@/constants/icons';
 
 import {
-    getAnalysisName
+    getAnalysisName,
+    getAnalysisSteps,
+    getAnalysisIcon
 } from '@/constants/analysis/registry';
 import { formatDistanceToNow, format } from 'date-fns';
 import { getDocumentTypeIcon, DOCUMENT_TYPE_ICONS } from '@/constants/icons';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 type ViewMode = 'timeline' | 'document' | 'type';
 
@@ -58,6 +63,25 @@ interface TimelineCardProps {
     onViewDocument: (documentId: string) => void;
 }
 
+// Helper functions for status display
+const getStatusIcon = (status: string | undefined) => {
+    if (!status) return <AlertCircle className="h-4 w-4 text-gray-400" />;
+    return ANALYSIS_STATUS_ICONS[status as keyof typeof ANALYSIS_STATUS_ICONS] ||
+        <AlertCircle className="h-4 w-4 text-gray-400" />;
+};
+
+const getStatusColorClass = (status: string | undefined) => {
+    if (!status) return 'bg-gray-100 text-gray-800';
+    return ANALYSIS_STATUS_COLORS[status as keyof typeof ANALYSIS_STATUS_COLORS] ||
+        'bg-gray-100 text-gray-800';
+};
+
+const getStatusLabel = (status: string | undefined) => {
+    if (!status) return 'Unknown';
+    return ANALYSIS_STATUS_LABELS[status as keyof typeof ANALYSIS_STATUS_LABELS] ||
+        'Unknown';
+};
+
 // Timeline card component for the timeline view
 const TimelineCard = ({
     analysis,
@@ -65,27 +89,6 @@ const TimelineCard = ({
     onViewAnalysis,
     onViewDocument
 }: TimelineCardProps) => {
-    // Get status icon
-    const getStatusIcon = (status: string | undefined) => {
-        if (!status) return <AlertCircle className="h-4 w-4 text-gray-400" />;
-        return ANALYSIS_STATUS_ICONS[status as keyof typeof ANALYSIS_STATUS_ICONS] ||
-            <AlertCircle className="h-4 w-4 text-gray-400" />;
-    };
-
-    // Get status label
-    const getStatusLabel = (status: string | undefined) => {
-        if (!status) return 'Unknown';
-        return ANALYSIS_STATUS_LABELS[status as keyof typeof ANALYSIS_STATUS_LABELS] ||
-            'Unknown';
-    };
-
-    // Get status color class
-    const getStatusColorClass = (status: string | undefined) => {
-        if (!status) return 'bg-gray-100 text-gray-800';
-        return ANALYSIS_STATUS_COLORS[status as keyof typeof ANALYSIS_STATUS_COLORS] ||
-            'bg-gray-100 text-gray-800';
-    };
-
     // Get document type icon
     const documentTypeIcon = getDocumentTypeIcon(document.type.toString().toLowerCase());
 
@@ -320,9 +323,9 @@ export function AnalysisRecentTab({
         }
 
         return (
-            <div className="space-y-6">
-                {analysisTypes.map((analysisType) => {
-                    const typeAnalyses = analysesByType[analysisType] || [];
+            <div className="space-y-8">
+                {analysisTypes.map((analysisTypeCode) => {
+                    const typeAnalyses = analysesByType[analysisTypeCode] || [];
 
                     // Skip if no analyses for this type
                     if (typeAnalyses.length === 0) return null;
@@ -333,49 +336,16 @@ export function AnalysisRecentTab({
 
                     if (!document) return null;
 
-                    // Get analysis definition name
-                    const analysisName = getAnalysisName(analysisType);
-
                     return (
-                        <div key={analysisType} className="space-y-3">
-                            <div className="flex items-center justify-between">
-                                <h3 className="text-lg font-medium flex items-center">
-                                    <span className="mr-2">{analysisName.name}</span>
-                                    <Badge variant="outline" className="text-xs">
-                                        {typeAnalyses.length} runs
-                                    </Badge>
-                                </h3>
-                            </div>
-
-                            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                                {typeAnalyses.slice(0, 6).map((analysis) => {
-                                    const doc = documentsMap.get(analysis.document_id);
-                                    if (!doc) return null;
-
-                                    return (
-                                        <div key={analysis.id || `analysis-${Math.random()}`}>
-                                            <AnalysisOverviewCard
-                                                document={doc}
-                                                analyses={[analysis]}
-                                                onViewAnalysis={handleViewAnalysis}
-                                                onViewDocument={handleViewDocument}
-                                                variant="compact"
-                                                groupBy="analysis_definition"
-                                            />
-                                        </div>
-                                    );
-                                })}
-                            </div>
-
-                            {typeAnalyses.length > 6 && (
-                                <Button
-                                    variant="ghost"
-                                    className="w-full text-xs text-muted-foreground"
-                                    onClick={() => setSearchQuery(analysisType)}
-                                >
-                                    View all {typeAnalyses.length} analyses
-                                </Button>
-                            )}
+                        <div key={analysisTypeCode}>
+                            <AnalysisOverviewCard
+                                document={document}
+                                analyses={typeAnalyses}
+                                onViewAnalysis={handleViewAnalysis}
+                                onViewDocument={handleViewDocument}
+                                variant="analysis_type"
+                                analysisType={analysisTypeCode}
+                            />
                         </div>
                     );
                 })}
