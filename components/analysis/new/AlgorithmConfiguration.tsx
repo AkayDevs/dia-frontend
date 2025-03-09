@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { InformationCircleIcon } from '@heroicons/react/24/outline';
 import { useToast } from '@/hooks/use-toast';
+import { useAnalysisStore } from '@/store/useAnalysisStore';
 import { AnalysisDefinition, AnalysisParameter } from '@/types/analysis/configs';
 import { AnalysisRunConfig, AnalysisStepConfig } from '@/types/analysis/base';
 
@@ -25,6 +26,16 @@ export function AlgorithmConfiguration({
 }: AlgorithmConfigurationProps) {
     const { toast } = useToast();
     const [showHelpTips, setShowHelpTips] = useState(true);
+    const { fetchStepAlgorithms, availableAlgorithms } = useAnalysisStore();
+
+    // Fetch algorithms for all steps when component mounts
+    useEffect(() => {
+        if (currentDefinition?.steps) {
+            currentDefinition.steps.forEach(step => {
+                fetchStepAlgorithms(step.id);
+            });
+        }
+    }, [currentDefinition, fetchStepAlgorithms]);
 
     if (!currentDefinition) {
         return (
@@ -39,18 +50,24 @@ export function AlgorithmConfiguration({
     const handleAlgorithmChange = (stepId: string, algorithmCode: string, algorithmVersion: string) => {
         // Find the algorithm to get default parameters
         const step = currentDefinition?.steps.find(s => s.id === stepId);
-        const algorithm = step?.algorithms.find(a => a.code === algorithmCode);
+
+        // Try to get algorithm from availableAlgorithms first (which has full parameter details)
+        // or fall back to the step algorithms
+        const algorithm = availableAlgorithms[stepId]?.find(a => a.code === algorithmCode) ||
+            step?.algorithms.find(a => a.code === algorithmCode);
 
         if (!algorithm) return;
 
         // Create default parameters
         const defaultParameters: Record<string, any> = {};
-        algorithm.parameters.forEach(param => {
-            defaultParameters[param.name] = {
-                name: param.name,
-                value: param.default
-            };
-        });
+        if (algorithm.parameters) {
+            algorithm.parameters.forEach(param => {
+                defaultParameters[param.name] = {
+                    name: param.name,
+                    value: param.default
+                };
+            });
+        }
 
         // Update config
         onConfigChange({
@@ -141,7 +158,10 @@ export function AlgorithmConfiguration({
     };
 
     const renderParameterInput = (stepId: string, param: AnalysisParameter, stepConfig: AnalysisStepConfig) => {
-        const value = stepConfig.algorithm?.parameters?.[param.name]?.value ?? param.default;
+        // Get the value, defaulting to empty string for null/undefined values
+        const rawValue = stepConfig.algorithm?.parameters?.[param.name]?.value ?? param.default;
+        // Ensure we never pass null to inputs
+        const value = rawValue === null ? '' : rawValue;
 
         const labelClasses = "text-sm font-medium text-gray-700 flex items-center";
         const requiredBadge = param.required && (
@@ -181,6 +201,8 @@ export function AlgorithmConfiguration({
                     </div>
                 );
             case 'number':
+                // For number inputs, convert empty string to undefined to avoid NaN issues
+                const numValue = value === '' ? '' : Number(value);
                 return (
                     <div className="mb-6">
                         <Label htmlFor={`${stepId}-${param.name}`} className={labelClasses}>
@@ -194,8 +216,11 @@ export function AlgorithmConfiguration({
                             <Input
                                 id={`${stepId}-${param.name}`}
                                 type="number"
-                                value={value}
-                                onChange={(e) => handleParameterChange(stepId, param.name, parseFloat(e.target.value))}
+                                value={numValue}
+                                onChange={(e) => {
+                                    const val = e.target.value === '' ? '' : parseFloat(e.target.value);
+                                    handleParameterChange(stepId, param.name, val);
+                                }}
                                 className="h-11 border-gray-300 focus:border-primary focus:ring-1 focus:ring-primary/20 rounded-md shadow-sm"
                                 min={param.constraints?.min}
                                 max={param.constraints?.max}
@@ -205,6 +230,8 @@ export function AlgorithmConfiguration({
                     </div>
                 );
             case 'select':
+                // For select, ensure we have a string value
+                const selectValue = value === null || value === undefined ? '' : String(value);
                 return (
                     <div className="mb-6">
                         <Label htmlFor={`${stepId}-${param.name}`} className={labelClasses}>
@@ -216,7 +243,7 @@ export function AlgorithmConfiguration({
                         )}
                         <div className={inputWrapperClasses}>
                             <Select
-                                value={value}
+                                value={selectValue}
                                 onValueChange={(value) => handleParameterChange(stepId, param.name, value)}
                             >
                                 <SelectTrigger id={`${stepId}-${param.name}`} className="h-11 border-gray-300 focus:border-primary focus:ring-1 focus:ring-primary/20 rounded-md shadow-sm">
@@ -234,6 +261,8 @@ export function AlgorithmConfiguration({
                     </div>
                 );
             default:
+                // For text inputs, ensure we have a string value
+                const textValue = value === null || value === undefined ? '' : String(value);
                 return (
                     <div className="mb-6">
                         <Label htmlFor={`${stepId}-${param.name}`} className={labelClasses}>
@@ -247,7 +276,7 @@ export function AlgorithmConfiguration({
                             <Input
                                 id={`${stepId}-${param.name}`}
                                 type="text"
-                                value={value}
+                                value={textValue}
                                 onChange={(e) => handleParameterChange(stepId, param.name, e.target.value)}
                                 className="h-11 border-gray-300 focus:border-primary focus:ring-1 focus:ring-primary/20 rounded-md shadow-sm"
                             />
@@ -284,9 +313,15 @@ export function AlgorithmConfiguration({
                     };
 
                     const selectedAlgorithmCode = stepConfig.algorithm?.code;
-                    const selectedAlgorithm = step.algorithms.find(
-                        algo => algo.code === selectedAlgorithmCode
-                    );
+
+                    // Try to get the selected algorithm from availableAlgorithms first
+                    // This ensures we have the full algorithm details including parameters
+                    const selectedAlgorithm =
+                        availableAlgorithms[step.id]?.find(algo => algo.code === selectedAlgorithmCode) ||
+                        step.algorithms.find(algo => algo.code === selectedAlgorithmCode);
+
+                    // Check if algorithms are still loading
+                    const isLoading = !availableAlgorithms[step.id] && selectedAlgorithmCode;
 
                     return (
                         <Card
@@ -329,7 +364,11 @@ export function AlgorithmConfiguration({
                                             <Select
                                                 value={selectedAlgorithmCode}
                                                 onValueChange={(value) => {
-                                                    const algorithm = step.algorithms.find(a => a.code === value);
+                                                    // Try to get algorithm from availableAlgorithms first
+                                                    const algorithm =
+                                                        availableAlgorithms[step.id]?.find(a => a.code === value) ||
+                                                        step.algorithms.find(a => a.code === value);
+
                                                     if (algorithm) {
                                                         handleAlgorithmChange(step.id, algorithm.code, algorithm.version);
                                                     }
@@ -339,7 +378,8 @@ export function AlgorithmConfiguration({
                                                     <SelectValue placeholder="Select algorithm" />
                                                 </SelectTrigger>
                                                 <SelectContent className="border-gray-200 shadow-md rounded-md">
-                                                    {step.algorithms.map(algorithm => (
+                                                    {/* Use availableAlgorithms if available, otherwise fall back to step.algorithms */}
+                                                    {(availableAlgorithms[step.id] || step.algorithms).map(algorithm => (
                                                         <SelectItem
                                                             key={algorithm.code}
                                                             value={algorithm.code}
@@ -352,7 +392,13 @@ export function AlgorithmConfiguration({
                                             </Select>
                                         </div>
 
-                                        {selectedAlgorithm && (
+                                        {isLoading ? (
+                                            <div className="space-y-2">
+                                                <Skeleton className="h-4 w-32" />
+                                                <Skeleton className="h-10 w-full" />
+                                                <Skeleton className="h-10 w-full" />
+                                            </div>
+                                        ) : selectedAlgorithm && (
                                             <div className="space-y-5">
                                                 <div className="flex items-center justify-between">
                                                     <h4 className="text-sm font-medium text-gray-700">Parameters</h4>

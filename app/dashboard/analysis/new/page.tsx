@@ -74,9 +74,6 @@ export default function AnalysisSetupPage() {
 
     // Fetch analysis definition when selected
     useEffect(() => {
-
-        console.log('selectedAnalysisType', selectedAnalysisType);
-        console.log('selectedAnalysisType', selectedAnalysisType?.steps);
         if (selectedAnalysisType?.id) {
             fetchAnalysisDefinition(selectedAnalysisType.id);
         }
