@@ -367,9 +367,9 @@ export function AlgorithmConfiguration({
                                                 </div>
 
                                                 <div className="bg-gray-50 rounded-lg p-5 border border-gray-100">
-                                                    {selectedAlgorithm.parameters.length > 0 ? (
+                                                    {selectedAlgorithm.parameters?.length > 0 ? (
                                                         <div className="space-y-1">
-                                                            {selectedAlgorithm.parameters.map(param => (
+                                                            {selectedAlgorithm.parameters?.map(param => (
                                                                 <div key={param.name}>
                                                                     {renderParameterInput(step.id, param, stepConfig)}
                                                                 </div>
