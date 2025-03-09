@@ -279,7 +279,7 @@ export const AnalysisOverviewCard = ({
                                         __html: getAnalysisIcon(latestAnalysis.analysis_code)?.icon || ''
                                     }} />
                                 ) : (
-                                    <BarChart4 className="h-5 w-5 text-primary" />
+                                <BarChart4 className="h-5 w-5 text-primary" />
                                 )}
                             </Avatar>
                             <div>
@@ -297,10 +297,10 @@ export const AnalysisOverviewCard = ({
                                         <>
                                             <Badge variant="outline" className={getStatusColorClass(latestAnalysis.status)}>
                                                 {getStatusLabel(latestAnalysis.status)}
-                                            </Badge>
-                                            <span className="text-xs text-muted-foreground">
+                                    </Badge>
+                                    <span className="text-xs text-muted-foreground">
                                                 {formatDistanceToNow(new Date(latestAnalysis.created_at), { addSuffix: true })}
-                                            </span>
+                                    </span>
                                         </>
                                     )}
                                 </div>
@@ -362,7 +362,7 @@ export const AnalysisOverviewCard = ({
                                 <span className="flex items-center">
                                     <Calendar className="h-3 w-3 mr-1" />
                                     {format(new Date(latestAnalysis.created_at), 'MMM d, yyyy')}
-                                </span>
+                        </span>
                             )}
                         </div>
                     </div>
@@ -404,7 +404,7 @@ export const AnalysisOverviewCard = ({
                                 </ScrollArea>
                             </div>
                         ))}
-                    </div>
+                </div>
                 </CardContent>
 
                 <CardFooter className="flex justify-end pt-2">
@@ -487,44 +487,44 @@ export const AnalysisOverviewCard = ({
                                         {groupAnalyses.map((analysis) => (
                                             <div
                                                 key={analysis.id || `analysis-${Math.random()}`}
-                                                className="p-2 hover:bg-muted/50 rounded cursor-pointer border border-muted"
-                                                onClick={() => analysis.id && onViewAnalysis(analysis.id)}
-                                            >
-                                                <div className="flex items-center justify-between mb-1">
-                                                    <div className="flex items-center gap-1.5">
-                                                        {getStatusIcon(analysis.status)}
-                                                        <span className="font-medium text-xs">
+                                        className="p-2 hover:bg-muted/50 rounded cursor-pointer border border-muted"
+                                        onClick={() => analysis.id && onViewAnalysis(analysis.id)}
+                                    >
+                                        <div className="flex items-center justify-between mb-1">
+                                            <div className="flex items-center gap-1.5">
+                                                {getStatusIcon(analysis.status)}
+                                                <span className="font-medium text-xs">
                                                             {groupBy !== 'analysis_definition' && analysis.analysis_code
                                                                 ? getAnalysisName(analysis.analysis_code).name
                                                                 : `Run #${analysis.id?.slice(-4) || 'Unknown'}`}
-                                                        </span>
-                                                    </div>
+                                                </span>
+                                            </div>
                                                     <Badge variant="outline" className={`text-[10px] ${getStatusColorClass(analysis.status)}`}>
                                                         {getStatusLabel(analysis.status)}
-                                                    </Badge>
+                                            </Badge>
+                                        </div>
+                                        <div className="flex justify-between items-center text-[10px] text-muted-foreground">
+                                            <div>
+                                                Created: {format(new Date(analysis.created_at), 'MMM d, yyyy • h:mm a')}
+                                            </div>
+                                            {analysis.completed_at && (
+                                                <div>
+                                                    Completed: {format(new Date(analysis.completed_at), 'MMM d, yyyy • h:mm a')}
                                                 </div>
-                                                <div className="flex justify-between items-center text-[10px] text-muted-foreground">
-                                                    <div>
-                                                        Created: {format(new Date(analysis.created_at), 'MMM d, yyyy • h:mm a')}
-                                                    </div>
-                                                    {analysis.completed_at && (
-                                                        <div>
-                                                            Completed: {format(new Date(analysis.completed_at), 'MMM d, yyyy • h:mm a')}
-                                                        </div>
-                                                    )}
+                                            )}
+                                        </div>
+                                        {analysis.step_results && analysis.step_results.length > 0 && (
+                                            <div className="mt-1 pt-1 border-t border-dashed border-muted">
+                                                <div className="text-[10px] text-muted-foreground flex items-center">
+                                                    <span className="mr-1">Steps:</span>
+                                                    {analysis.step_results.map((step, idx) => (
+                                                        <Badge key={step.id || idx} variant="outline" className="mr-1 text-[8px] h-4 px-1">
+                                                            {step.step_code}
+                                                        </Badge>
+                                                    ))}
                                                 </div>
-                                                {analysis.step_results && analysis.step_results.length > 0 && (
-                                                    <div className="mt-1 pt-1 border-t border-dashed border-muted">
-                                                        <div className="text-[10px] text-muted-foreground flex items-center">
-                                                            <span className="mr-1">Steps:</span>
-                                                            {analysis.step_results.map((step, idx) => (
-                                                                <Badge key={step.id || idx} variant="outline" className="mr-1 text-[8px] h-4 px-1">
-                                                                    {step.step_code}
-                                                                </Badge>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                )}
+                                            </div>
+                                        )}
                                             </div>
                                         ))}
                                     </div>
@@ -562,4 +562,4 @@ export const AnalysisOverviewCard = ({
             </div>
         </Card>
     );
-}; 
+};

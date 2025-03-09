@@ -14,15 +14,14 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { DocumentSelection } from '@/components/analysis/setup/document-selection';
 import { AnalysisTypeSelection } from '@/components/analysis/setup/analysis-type-selection';
 import { ModeSelection } from '@/components/analysis/setup/mode-selection';
 import { useToast } from '@/hooks/use-toast';
 import { useAnalysisStore } from '@/store/useAnalysisStore';
 import { Document } from '@/types/document';
-import { AnalysisDefinition, AnalysisStep, AnalysisAlgorithmInfo, AnalysisParameter } from '@/types/analysis/configs';
-import { AnalysisRunConfig, AnalysisStepConfig, AnalysisAlgorithmConfig } from '@/types/analysis/base';
+import { AnalysisDefinition, AnalysisParameter } from '@/types/analysis/configs';
+import { AnalysisRunConfig, AnalysisStepConfig } from '@/types/analysis/base';
 import { AnalysisMode } from '@/enums/analysis';
 import { motion } from 'framer-motion';
 import {
@@ -40,17 +39,27 @@ import { Loader2 } from 'lucide-react';
 
 // Define the steps for the setup process
 const setupSteps = [
-    { id: 'document', title: 'Document Selection', icon: DocumentTextIcon },
-    { id: 'analysis-type', title: 'Analysis Type', icon: Cog6ToothIcon },
-    { id: 'algorithm', title: 'Algorithm Configuration', icon: LightBulbIcon },
-    { id: 'mode', title: 'Mode Selection', icon: PlayIcon },
-    { id: 'review', title: 'Review & Start', icon: CheckCircleIcon }
+    { id: 'document', title: 'Document Selection', icon: DocumentTextIcon, description: 'Select the document you want to analyze' },
+    { id: 'analysis-type', title: 'Analysis Type', icon: Cog6ToothIcon, description: 'Choose the type of analysis to perform' },
+    { id: 'algorithm', title: 'Algorithm Configuration', icon: LightBulbIcon, description: 'Configure the algorithms and parameters' },
+    { id: 'mode', title: 'Mode Selection', icon: PlayIcon, description: 'Choose between automatic or step-by-step processing' },
+    { id: 'review', title: 'Review & Start', icon: CheckCircleIcon, description: 'Review your configuration and start the analysis' }
 ];
+
+// Helper function to format file size
+const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+};
 
 export default function AnalysisSetupPage() {
     const router = useRouter();
     const { toast } = useToast();
-    const [currentStep, setCurrentStep] = useState(0);
+    const [activeStep, setActiveStep] = useState('document');
+    const [completedSteps, setCompletedSteps] = useState<Record<string, boolean>>({});
     const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
     const [selectedAnalysisType, setSelectedAnalysisType] = useState<AnalysisDefinition | null>(null);
     const [selectedMode, setSelectedMode] = useState<'automatic' | 'step_by_step' | null>(null);
@@ -119,21 +128,53 @@ export default function AnalysisSetupPage() {
         }
     }, [currentDefinition, fetchStepAlgorithms]);
 
-    const handleNext = async () => {
-        if (currentStep === setupSteps.length - 1) {
-            await handleStartAnalysis();
-            return;
-        }
-        setCurrentStep((prev) => prev + 1);
-    };
+    // Update completed steps when data changes
+    useEffect(() => {
+        const newCompletedSteps = { ...completedSteps };
 
-    const handleBack = () => {
-        if (currentStep === 0) {
-            router.push('/dashboard/analysis');
-            return;
+        // Document step
+        newCompletedSteps['document'] = !!selectedDocument;
+
+        // Analysis type step
+        newCompletedSteps['analysis-type'] = !!selectedAnalysisType;
+
+        // Algorithm step
+        if (currentDefinition?.steps) {
+            const allRequiredParamsSet = currentDefinition.steps.every(step => {
+                const stepConfig = analysisConfig.steps[step.id];
+                if (!stepConfig?.enabled) return true; // Skip disabled steps
+
+                // If no algorithm is selected, mark as incomplete
+                if (!stepConfig.algorithm) return false;
+
+                // Get the selected algorithm
+                const selectedAlgorithm = step.algorithms.find(
+                    algo => algo.code === stepConfig.algorithm?.code
+                );
+
+                if (!selectedAlgorithm) return false;
+
+                // Check required parameters
+                return selectedAlgorithm.parameters.every(param => {
+                    if (!param.required) return true;
+                    const paramValue = stepConfig.algorithm?.parameters?.[param.name]?.value;
+                    return paramValue !== undefined && paramValue !== null && paramValue !== '';
+                });
+            });
+
+            newCompletedSteps['algorithm'] = allRequiredParamsSet;
+        } else {
+            newCompletedSteps['algorithm'] = false;
         }
-        setCurrentStep((prev) => prev - 1);
-    };
+
+        // Mode step
+        newCompletedSteps['mode'] = !!selectedMode;
+
+        // Review step is always considered complete
+        newCompletedSteps['review'] = true;
+
+        setCompletedSteps(newCompletedSteps);
+    }, [selectedDocument, selectedAnalysisType, selectedMode, analysisConfig, currentDefinition]);
 
     const handleStartAnalysis = async () => {
         if (!selectedDocument || !selectedAnalysisType || !selectedMode) {
@@ -172,151 +213,86 @@ export default function AnalysisSetupPage() {
         }
     };
 
-    const isNextDisabled = () => {
-        switch (currentStep) {
-            case 0:
-                return !selectedDocument;
-            case 1:
-                return !selectedAnalysisType;
-            case 2:
-                // Check if all required parameters are filled
-                if (!currentDefinition?.steps) return true;
+    const canNavigateTo = (stepId: string) => {
+        // Find the index of the target step
+        const targetIndex = setupSteps.findIndex(step => step.id === stepId);
 
-                // For each enabled step, check if all required parameters are filled
-                for (const step of currentDefinition.steps) {
-                    const stepConfig = analysisConfig.steps[step.id];
-                    if (!stepConfig?.enabled) continue;
-
-                    // If no algorithm is selected, disable next
-                    if (!stepConfig.algorithm) return true;
-
-                    // Get the selected algorithm
-                    const selectedAlgorithm = step.algorithms.find(
-                        algo => algo.code === stepConfig.algorithm?.code
-                    );
-
-                    if (!selectedAlgorithm) return true;
-
-                    // Check required parameters
-                    for (const param of selectedAlgorithm.parameters) {
-                        if (param.required) {
-                            const paramValue = stepConfig.algorithm?.parameters?.[param.name]?.value;
-                            if (paramValue === undefined || paramValue === null || paramValue === '') {
-                                return true;
-                            }
-                        }
-                    }
-                }
+        // Check if all previous steps are completed
+        for (let i = 0; i < targetIndex; i++) {
+            if (!completedSteps[setupSteps[i].id]) {
                 return false;
-            case 3:
-                return !selectedMode;
-            default:
-                return false;
+            }
+        }
+
+        return true;
+    };
+
+    const handleStepChange = (stepId: string) => {
+        if (canNavigateTo(stepId)) {
+            setActiveStep(stepId);
+        } else {
+            toast({
+                title: "Complete previous steps",
+                description: "Please complete all previous steps before proceeding.",
+                variant: "destructive"
+            });
         }
     };
 
-    const handleAlgorithmChange = (stepId: string, algorithmCode: string, algorithmVersion: string) => {
-        // Find the algorithm to get default parameters
-        const step = currentDefinition?.steps.find(s => s.id === stepId);
-        const algorithm = step?.algorithms.find(a => a.code === algorithmCode);
-
-        if (!algorithm) return;
-
-        // Create default parameters
-        const defaultParameters: Record<string, any> = {};
-        algorithm.parameters.forEach(param => {
-            defaultParameters[param.name] = {
-                name: param.name,
-                value: param.default
-            };
-        });
-
-        // Update config
-        setAnalysisConfig(prev => ({
-            ...prev,
-            steps: {
-                ...prev.steps,
-                [stepId]: {
-                    ...prev.steps[stepId],
-                    algorithm: {
-                        code: algorithmCode,
-                        version: algorithmVersion,
-                        parameters: defaultParameters
-                    }
-                }
+    const handleNext = () => {
+        const currentIndex = setupSteps.findIndex(step => step.id === activeStep);
+        if (currentIndex < setupSteps.length - 1) {
+            const nextStep = setupSteps[currentIndex + 1];
+            if (canNavigateTo(nextStep.id)) {
+                setActiveStep(nextStep.id);
             }
-        }));
+        }
     };
 
-    const handleParameterChange = (stepId: string, paramName: string, value: any) => {
-        setAnalysisConfig(prev => ({
-            ...prev,
-            steps: {
-                ...prev.steps,
-                [stepId]: {
-                    ...prev.steps[stepId],
-                    algorithm: {
-                        ...prev.steps[stepId].algorithm!,
-                        parameters: {
-                            ...prev.steps[stepId].algorithm!.parameters,
-                            [paramName]: {
-                                name: paramName,
-                                value
-                            }
-                        }
-                    }
-                }
-            }
-        }));
+    const handleBack = () => {
+        const currentIndex = setupSteps.findIndex(step => step.id === activeStep);
+        if (currentIndex > 0) {
+            setActiveStep(setupSteps[currentIndex - 1].id);
+        } else {
+            router.push('/dashboard/analysis');
+        }
     };
 
-    const handleStepToggle = (stepId: string, enabled: boolean) => {
-        setAnalysisConfig(prev => ({
-            ...prev,
-            steps: {
-                ...prev.steps,
-                [stepId]: {
-                    ...prev.steps[stepId],
-                    enabled
-                }
-            }
-        }));
+    const isStartDisabled = () => {
+        return !selectedDocument || !selectedAnalysisType || !selectedMode;
     };
 
-    const handleUseDefaultParameters = (stepId: string) => {
-        const step = currentDefinition?.steps.find(s => s.id === stepId);
-        const algorithmCode = analysisConfig.steps[stepId]?.algorithm?.code;
-        const algorithm = step?.algorithms.find(a => a.code === algorithmCode);
-
-        if (!algorithm) return;
-
-        // Create default parameters
-        const defaultParameters: Record<string, any> = {};
-        algorithm.parameters.forEach(param => {
-            defaultParameters[param.name] = {
-                name: param.name,
-                value: param.default
-            };
-        });
-
-        // Update config
-        setAnalysisConfig(prev => ({
-            ...prev,
-            steps: {
-                ...prev.steps,
-                [stepId]: {
-                    ...prev.steps[stepId],
-                    algorithm: {
-                        ...prev.steps[stepId].algorithm!,
-                        parameters: defaultParameters
-                    }
-                }
-            }
-        }));
-
-        toast({
-            description: "Default parameters applied",
-        });
+    const renderStepContent = () => {
+        switch (activeStep) {
+            case 'document':
+                return (
+                    <DocumentSelection
+                        selectedDocument={selectedDocument}
+                        onSelect={setSelectedDocument}
+                    />
+                );
+            case 'analysis-type':
+                return (
+                    <AnalysisTypeSelection
+                        selectedDocument={selectedDocument}
+                        selectedAnalysisType={selectedAnalysisType}
+                        onSelect={(analysisType) => setSelectedAnalysisType(analysisType as AnalysisDefinition)}
+                    />
+                );
+            case 'algorithm':
+                return renderAlgorithmConfiguration();
+            case 'mode':
+                return (
+                    <ModeSelection
+                        selectedMode={selectedMode}
+                        onSelect={setSelectedMode}
+                    />
+                );
+            case 'review':
+                return renderReviewStep();
+            default:
+                return null;
+        }
     };
 
     const renderAlgorithmConfiguration = () => {
@@ -561,213 +537,130 @@ export default function AnalysisSetupPage() {
     };
 
     const renderReviewStep = () => {
-        if (!selectedDocument || !selectedAnalysisType || !currentDefinition) {
-            return (
-                <div className="text-center py-8">
-                    <p className="text-muted-foreground">Missing information. Please go back and complete all steps.</p>
-                </div>
-            );
-        }
-
         return (
             <div className="space-y-6">
-                <div className="space-y-2">
-                    <h2 className="text-xl font-semibold">Review Analysis Configuration</h2>
-                    <p className="text-sm text-muted-foreground">
-                        Verify your analysis setup before starting the process.
-                    </p>
-                </div>
+                <div className="bg-muted/30 rounded-lg p-6">
+                    <h3 className="text-lg font-medium mb-4">Review Configuration</h3>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <Card className="overflow-hidden shadow-sm">
-                        <div className="bg-blue-500 h-1.5 w-full"></div>
-                        <CardHeader className="pb-2">
-                            <div className="flex items-center">
-                                <DocumentTextIcon className="h-5 w-5 text-blue-500 mr-2" />
-                                <h3 className="text-sm font-medium">Document</h3>
-                            </div>
-                        </CardHeader>
-                        <CardContent>
-                            <p className="text-sm font-medium">{selectedDocument.name}</p>
-                            <p className="text-xs text-muted-foreground">Type: {selectedDocument.type}</p>
-                        </CardContent>
-                    </Card>
-
-                    <Card className="overflow-hidden shadow-sm">
-                        <div className="bg-purple-500 h-1.5 w-full"></div>
-                        <CardHeader className="pb-2">
-                            <div className="flex items-center">
-                                <Cog6ToothIcon className="h-5 w-5 text-purple-500 mr-2" />
-                                <h3 className="text-sm font-medium">Analysis Type</h3>
-                            </div>
-                        </CardHeader>
-                        <CardContent>
-                            <p className="text-sm font-medium">
-                                {selectedAnalysisType.name.split('_').map(word =>
-                                    word.charAt(0).toUpperCase() + word.slice(1)
-                                ).join(' ')}
-                            </p>
-                            {selectedAnalysisType.description && (
-                                <p className="text-xs text-muted-foreground mt-1">
-                                    {selectedAnalysisType.description}
-                                </p>
+                    {/* Document */}
+                    <div className="mb-6">
+                        <h4 className="text-sm font-medium text-muted-foreground mb-2">Document</h4>
+                        <div className="bg-white rounded-md border p-4">
+                            {selectedDocument ? (
+                                <div className="flex items-start">
+                                    <DocumentTextIcon className="h-5 w-5 text-primary mr-3 mt-0.5" />
+                                    <div>
+                                        <p className="font-medium">{selectedDocument.name}</p>
+                                        <p className="text-sm text-muted-foreground">
+                                            {selectedDocument.metadata?.num_pages || 'Unknown'} pages • {selectedDocument.type} • {formatFileSize(selectedDocument.size)}
+                                        </p>
+                                    </div>
+                                </div>
+                            ) : (
+                                <p className="text-muted-foreground">No document selected</p>
                             )}
-                        </CardContent>
-                    </Card>
-
-                    <Card className="overflow-hidden shadow-sm">
-                        <div className="bg-amber-500 h-1.5 w-full"></div>
-                        <CardHeader className="pb-2">
-                            <div className="flex items-center">
-                                <PlayIcon className="h-5 w-5 text-amber-500 mr-2" />
-                                <h3 className="text-sm font-medium">Execution Mode</h3>
-                            </div>
-                        </CardHeader>
-                        <CardContent>
-                            <p className="text-sm font-medium">
-                                {selectedMode === 'automatic' ? 'Automatic Mode' : 'Step-by-Step Mode'}
-                            </p>
-                            <p className="text-xs text-muted-foreground mt-1">
-                                {selectedMode === 'automatic'
-                                    ? 'The analysis will run automatically without user intervention.'
-                                    : 'You will be guided through each step of the analysis process.'}
-                            </p>
-                        </CardContent>
-                    </Card>
-
-                    <Card className="overflow-hidden shadow-sm">
-                        <div className="bg-green-500 h-1.5 w-full"></div>
-                        <CardHeader className="pb-2">
-                            <div className="flex items-center">
-                                <CheckCircleIcon className="h-5 w-5 text-green-500 mr-2" />
-                                <h3 className="text-sm font-medium">Notifications</h3>
-                            </div>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                                <div className="flex items-center">
-                                    <Switch
-                                        checked={analysisConfig.notifications.notify_on_completion}
-                                        onCheckedChange={(checked) => setAnalysisConfig(prev => ({
-                                            ...prev,
-                                            notifications: {
-                                                ...prev.notifications,
-                                                notify_on_completion: checked
-                                            }
-                                        }))}
-                                        className="mr-2"
-                                    />
-                                    <Label className="text-sm">Notify on completion</Label>
-                                </div>
-                                <div className="flex items-center">
-                                    <Switch
-                                        checked={analysisConfig.notifications.notify_on_failure}
-                                        onCheckedChange={(checked) => setAnalysisConfig(prev => ({
-                                            ...prev,
-                                            notifications: {
-                                                ...prev.notifications,
-                                                notify_on_failure: checked
-                                            }
-                                        }))}
-                                        className="mr-2"
-                                    />
-                                    <Label className="text-sm">Notify on failure</Label>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
-
-                <Card className="shadow-sm">
-                    <div className="bg-slate-500 h-1.5 w-full"></div>
-                    <CardHeader className="pb-2">
-                        <div className="flex items-center">
-                            <Cog6ToothIcon className="h-5 w-5 text-slate-500 mr-2" />
-                            <h3 className="text-sm font-medium">Algorithm Configuration</h3>
                         </div>
-                    </CardHeader>
-                    <CardContent>
-                        <ScrollArea className="h-[250px] pr-4">
-                            <div className="space-y-4">
-                                {currentDefinition.steps.map((step, index) => {
-                                    const stepConfig = analysisConfig.steps[step.id];
-                                    if (!stepConfig) return null;
+                    </div>
 
-                                    const selectedAlgorithm = step.algorithms.find(
-                                        algo => algo.code === stepConfig.algorithm?.code
-                                    );
+                    {/* Analysis Type */}
+                    <div className="mb-6">
+                        <h4 className="text-sm font-medium text-muted-foreground mb-2">Analysis Type</h4>
+                        <div className="bg-white rounded-md border p-4">
+                            {selectedAnalysisType ? (
+                                <div className="flex items-start">
+                                    <Cog6ToothIcon className="h-5 w-5 text-primary mr-3 mt-0.5" />
+                                    <div>
+                                        <p className="font-medium">{selectedAnalysisType.name}</p>
+                                        <p className="text-sm text-muted-foreground">
+                                            {selectedAnalysisType.description}
+                                        </p>
+                                    </div>
+                                </div>
+                            ) : (
+                                <p className="text-muted-foreground">No analysis type selected</p>
+                            )}
+                        </div>
+                    </div>
 
-                                    return (
-                                        <div key={step.id} className={`p-3 rounded-md border ${stepConfig.enabled ? 'bg-white' : 'bg-muted/20'}`}>
+                    {/* Algorithm Configuration */}
+                    <div className="mb-6">
+                        <h4 className="text-sm font-medium text-muted-foreground mb-2">Algorithm Configuration</h4>
+                        <div className="bg-white rounded-md border p-4 space-y-4">
+                            {currentDefinition?.steps.map(step => {
+                                const stepConfig = analysisConfig.steps[step.id];
+                                if (!stepConfig) return null;
+
+                                const algorithm = step.algorithms.find(
+                                    algo => algo.code === stepConfig.algorithm?.code
+                                );
+
+                                return (
+                                    <div key={step.id} className="border-b last:border-b-0 pb-4 last:pb-0">
+                                        <div className="flex items-center justify-between mb-2">
                                             <div className="flex items-center">
-                                                <Badge className="mr-2 bg-primary/10 text-primary hover:bg-primary/20 border-none">
-                                                    Step {index + 1}
+                                                <Badge variant={stepConfig.enabled ? "default" : "outline"} className="mr-2">
+                                                    {stepConfig.enabled ? "Enabled" : "Disabled"}
                                                 </Badge>
-                                                <span className="text-sm font-medium">
-                                                    {step.name.split('_').map(word =>
-                                                        word.charAt(0).toUpperCase() + word.slice(1)
-                                                    ).join(' ')}
-                                                </span>
-                                                {!stepConfig.enabled && (
-                                                    <Badge variant="outline" className="ml-2 text-muted-foreground">
-                                                        Disabled
-                                                    </Badge>
+                                                <h5 className="font-medium">{step.name}</h5>
+                                            </div>
+                                        </div>
+
+                                        {stepConfig.enabled && (
+                                            <div className="pl-4 border-l-2 border-muted space-y-2">
+                                                <p className="text-sm">
+                                                    <span className="text-muted-foreground">Algorithm:</span>{" "}
+                                                    {algorithm?.name || "None selected"}
+                                                </p>
+
+                                                {algorithm && Object.keys(stepConfig.algorithm?.parameters || {}).length > 0 && (
+                                                    <div className="space-y-1">
+                                                        <p className="text-sm text-muted-foreground">Parameters:</p>
+                                                        <ul className="text-sm pl-4 space-y-1">
+                                                            {Object.entries(stepConfig.algorithm?.parameters || {}).map(([key, param]: [string, any]) => (
+                                                                <li key={key}>
+                                                                    <span className="font-medium">{key}:</span>{" "}
+                                                                    {param.value !== undefined ? String(param.value) : "Not set"}
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                    </div>
                                                 )}
                                             </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
 
-                                            {stepConfig.enabled && selectedAlgorithm && (
-                                                <div className="pl-6 mt-2 space-y-2">
-                                                    <p className="text-xs flex items-center">
-                                                        <span className="text-muted-foreground mr-1">Algorithm:</span>{' '}
-                                                        <span className="font-medium">
-                                                            {selectedAlgorithm.name.split('_').map(word =>
-                                                                word.charAt(0).toUpperCase() + word.slice(1)
-                                                            ).join(' ')}
-                                                        </span>
-                                                    </p>
+                    {/* Mode */}
+                    <div className="mb-6">
+                        <h4 className="text-sm font-medium text-muted-foreground mb-2">Processing Mode</h4>
+                        <div className="bg-white rounded-md border p-4">
+                            {selectedMode ? (
+                                <div className="flex items-start">
+                                    <PlayIcon className="h-5 w-5 text-primary mr-3 mt-0.5" />
+                                    <div>
+                                        <p className="font-medium">
+                                            {selectedMode === 'automatic' ? 'Automatic Processing' : 'Step-by-Step Processing'}
+                                        </p>
+                                        <p className="text-sm text-muted-foreground">
+                                            {selectedMode === 'automatic'
+                                                ? 'The analysis will run automatically without intervention.'
+                                                : 'You will control each step of the analysis process.'}
+                                        </p>
+                                    </div>
+                                </div>
+                            ) : (
+                                <p className="text-muted-foreground">No mode selected</p>
+                            )}
+                        </div>
+                    </div>
 
-                                                    {selectedAlgorithm.parameters.length > 0 && (
-                                                        <div className="space-y-1">
-                                                            <p className="text-xs text-muted-foreground">Parameters:</p>
-                                                            <div className="pl-3 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
-                                                                {selectedAlgorithm.parameters.map(param => {
-                                                                    const paramValue = stepConfig.algorithm?.parameters?.[param.name]?.value;
-                                                                    return (
-                                                                        <p key={param.name} className="text-xs flex items-center">
-                                                                            <span className="text-muted-foreground mr-1">
-                                                                                {param.name.split('_').map(word =>
-                                                                                    word.charAt(0).toUpperCase() + word.slice(1)
-                                                                                ).join(' ')}:
-                                                                            </span>{' '}
-                                                                            <span className={`${param.required && (paramValue === undefined || paramValue === null || paramValue === '') ? 'text-destructive' : ''}`}>
-                                                                                {paramValue !== undefined && paramValue !== null
-                                                                                    ? String(paramValue)
-                                                                                    : 'Not set'}
-                                                                            </span>
-                                                                            {param.required && (paramValue === undefined || paramValue === null || paramValue === '') && (
-                                                                                <span className="text-destructive ml-1 text-xs">*</span>
-                                                                            )}
-                                                                        </p>
-                                                                    );
-                                                                })}
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </ScrollArea>
-                    </CardContent>
-                </Card>
-
-                <div className="bg-blue-50 border border-blue-100 rounded-md p-4 text-sm text-blue-700 flex items-start space-x-3">
-                    <InformationCircleIcon className="h-5 w-5 text-blue-500 flex-shrink-0 mt-0.5" />
-                    <div>
-                        <p className="font-medium mb-1">Ready to start your analysis</p>
-                        <p className="text-blue-600 text-xs">
+                    {/* Start Info */}
+                    <div className="bg-blue-50 border border-blue-100 rounded-md p-4 flex">
+                        <InformationCircleIcon className="h-5 w-5 text-blue-500 mr-3 mt-0.5 flex-shrink-0" />
+                        <p className="text-sm text-blue-700">
                             Once you start the analysis, you'll be redirected to the analysis dashboard where you can monitor progress
                             {selectedMode === 'step_by_step' ? ' and control each step of the process.' : '.'}
                         </p>
@@ -777,37 +670,108 @@ export default function AnalysisSetupPage() {
         );
     };
 
-    const renderStep = () => {
-        switch (currentStep) {
-            case 0:
-                return (
-                    <DocumentSelection
-                        selectedDocument={selectedDocument}
-                        onSelect={setSelectedDocument}
-                    />
-                );
-            case 1:
-                return (
-                    <AnalysisTypeSelection
-                        selectedDocument={selectedDocument}
-                        selectedAnalysisType={selectedAnalysisType}
-                        onSelect={(analysisType) => setSelectedAnalysisType(analysisType as AnalysisDefinition)}
-                    />
-                );
-            case 2:
-                return renderAlgorithmConfiguration();
-            case 3:
-                return (
-                    <ModeSelection
-                        selectedMode={selectedMode}
-                        onSelect={setSelectedMode}
-                    />
-                );
-            case 4:
-                return renderReviewStep();
-            default:
-                return null;
-        }
+    const handleAlgorithmChange = (stepId: string, algorithmCode: string, algorithmVersion: string) => {
+        // Find the algorithm to get default parameters
+        const step = currentDefinition?.steps.find(s => s.id === stepId);
+        const algorithm = step?.algorithms.find(a => a.code === algorithmCode);
+
+        if (!algorithm) return;
+
+        // Create default parameters
+        const defaultParameters: Record<string, any> = {};
+        algorithm.parameters.forEach(param => {
+            defaultParameters[param.name] = {
+                name: param.name,
+                value: param.default
+            };
+        });
+
+        // Update config
+        setAnalysisConfig(prev => ({
+            ...prev,
+            steps: {
+                ...prev.steps,
+                [stepId]: {
+                    ...prev.steps[stepId],
+                    algorithm: {
+                        code: algorithmCode,
+                        version: algorithmVersion,
+                        parameters: defaultParameters
+                    }
+                }
+            }
+        }));
+    };
+
+    const handleParameterChange = (stepId: string, paramName: string, value: any) => {
+        setAnalysisConfig(prev => ({
+            ...prev,
+            steps: {
+                ...prev.steps,
+                [stepId]: {
+                    ...prev.steps[stepId],
+                    algorithm: {
+                        ...prev.steps[stepId].algorithm!,
+                        parameters: {
+                            ...prev.steps[stepId].algorithm!.parameters,
+                            [paramName]: {
+                                name: paramName,
+                                value
+                            }
+                        }
+                    }
+                }
+            }
+        }));
+    };
+
+    const handleStepToggle = (stepId: string, enabled: boolean) => {
+        setAnalysisConfig(prev => ({
+            ...prev,
+            steps: {
+                ...prev.steps,
+                [stepId]: {
+                    ...prev.steps[stepId],
+                    enabled
+                }
+            }
+        }));
+    };
+
+    const handleUseDefaultParameters = (stepId: string) => {
+        const step = currentDefinition?.steps.find(s => s.id === stepId);
+        const algorithmCode = analysisConfig.steps[stepId]?.algorithm?.code;
+        const algorithm = step?.algorithms.find(a => a.code === algorithmCode);
+
+        if (!algorithm) return;
+
+        // Create default parameters
+        const defaultParameters: Record<string, any> = {};
+        algorithm.parameters.forEach(param => {
+            defaultParameters[param.name] = {
+                name: param.name,
+                value: param.default
+            };
+        });
+
+        // Update config
+        setAnalysisConfig(prev => ({
+            ...prev,
+            steps: {
+                ...prev.steps,
+                [stepId]: {
+                    ...prev.steps[stepId],
+                    algorithm: {
+                        ...prev.steps[stepId].algorithm!,
+                        parameters: defaultParameters
+                    }
+                }
+            }
+        }));
+
+        toast({
+            description: "Default parameters applied",
+        });
     };
 
     return (
@@ -815,77 +779,186 @@ export default function AnalysisSetupPage() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3 }}
-            className="container mx-auto px-4 py-8"
+            className="container mx-auto px-4 py-8 max-w-7xl"
         >
-            <Card className="max-w-5xl mx-auto shadow-sm overflow-hidden">
-                <div className="bg-gradient-to-r from-primary to-primary/80 p-6 text-white">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <h1 className="text-2xl font-bold">New Analysis</h1>
-                            <p className="text-sm opacity-90 mt-1">Configure and run a new document analysis</p>
+            <div className="mb-8">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h1 className="text-3xl font-bold text-gray-900">New Analysis</h1>
+                        <p className="text-gray-500 mt-1">Configure and run a document analysis</p>
+                    </div>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => router.push('/dashboard/analysis')}
+                        className="flex items-center"
+                    >
+                        <XMarkIcon className="h-4 w-4 mr-1" />
+                        Cancel
+                    </Button>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                {/* Progress Tracker */}
+                <div className="lg:col-span-3">
+                    <div className="bg-white rounded-xl shadow-sm border p-6 sticky top-8">
+                        <h2 className="text-lg font-semibold mb-4">Analysis Setup</h2>
+                        <nav className="space-y-2">
+                            {setupSteps.map((step, index) => {
+                                const isActive = activeStep === step.id;
+                                const isCompleted = completedSteps[step.id];
+                                const canNavigate = canNavigateTo(step.id);
+
+                                return (
+                                    <button
+                                        key={step.id}
+                                        onClick={() => handleStepChange(step.id)}
+                                        disabled={!canNavigate && !isActive}
+                                        className={`w-full flex items-start p-3 rounded-lg text-left transition-all ${isActive
+                                                ? 'bg-primary/10 border-l-4 border-primary'
+                                                : isCompleted
+                                                    ? 'hover:bg-gray-50 border-l-4 border-green-500'
+                                                    : canNavigate
+                                                        ? 'hover:bg-gray-50 border-l-4 border-transparent'
+                                                        : 'opacity-50 cursor-not-allowed border-l-4 border-transparent'
+                                            }`}
+                                    >
+                                        <div className={`flex items-center justify-center h-8 w-8 rounded-full mr-3 flex-shrink-0 ${isActive
+                                                ? 'bg-primary text-white'
+                                                : isCompleted
+                                                    ? 'bg-green-500 text-white'
+                                                    : 'bg-gray-200 text-gray-500'
+                                            }`}>
+                                            {isCompleted && !isActive ? (
+                                                <CheckCircleIcon className="h-5 w-5" />
+                                            ) : (
+                                                <span>{index + 1}</span>
+                                            )}
+                                        </div>
+                                        <div>
+                                            <span className={`font-medium block ${isActive ? 'text-primary' : isCompleted ? 'text-green-700' : 'text-gray-700'
+                                                }`}>
+                                                {step.title}
+                                            </span>
+                                            <span className="text-xs text-gray-500 mt-0.5 block">
+                                                {step.description}
+                                            </span>
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </nav>
+
+                        {activeStep === 'review' && (
+                            <div className="mt-8">
+                                <Button
+                                    onClick={handleStartAnalysis}
+                                    disabled={isStartDisabled() || isSubmitting}
+                                    className="w-full bg-green-600 hover:bg-green-700 text-white"
+                                >
+                                    {isSubmitting ? (
+                                        <>
+                                            <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                                            Processing...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <PlayIcon className="h-4 w-4 mr-1.5" />
+                                            Start Analysis
+                                        </>
+                                    )}
+                                </Button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Main Content */}
+                <div className="lg:col-span-9">
+                    <Card className="shadow-sm border overflow-hidden">
+                        <CardHeader className="bg-gray-50 border-b px-6 py-4">
+                            <div className="flex items-center">
+                                <div className={`h-10 w-10 rounded-full flex items-center justify-center mr-3 ${activeStep === 'review' ? 'bg-green-100 text-green-600' : 'bg-primary/10 text-primary'
+                                    }`}>
+                                    {(() => {
+                                        const step = setupSteps.find(s => s.id === activeStep);
+                                        if (step) {
+                                            const Icon = step.icon;
+                                            return <Icon className="h-5 w-5" />;
+                                        }
+                                        return null;
+                                    })()}
+                                </div>
+                                <div>
+                                    <h2 className="text-xl font-semibold text-gray-900">
+                                        {setupSteps.find(s => s.id === activeStep)?.title}
+                                    </h2>
+                                    <p className="text-sm text-gray-500">
+                                        {setupSteps.find(s => s.id === activeStep)?.description}
+                                    </p>
+                                </div>
+                            </div>
+                        </CardHeader>
+
+                        <CardContent className="p-6">
+                            <div className="min-h-[500px]">
+                                <motion.div
+                                    key={activeStep}
+                                    initial={{ opacity: 0, x: 20 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    exit={{ opacity: 0, x: -20 }}
+                                    transition={{ duration: 0.3 }}
+                                >
+                                    {renderStepContent()}
+                                </motion.div>
+                            </div>
+                        </CardContent>
+
+                        <div className="px-6 py-4 bg-gray-50 border-t">
+                            <div className="flex justify-between items-center">
+                                <Button
+                                    variant="outline"
+                                    onClick={handleBack}
+                                    className="flex items-center"
+                                >
+                                    <ArrowLeftIcon className="h-4 w-4 mr-1.5" />
+                                    {activeStep === 'document' ? 'Cancel' : 'Back'}
+                                </Button>
+
+                                {activeStep !== 'review' ? (
+                                    <Button
+                                        onClick={handleNext}
+                                        disabled={!completedSteps[activeStep]}
+                                        className="flex items-center"
+                                    >
+                                        Next
+                                        <ArrowRightIcon className="h-4 w-4 ml-1.5" />
+                                    </Button>
+                                ) : (
+                                    <Button
+                                        onClick={handleStartAnalysis}
+                                        disabled={isStartDisabled() || isSubmitting}
+                                        className="flex items-center bg-green-600 hover:bg-green-700 text-white"
+                                    >
+                                        {isSubmitting ? (
+                                            <>
+                                                <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                                                Processing...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <PlayIcon className="h-4 w-4 mr-1.5" />
+                                                Start Analysis
+                                            </>
+                                        )}
+                                    </Button>
+                                )}
+                            </div>
                         </div>
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => router.push('/dashboard/analysis')}
-                            className="text-white hover:bg-white/20"
-                        >
-                            <XMarkIcon className="h-4 w-4 mr-1" />
-                            Cancel
-                        </Button>
-                    </div>
+                    </Card>
                 </div>
-
-                <div className="p-6 md:p-8">
-                    <div className="mb-8">
-                        <Steps
-                            steps={setupSteps}
-                            currentStep={currentStep}
-                        />
-                    </div>
-
-                    <div className="min-h-[400px] mb-8">
-                        {renderStep()}
-                    </div>
-
-                    <Separator className="mb-6" />
-
-                    <div className="flex justify-between">
-                        <Button
-                            variant="outline"
-                            onClick={handleBack}
-                            className="flex items-center"
-                            disabled={isSubmitting}
-                        >
-                            <ArrowLeftIcon className="h-4 w-4 mr-1.5" />
-                            {currentStep === 0 ? 'Cancel' : 'Back'}
-                        </Button>
-
-                        <Button
-                            onClick={handleNext}
-                            disabled={isNextDisabled() || isSubmitting}
-                            className={`flex items-center ${currentStep === setupSteps.length - 1 ? 'bg-green-600 hover:bg-green-700' : ''}`}
-                        >
-                            {isSubmitting ? (
-                                <>
-                                    <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-                                    Processing...
-                                </>
-                            ) : currentStep === setupSteps.length - 1 ? (
-                                <>
-                                    <PlayIcon className="h-4 w-4 mr-1.5" />
-                                    Start Analysis
-                                </>
-                            ) : (
-                                <>
-                                    Next
-                                    <ArrowRightIcon className="h-4 w-4 ml-1.5" />
-                                </>
-                            )}
-                        </Button>
-                    </div>
-                </div>
-            </Card>
+            </div>
         </motion.div>
     );
 } 
