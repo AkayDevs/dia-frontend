@@ -93,9 +93,6 @@ export function AnalysisStepSidebar({
                                     }`}>
                                     {step.title}
                                 </span>
-                                <span className="text-xs text-gray-500 mt-1 block leading-relaxed">
-                                    {step.description}
-                                </span>
                             </div>
                         </button>
                     );

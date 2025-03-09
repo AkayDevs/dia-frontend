@@ -309,7 +309,7 @@ export default function AnalysisSetupPage() {
                         variant="outline"
                         size="sm"
                         onClick={() => router.push('/dashboard/analysis')}
-                        className="flex items-center hover:bg-gray-50 transition-colors border-gray-200"
+                        className="flex items-center hover:bg-red-500 transition-colors"
                     >
                         <XMarkIcon className="h-4 w-4 mr-1.5" />
                         Cancel
@@ -317,9 +317,9 @@ export default function AnalysisSetupPage() {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 {/* Progress Tracker Sidebar */}
-                <div className="lg:col-span-3">
+                <div className="lg:col-span-1">
                     <AnalysisStepSidebar
                         steps={setupSteps}
                         activeStep={activeStep}
@@ -333,7 +333,7 @@ export default function AnalysisSetupPage() {
                 </div>
 
                 {/* Main Content */}
-                <div className="lg:col-span-9">
+                <div className="lg:col-span-2">
                     <AnalysisStepContent
                         steps={setupSteps}
                         activeStep={activeStep}
