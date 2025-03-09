@@ -10,25 +10,13 @@ import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { DocumentType } from '@/enums/document';
-import {
-    TableCellsIcon,
-    DocumentTextIcon,
-    DocumentDuplicateIcon,
-    ChartBarIcon
-} from '@heroicons/react/24/outline';
+import { getAnalysisIcon } from '@/constants/analysis/registry';
 
 interface AnalysisTypeSelectionProps {
     selectedDocument: Document | null;
     selectedAnalysisType: AnalysisDefinition | null;
     onSelect: (analysisType: AnalysisDefinition) => void;
 }
-
-const analysisTypeIcons: Record<string, any> = {
-    'table_analysis': TableCellsIcon,
-    'text_extraction': DocumentTextIcon,
-    'template_conversion': DocumentDuplicateIcon,
-    'data_analysis': ChartBarIcon,
-};
 
 export function AnalysisTypeSelection({
     selectedDocument,
@@ -98,7 +86,6 @@ export function AnalysisTypeSelection({
                 >
                     <div className="space-y-3">
                         {analysisDefinitions.map((analysisType: AnalysisDefinitionInfo) => {
-                            const Icon = analysisTypeIcons[analysisType.code] || DocumentTextIcon;
                             const isCompatible = isAnalysisTypeCompatible(analysisType);
 
                             return (
@@ -116,7 +103,9 @@ export function AnalysisTypeSelection({
                                     />
                                     <div className="flex-1 space-y-1">
                                         <div className="flex items-center">
-                                            <Icon className="w-5 h-5 mr-2 text-muted-foreground" />
+                                            <div dangerouslySetInnerHTML={{
+                                                __html: getAnalysisIcon(analysisType.code)?.icon || ''
+                                            }} className="w-5 h-5 mr-2 text-muted-foreground" />
                                             <span className="font-medium">
                                                 {analysisType.name.split('_').map((word: string) =>
                                                     word.charAt(0).toUpperCase() + word.slice(1)

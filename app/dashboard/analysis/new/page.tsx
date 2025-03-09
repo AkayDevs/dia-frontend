@@ -109,26 +109,14 @@ export default function AnalysisSetupPage() {
     // Update completed steps when data changes
     useEffect(() => {
 
-        // Create a new object to avoid direct state mutation
         const newCompletedSteps = {
-
-            // Keep review always true
-            review: true,
-
-            // Document step
+            review: false,
             document: !!selectedDocument,
-
-            // Analysis type step
             'analysis-type': !!selectedAnalysisType,
-
-            // Mode step
             mode: !!selectedMode,
-
-            // Algorithm step - default to false, will be updated below if needed
             algorithm: false
         };
 
-        // Algorithm step - more complex validation
         if (currentDefinition?.steps && currentDefinition.steps.length > 0) {
             const allRequiredParamsSet = currentDefinition.steps.every(step => {
                 const stepConfig = analysisConfig.steps[step.id];
