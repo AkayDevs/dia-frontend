@@ -49,11 +49,10 @@ export default function AnalysisSetupPage() {
         'analysis-type': false,
         algorithm: false,
         mode: false,
-        review: true // Review is always considered complete
+        review: false
     });
     const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
     const [selectedAnalysisType, setSelectedAnalysisType] = useState<AnalysisDefinition | null>(null);
-    const [selectedMode, setSelectedMode] = useState<'automatic' | 'step_by_step' | null>(null);
     const [analysisConfig, setAnalysisConfig] = useState<AnalysisRunConfig>({
         steps: {} as Record<string, AnalysisStepConfig>,
         notifications: {
@@ -62,6 +61,7 @@ export default function AnalysisSetupPage() {
         },
         metadata: {}
     });
+    const [selectedMode, setSelectedMode] = useState<'automatic' | 'step_by_step' | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const {
@@ -74,6 +74,9 @@ export default function AnalysisSetupPage() {
 
     // Fetch analysis definition when selected
     useEffect(() => {
+
+        console.log('selectedAnalysisType', selectedAnalysisType);
+        console.log('selectedAnalysisType', selectedAnalysisType?.steps);
         if (selectedAnalysisType?.id) {
             fetchAnalysisDefinition(selectedAnalysisType.id);
         }
@@ -105,8 +108,10 @@ export default function AnalysisSetupPage() {
 
     // Update completed steps when data changes
     useEffect(() => {
+
         // Create a new object to avoid direct state mutation
         const newCompletedSteps = {
+
             // Keep review always true
             review: true,
 

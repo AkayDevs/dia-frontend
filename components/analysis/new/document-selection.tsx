@@ -13,42 +13,37 @@ import { useToast } from '@/hooks/use-toast';
 import { formatDistanceToNow } from 'date-fns';
 import { motion } from 'framer-motion';
 import {
-    DocumentIcon,
     MagnifyingGlassIcon,
-    DocumentTextIcon,
-    PhotoIcon,
-    TableCellsIcon,
     CheckCircleIcon
 } from '@heroicons/react/24/outline';
-
+import { getDocumentTypeIcon } from '@/constants/icons';
+import { Loader2 } from 'lucide-react';
 interface DocumentSelectionProps {
     selectedDocument: Document | null;
     onSelect: (document: Document) => void;
 }
-
-const documentTypeIcons: Record<string, any> = {
-    'pdf': DocumentTextIcon,
-    'image': PhotoIcon,
-    'doc': DocumentIcon,
-    'excel': TableCellsIcon,
-};
 
 export function DocumentSelection({ selectedDocument, onSelect }: DocumentSelectionProps) {
     const { toast } = useToast();
     const [searchTerm, setSearchTerm] = useState('');
     const {
         documents,
-        isLoading,
-        error,
         fetchDocuments,
         uploadDocument,
-        setFilters,
-        clearError
+        isLoading,
     } = useDocumentStore();
 
     useEffect(() => {
         fetchDocuments();
-    }, [fetchDocuments]);
+    }, [fetchDocuments, documents]);
+
+    if (isLoading) {
+        return (
+            <div className="flex items-center justify-center h-full">
+                <Loader2 className="h-4 w-4 animate-spin" />
+            </div>
+        );
+    }
 
     const handleUploadSuccess = async (file: File) => {
         try {
@@ -72,7 +67,7 @@ export function DocumentSelection({ selectedDocument, onSelect }: DocumentSelect
     );
 
     const DocumentCard = ({ document }: { document: Document }) => {
-        const Icon = documentTypeIcons[document.type.toLowerCase()] || DocumentIcon;
+        const Icon = getDocumentTypeIcon(document.type);
         const isSelected = selectedDocument?.id === document.id;
 
         return (
@@ -82,7 +77,7 @@ export function DocumentSelection({ selectedDocument, onSelect }: DocumentSelect
             >
                 <div className="flex items-start space-x-4">
                     <div className={`p-2 rounded-md ${isSelected ? 'bg-primary/10' : 'bg-muted'}`}>
-                        <Icon className={`w-5 h-5 ${isSelected ? 'text-primary' : 'text-muted-foreground'}`} />
+                        {Icon}
                     </div>
                     <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between">
