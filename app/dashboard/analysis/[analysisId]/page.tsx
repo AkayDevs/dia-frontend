@@ -20,16 +20,8 @@ import {
     Clock,
     CheckCircle2
 } from 'lucide-react';
-import { getAnalysisComponent } from '@/components/analysis/registry';
 import { AnalysisStatus } from '@/enums/analysis';
 import { formatDistanceToNow } from 'date-fns';
-import { AnalysisTypeIcon } from '@/components/analysis';
-import {
-    StepperProps,
-    ResultsProps,
-    OptionsProps,
-    SummaryProps
-} from '@/components/analysis/interfaces';
 import { motion } from 'framer-motion';
 
 interface AnalysisDetailPageProps {
