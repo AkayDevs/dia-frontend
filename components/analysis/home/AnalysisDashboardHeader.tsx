@@ -1,7 +1,8 @@
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { PlusCircle, RefreshCw } from 'lucide-react';
+import { PlusCircle, RefreshCw, Beaker } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 interface AnalysisDashboardHeaderProps {
     isLoading: boolean;
@@ -40,6 +41,17 @@ export function AnalysisDashboardHeader({ isLoading, onRefresh }: AnalysisDashbo
                         <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
                         Refresh
                     </Button>
+                    <Link href="/dashboard/analysis/test" passHref>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-9"
+                            disabled={isLoading}
+                        >
+                            <Beaker className="h-4 w-4 mr-2" />
+                            Test Components
+                        </Button>
+                    </Link>
                     <Button
                         onClick={() => router.push('/dashboard/analysis/new')}
                         className="h-9 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"

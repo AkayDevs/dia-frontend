@@ -13,6 +13,7 @@ import {
     AnalysisTypesTab,
 } from '@/components/analysis/home';
 import { Document } from '@/types/document';
+import Link from 'next/link';
 
 // Interfaces for algorithm accuracy data
 interface AlgorithmMetric {

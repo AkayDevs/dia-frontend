@@ -1,24 +1,20 @@
 import React from 'react';
+import { BaseResultsProps } from './index';
 
-interface BaseResultsProps {
-  data?: any;
-  loading?: boolean;
-}
-
-export const BaseResults: React.FC<BaseResultsProps> = ({ data, loading }) => {
-  if (loading) {
-    return <div className="base-results loading">Loading results...</div>;
-  }
-  
-  if (!data) {
-    return <div className="base-results empty">No results available</div>;
-  }
-  
+/**
+ * Base Results Component
+ * This component serves as a fallback when a specific analysis type doesn't provide its own Results component
+ */
+const BaseResults: React.FC<BaseResultsProps> = ({ analysisId, analysisType, stepCode }) => {
   return (
-    <div className="base-results">
-      <h3>Analysis Results</h3>
-      <p>This is the base results component. Override this for specific analysis types.</p>
-      <pre>{JSON.stringify(data, null, 2)}</pre>
+    <div className="p-4 border rounded-md bg-gray-50">
+      <h2 className="text-lg font-medium mb-2">Analysis Results</h2>
+      <p className="text-sm text-gray-500">
+        No specific results component found for analysis type: {analysisType}, step: {stepCode}
+      </p>
+        <p className="text-sm text-gray-500">Analysis ID: {analysisId}</p>
     </div>
   );
 };
+
+export default BaseResults;

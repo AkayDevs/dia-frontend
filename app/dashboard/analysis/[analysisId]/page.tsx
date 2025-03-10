@@ -23,6 +23,7 @@ import {
 import { AnalysisStatus } from '@/enums/analysis';
 import { formatDistanceToNow } from 'date-fns';
 import { motion } from 'framer-motion';
+import { getSummaryComponent } from '@/components/analysis/registry';
 
 interface AnalysisDetailPageProps {
     params: {
@@ -37,7 +38,7 @@ export default function AnalysisDetailPage({ params }: AnalysisDetailPageProps) 
 
     const router = useRouter();
     const { toast } = useToast();
-    const [activeTab, setActiveTab] = useState('results');
+    const [activeTab, setActiveTab] = useState('summary');
 
     const {
         currentAnalysis,
@@ -52,6 +53,11 @@ export default function AnalysisDetailPage({ params }: AnalysisDetailPageProps) 
         currentDocument,
         fetchDocument,
     } = useDocumentStore();
+
+    // Default to TABLE_ANALYSIS if analysisType is not available
+    const effectiveAnalysisType = analysisType || 'table_analysis';
+
+    const SummaryComponent = getSummaryComponent(effectiveAnalysisType);
 
     // Load analysis and document data
     useEffect(() => {
@@ -75,10 +81,10 @@ export default function AnalysisDetailPage({ params }: AnalysisDetailPageProps) 
     }, [analysisId, fetchAnalysis, documentId, fetchDocument, toast]);
 
     // Get components from registry based on analysis type
-    const StepperComponent = analysisType ? getAnalysisComponent(analysisType, 'Stepper') as React.ComponentType<StepperProps> : null;
-    const ResultsComponent = analysisType ? getAnalysisComponent(analysisType, 'Results') as React.ComponentType<ResultsProps> : null;
-    const OptionsComponent = analysisType ? getAnalysisComponent(analysisType, 'Options') as React.ComponentType<OptionsProps> : null;
-    const SummaryComponent = analysisType ? getAnalysisComponent(analysisType, 'Summary') as React.ComponentType<SummaryProps> : null;
+    // const StepperComponent = analysisType ? getAnalysisComponent(analysisType, 'Stepper') as React.ComponentType<StepperProps> : null;
+    // const ResultsComponent = analysisType ? getAnalysisComponent(analysisType, 'Results') as React.ComponentType<ResultsProps> : null;
+    // const OptionsComponent = analysisType ? getAnalysisComponent(analysisType, 'Options') as React.ComponentType<OptionsProps> : null;
+    // const SummaryComponent = analysisType ? getAnalysisComponent(analysisType, 'Summary') as React.ComponentType<SummaryProps> : null;
 
     // Loading state
     if (isLoading || !currentAnalysis) {
@@ -162,9 +168,9 @@ export default function AnalysisDetailPage({ params }: AnalysisDetailPageProps) 
                             <ArrowLeft className="h-4 w-4" />
                         </Button>
                         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-                            <AnalysisTypeIcon type={analysisType} className="h-6 w-6 text-primary" />
-                            {analysisType === 'table_analysis' ? 'Table Analysis' :
-                                analysisType === 'text_analysis' ? 'Text Analysis' : 'Analysis'}
+                            {/* <AnalysisTypeIcon type={analysisType} className="h-6 w-6 text-primary" /> */}
+                            {effectiveAnalysisType === 'table_analysis' ? 'Table Analysis' :
+                                effectiveAnalysisType === 'text_analysis' ? 'Text Analysis' : 'Analysis'}
                         </h1>
                     </div>
                     <div className="flex items-center gap-2">
@@ -259,47 +265,52 @@ export default function AnalysisDetailPage({ params }: AnalysisDetailPageProps) 
             <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
                 <div className="bg-card rounded-lg shadow-sm border p-1">
                     <TabsList className="w-full grid grid-cols-4">
+                        <TabsTrigger value="summary" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Summary</TabsTrigger>
                         <TabsTrigger value="results" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Results</TabsTrigger>
                         <TabsTrigger value="steps" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Steps</TabsTrigger>
                         <TabsTrigger value="options" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Options</TabsTrigger>
-                        <TabsTrigger value="summary" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Summary</TabsTrigger>
                     </TabsList>
                 </div>
 
                 <TabsContent value="results" className="space-y-6">
-                    {ResultsComponent && (
+                    {/* {ResultsComponent && (
                         <ResultsComponent
                             analysisId={analysisId}
                             documentId={documentId}
                         />
-                    )}
+                    )} */}
                 </TabsContent>
 
                 <TabsContent value="steps" className="space-y-6">
-                    {StepperComponent && (
+                    {/* {StepperComponent && (
                         <StepperComponent
                             analysisId={analysisId}
                             documentId={documentId}
                         />
-                    )}
+                    )} */}
                 </TabsContent>
 
                 <TabsContent value="options" className="space-y-6">
-                    {OptionsComponent && (
+                    {/* {OptionsComponent && (
                         <OptionsComponent
                             analysisId={analysisId}
                             documentId={documentId}
                         />
-                    )}
+                    )} */}
                 </TabsContent>
 
                 <TabsContent value="summary" className="space-y-6">
-                    {SummaryComponent && (
-                        <SummaryComponent
-                            analysisId={analysisId}
-                            documentId={documentId}
-                        />
-                    )}
+                    <SummaryComponent
+                        analysisId={analysisId}
+                        analysisType={effectiveAnalysisType}
+                        stepCode="extract"
+                        documentId={documentId}
+                        status={currentAnalysis?.status}
+                        metadata={{
+                            documentName: currentDocument?.name || 'Unknown',
+                            documentType: currentDocument?.type || 'Unknown'
+                        }}
+                    />
                 </TabsContent>
             </Tabs>
         </motion.div>

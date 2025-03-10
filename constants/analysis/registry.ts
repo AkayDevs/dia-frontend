@@ -49,6 +49,11 @@ export const ANALYSIS_CONSTANTS_REGISTRY: AnalysisConstantsMap = {
  * Get constants for a specific analysis type
  */
 export function getAnalysisConstants<T extends BaseAnalysisDefinition>(analysisType: string): T {
+    // If analysisType is empty or undefined, default to TABLE_ANALYSIS
+    if (!analysisType) {
+        return ANALYSIS_CONSTANTS_REGISTRY[AnalysisDefinitionCode.TABLE_ANALYSIS] as unknown as T;
+    }
+
     if (!Object.values(AnalysisDefinitionCode).includes(analysisType as AnalysisDefinitionCode)) {
         throw new Error(`Invalid analysis type: ${analysisType}`);
     }
@@ -85,7 +90,7 @@ export function getAnalysisSteps(analysisType: string) {
 export function getAnalysisIcon(analysisType: string) {
     const constants = getAnalysisConstants<BaseAnalysisDefinition>(analysisType);
     return constants.ANALYSIS_DEFINITION_ICON;
-}   
+}
 
 /**
  * Get error messages for a specific analysis type
