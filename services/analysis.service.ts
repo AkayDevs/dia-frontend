@@ -121,14 +121,10 @@ class AnalysisService {
         mode: AnalysisMode = AnalysisMode.AUTOMATIC,
         config?: AnalysisRunConfig
     ): Promise<AnalysisRunInfo> {
-        const response = await fetch(`${this.baseUrl}/documents/${documentId}/analyze`, {
+        const response = await fetch(`${this.baseUrl}/documents/${documentId}/analyze?analysis_code=${analysisCode}&mode=${mode}`, {
             method: 'POST',
             headers: this.getHeaders(),
-            body: JSON.stringify({
-                analysis_code: analysisCode,
-                mode,
-                config
-            }),
+            body: JSON.stringify(config)
         });
 
         return this.handleResponse<AnalysisRunInfo>(response);

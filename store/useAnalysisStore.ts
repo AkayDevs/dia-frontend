@@ -198,17 +198,11 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
         }
     },
 
-    startAnalysis: async (documentId, analysisCode, mode = AnalysisMode.AUTOMATIC, config = {
-        steps: {},
-        notifications: {
-            notify_on_completion: true,
-            notify_on_failure: true
-        },
-        metadata: {}
-    }) => {
+    startAnalysis: async (documentId, analysisCode, mode = AnalysisMode.AUTOMATIC, config: AnalysisRunConfig | undefined = undefined) => {
         set({ isLoading: true, error: null });
         try {
             // Use the analysis service to start a new analysis
+
             const analysis = await analysisService.startAnalysis(documentId, analysisCode, mode, config);
 
             // Since the startAnalysis endpoint might not return the full AnalysisRunWithResults,

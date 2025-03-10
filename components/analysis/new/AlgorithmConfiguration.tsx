@@ -158,10 +158,13 @@ export function AlgorithmConfiguration({
     };
 
     const renderParameterInput = (stepId: string, param: AnalysisParameter, stepConfig: AnalysisStepConfig) => {
-        // Get the value, defaulting to empty string for null/undefined values
+        // Get the value or use default, ensuring it's never null (use empty string or appropriate default)
         const rawValue = stepConfig.algorithm?.parameters?.[param.name]?.value ?? param.default;
-        // Ensure we never pass null to inputs
-        const value = rawValue === null ? '' : rawValue;
+
+        // Convert null/undefined to appropriate defaults based on type
+        const value = rawValue === null || rawValue === undefined
+            ? (param.type === 'number' ? 0 : param.type === 'boolean' ? false : '')
+            : rawValue;
 
         const labelClasses = "text-sm font-medium text-gray-700 flex items-center";
         const requiredBadge = param.required && (
@@ -190,7 +193,7 @@ export function AlgorithmConfiguration({
                             </Label>
                             <Switch
                                 id={`${stepId}-${param.name}`}
-                                checked={value === true}
+                                checked={Boolean(value)}
                                 onCheckedChange={(checked) => handleParameterChange(stepId, param.name, checked)}
                                 className="data-[state=checked]:bg-primary"
                             />
@@ -201,8 +204,6 @@ export function AlgorithmConfiguration({
                     </div>
                 );
             case 'number':
-                // For number inputs, convert empty string to undefined to avoid NaN issues
-                const numValue = value === '' ? '' : Number(value);
                 return (
                     <div className="mb-6">
                         <Label htmlFor={`${stepId}-${param.name}`} className={labelClasses}>
@@ -216,11 +217,8 @@ export function AlgorithmConfiguration({
                             <Input
                                 id={`${stepId}-${param.name}`}
                                 type="number"
-                                value={numValue}
-                                onChange={(e) => {
-                                    const val = e.target.value === '' ? '' : parseFloat(e.target.value);
-                                    handleParameterChange(stepId, param.name, val);
-                                }}
+                                value={value.toString()}
+                                onChange={(e) => handleParameterChange(stepId, param.name, parseFloat(e.target.value) || 0)}
                                 className="h-11 border-gray-300 focus:border-primary focus:ring-1 focus:ring-primary/20 rounded-md shadow-sm"
                                 min={param.constraints?.min}
                                 max={param.constraints?.max}
@@ -230,8 +228,6 @@ export function AlgorithmConfiguration({
                     </div>
                 );
             case 'select':
-                // For select, ensure we have a string value
-                const selectValue = value === null || value === undefined ? '' : String(value);
                 return (
                     <div className="mb-6">
                         <Label htmlFor={`${stepId}-${param.name}`} className={labelClasses}>
@@ -243,7 +239,7 @@ export function AlgorithmConfiguration({
                         )}
                         <div className={inputWrapperClasses}>
                             <Select
-                                value={selectValue}
+                                value={value ? value.toString() : ''}
                                 onValueChange={(value) => handleParameterChange(stepId, param.name, value)}
                             >
                                 <SelectTrigger id={`${stepId}-${param.name}`} className="h-11 border-gray-300 focus:border-primary focus:ring-1 focus:ring-primary/20 rounded-md shadow-sm">
@@ -261,8 +257,6 @@ export function AlgorithmConfiguration({
                     </div>
                 );
             default:
-                // For text inputs, ensure we have a string value
-                const textValue = value === null || value === undefined ? '' : String(value);
                 return (
                     <div className="mb-6">
                         <Label htmlFor={`${stepId}-${param.name}`} className={labelClasses}>
@@ -276,7 +270,7 @@ export function AlgorithmConfiguration({
                             <Input
                                 id={`${stepId}-${param.name}`}
                                 type="text"
-                                value={textValue}
+                                value={value ? value.toString() : ''}
                                 onChange={(e) => handleParameterChange(stepId, param.name, e.target.value)}
                                 className="h-11 border-gray-300 focus:border-primary focus:ring-1 focus:ring-primary/20 rounded-md shadow-sm"
                             />

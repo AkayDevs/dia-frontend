@@ -9,7 +9,6 @@ import { useAnalysisStore } from '@/store/useAnalysisStore';
 import { Document } from '@/types/document';
 import { AnalysisDefinition } from '@/types/analysis/configs';
 import { AnalysisRunConfig, AnalysisStepConfig } from '@/types/analysis/base';
-import { AnalysisMode } from '@/enums/analysis';
 import { motion } from 'framer-motion';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 
@@ -158,11 +157,12 @@ export default function AnalysisSetupPage() {
 
         setIsSubmitting(true);
         try {
+
             await startAnalysis(
                 selectedDocument.id,
                 selectedAnalysisType.code,
-                selectedMode === 'automatic' ? AnalysisMode.AUTOMATIC : AnalysisMode.STEP_BY_STEP,
-                analysisConfig
+                // selectedMode === 'automatic' ? AnalysisMode.AUTOMATIC : AnalysisMode.STEP_BY_STEP,
+                // analysisConfig
             );
 
             toast({
