@@ -490,6 +490,7 @@ const PageTableVisualizer: React.FC<PageTableVisualizerProps> = ({
     const [zoomLevel, setZoomLevel] = useState<number>(1);
     const containerRef = useRef<HTMLDivElement>(null);
     const imageRef = useRef<HTMLImageElement>(null);
+    const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
 
     // State to track if image is loaded and its natural dimensions
     const [imageLoaded, setImageLoaded] = useState<boolean>(false);
@@ -497,6 +498,57 @@ const PageTableVisualizer: React.FC<PageTableVisualizerProps> = ({
         width: actualWidth,
         height: actualHeight
     });
+
+    // Handle window resize
+    useEffect(() => {
+        const handleResize = () => {
+            if (containerRef.current) {
+                updateContainerSize();
+            }
+        };
+
+        // Initial size calculation
+        updateContainerSize();
+
+        // Add resize listener
+        window.addEventListener('resize', handleResize);
+
+        // Cleanup
+        return () => {
+            window.removeEventListener('resize', handleResize);
+        };
+    }, []);
+
+    // Update container size based on available space
+    const updateContainerSize = () => {
+        if (!containerRef.current) return;
+
+        const aspectRatio = actualWidth / actualHeight;
+
+        // Get parent width (accounting for padding/margins)
+        const parentElement = containerRef.current.parentElement;
+        const availableWidth = parentElement ? parentElement.clientWidth - 32 : window.innerWidth - 64;
+
+        // Calculate responsive dimensions
+        // For small screens, use full width
+        // For medium screens, cap at 700px
+        // For large screens, cap at 800px
+        let containerWidth = availableWidth;
+        if (window.innerWidth >= 1280) { // xl breakpoint
+            containerWidth = Math.min(800, availableWidth);
+        } else if (window.innerWidth >= 1024) { // lg breakpoint
+            containerWidth = Math.min(700, availableWidth);
+        } else if (window.innerWidth >= 768) { // md breakpoint
+            containerWidth = Math.min(650, availableWidth);
+        }
+
+        const containerHeight = containerWidth / aspectRatio;
+
+        setContainerSize({
+            width: containerWidth,
+            height: containerHeight
+        });
+    };
 
     // Handle image load to get actual dimensions
     const handleImageLoad = () => {
@@ -506,6 +558,9 @@ const PageTableVisualizer: React.FC<PageTableVisualizerProps> = ({
                 height: imageRef.current.naturalHeight
             });
             setImageLoaded(true);
+
+            // Update container size after image loads
+            updateContainerSize();
         }
     };
 
@@ -521,19 +576,14 @@ const PageTableVisualizer: React.FC<PageTableVisualizerProps> = ({
         );
     }
 
-    // Calculate container dimensions
-    const aspectRatio = actualWidth / actualHeight;
-    const maxWidth = Math.min(800, window.innerWidth - 64); // Responsive max width
-    const containerWidth = maxWidth;
-    const containerHeight = containerWidth / aspectRatio;
-
     // Zoom in/out handlers
     const zoomIn = () => setZoomLevel(prev => Math.min(prev + 0.25, 3));
     const zoomOut = () => setZoomLevel(prev => Math.max(prev - 0.25, 0.5));
+    const resetZoom = () => setZoomLevel(1);
 
     // Calculate the actual display dimensions after zoom
-    const displayWidth = containerWidth * zoomLevel;
-    const displayHeight = containerHeight * zoomLevel;
+    const displayWidth = containerSize.width * zoomLevel;
+    const displayHeight = containerSize.height * zoomLevel;
 
     // Calculate scale factors for bounding boxes
     // Use the ratio between the displayed image size and the original page dimensions
@@ -549,28 +599,38 @@ const PageTableVisualizer: React.FC<PageTableVisualizerProps> = ({
 
     return (
         <div className="space-y-4">
-            <div className="flex flex-col lg:flex-row gap-4">
+            <div className="flex flex-col xl:flex-row gap-4">
                 {/* Image container with zoom controls */}
-                <div className="flex flex-col space-y-2">
-                    <div className="flex justify-between items-center mb-2">
+                <div className="flex flex-col space-y-2 w-full xl:max-w-[65%]">
+                    <div className="flex flex-wrap justify-between items-center mb-2 gap-2">
                         <div className="text-sm font-medium">
                             Page {pageResult.page_info.page_number} • {actualWidth}×{actualHeight}px
                         </div>
-                        <div className="flex items-center space-x-2">
+                        <div className="flex items-center space-x-1">
                             <Button
                                 variant="outline"
                                 size="icon"
                                 onClick={zoomOut}
                                 disabled={zoomLevel <= 0.5}
+                                title="Zoom out"
                             >
                                 <ZoomOut className="h-4 w-4" />
                             </Button>
-                            <span className="text-sm font-medium">{Math.round(zoomLevel * 100)}%</span>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={resetZoom}
+                                className="px-2"
+                                title="Reset zoom"
+                            >
+                                {Math.round(zoomLevel * 100)}%
+                            </Button>
                             <Button
                                 variant="outline"
                                 size="icon"
                                 onClick={zoomIn}
                                 disabled={zoomLevel >= 3}
+                                title="Zoom in"
                             >
                                 <ZoomIn className="h-4 w-4" />
                             </Button>
@@ -579,11 +639,10 @@ const PageTableVisualizer: React.FC<PageTableVisualizerProps> = ({
 
                     <div
                         ref={containerRef}
-                        className="relative border rounded-md overflow-auto bg-gray-50"
+                        className="relative border rounded-md overflow-auto bg-gray-50 w-full"
                         style={{
-                            width: containerWidth,
-                            height: containerHeight,
-                            maxWidth: '100%'
+                            height: containerSize.height || 400, // Fallback height
+                            maxHeight: '70vh' // Prevent excessive height on large screens
                         }}
                     >
                         <div
@@ -648,12 +707,12 @@ const PageTableVisualizer: React.FC<PageTableVisualizerProps> = ({
                 </div>
 
                 {/* Information panel */}
-                <div className="flex-1 min-w-[300px] space-y-4">
+                <div className="w-full xl:w-[35%] space-y-4">
                     {/* Table information card */}
                     <Card>
-                        <CardHeader>
-                            <CardTitle className="text-lg">
-                                <Table className="inline-block mr-2 h-5 w-5" />
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-base flex items-center">
+                                <Table className="h-4 w-4 mr-2" />
                                 Table Information
                             </CardTitle>
                             <CardDescription>
@@ -686,7 +745,7 @@ const PageTableVisualizer: React.FC<PageTableVisualizerProps> = ({
                                             )}
 
                                             <div className="font-medium">Position:</div>
-                                            <div>
+                                            <div className="text-xs">
                                                 ({pageResult.tables[selectedTableIndex].bbox.x1.toFixed(0)},
                                                 {pageResult.tables[selectedTableIndex].bbox.y1.toFixed(0)}) -
                                                 ({pageResult.tables[selectedTableIndex].bbox.x2.toFixed(0)},
@@ -720,8 +779,11 @@ const PageTableVisualizer: React.FC<PageTableVisualizerProps> = ({
 
                     {/* Page processing information */}
                     <Card>
-                        <CardHeader>
-                            <CardTitle className="text-lg">Page Processing Info</CardTitle>
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-base flex items-center">
+                                <RefreshCw className="h-4 w-4 mr-2" />
+                                Processing Info
+                            </CardTitle>
                         </CardHeader>
                         <CardContent>
                             <div className="text-sm space-y-2">
@@ -730,7 +792,9 @@ const PageTableVisualizer: React.FC<PageTableVisualizerProps> = ({
                                         {Object.entries(processingInfo).map(([key, value]) => (
                                             <React.Fragment key={key}>
                                                 <div className="font-medium">{key}:</div>
-                                                <div>{typeof value === 'object' ? JSON.stringify(value) : String(value)}</div>
+                                                <div className="truncate" title={typeof value === 'object' ? JSON.stringify(value) : String(value)}>
+                                                    {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                                                </div>
                                             </React.Fragment>
                                         ))}
                                     </div>
