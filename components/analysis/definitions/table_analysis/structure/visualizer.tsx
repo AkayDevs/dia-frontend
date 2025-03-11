@@ -384,24 +384,57 @@ const PageTableStructureVisualizer: React.FC<PageTableStructureVisualizerProps> 
         const gridCellWidth = tableWidth / table.num_cols;
         const gridCellHeight = tableHeight / table.num_rows;
 
-        return table.cells.map(cell => {
+        // First, sort cells by their position (top to bottom, left to right)
+        const sortedCells = [...table.cells].sort((a, b) => {
+            if (Math.abs(a.bbox.y1 - b.bbox.y1) < gridCellHeight / 2) {
+                // If cells are in the same row (approximately), sort by x-coordinate
+                return a.bbox.x1 - b.bbox.x1;
+            }
+            // Otherwise, sort by y-coordinate
+            return a.bbox.y1 - b.bbox.y1;
+        });
+
+        // Create a 2D grid to track cell occupancy
+        const grid: number[][] = Array(table.num_rows).fill(null)
+            .map(() => Array(table.num_cols).fill(-1));
+
+        // Map cells to grid positions
+        return sortedCells.map((cell, cellIndex) => {
             // Calculate the grid position of this cell
             const relX = cell.bbox.x1 - table.bbox.x1;
             const relY = cell.bbox.y1 - table.bbox.y1;
 
             // Estimate row and column indices
-            const colStart = Math.max(0, Math.floor(relX / gridCellWidth));
-            const rowStart = Math.max(0, Math.floor(relY / gridCellHeight));
+            let rowStart = Math.max(0, Math.floor(relY / gridCellHeight));
+            let colStart = Math.max(0, Math.floor(relX / gridCellWidth));
+
+            // Ensure we don't exceed grid boundaries
+            rowStart = Math.min(rowStart, table.num_rows - 1);
+            colStart = Math.min(colStart, table.num_cols - 1);
 
             // Calculate span based on width and height
             const actualCellWidth = cell.bbox.x2 - cell.bbox.x1;
             const actualCellHeight = cell.bbox.y2 - cell.bbox.y1;
 
-            const colSpan = Math.max(1, Math.round(actualCellWidth / gridCellWidth));
-            const rowSpan = Math.max(1, Math.round(actualCellHeight / gridCellHeight));
+            let colSpan = Math.max(1, Math.round(actualCellWidth / gridCellWidth));
+            let rowSpan = Math.max(1, Math.round(actualCellHeight / gridCellHeight));
+
+            // Ensure spans don't exceed grid boundaries
+            colSpan = Math.min(colSpan, table.num_cols - colStart);
+            rowSpan = Math.min(rowSpan, table.num_rows - rowStart);
+
+            // Mark grid cells as occupied by this cell
+            for (let r = rowStart; r < rowStart + rowSpan; r++) {
+                for (let c = colStart; c < colStart + colSpan; c++) {
+                    if (r < table.num_rows && c < table.num_cols) {
+                        grid[r][c] = cellIndex;
+                    }
+                }
+            }
 
             return {
                 cell,
+                cellIndex,
                 gridPosition: {
                     rowStart,
                     colStart,
@@ -442,7 +475,7 @@ const PageTableStructureVisualizer: React.FC<PageTableStructureVisualizerProps> 
                                 <ZoomIn className="h-4 w-4" />
                             </Button>
                             <Button
-                                variant="outline"
+                                variant={showGrid ? "secondary" : "outline"}
                                 size="icon"
                                 onClick={() => setShowGrid(prev => !prev)}
                                 title={showGrid ? "Hide grid" : "Show grid"}
@@ -505,6 +538,9 @@ const PageTableStructureVisualizer: React.FC<PageTableStructureVisualizerProps> 
                                 const scaledWidth = (x2 - x1) * scaleX;
                                 const scaledHeight = (y2 - y1) * scaleY;
 
+                                // Calculate grid positions for cells
+                                const cellsWithGridPositions = isSelected ? calculateGridPositions(table) : [];
+
                                 return (
                                     <div
                                         key={`table-${tableIndex}`}
@@ -531,20 +567,24 @@ const PageTableStructureVisualizer: React.FC<PageTableStructureVisualizerProps> 
                                         </div>
 
                                         {/* Only show cells for the selected table */}
-                                        {isSelected && showGrid && table.cells.map((cell, cellIndex) => {
-                                            const { x1: cellX1, y1: cellY1, x2: cellX2, y2: cellY2 } = cell.bbox;
+                                        {isSelected && showGrid && cellsWithGridPositions.map(({ cell, cellIndex, gridPosition }) => {
+                                            const { rowStart, colStart, rowSpan, colSpan } = gridPosition;
                                             const isCellSelected = selectedCellIndex === cellIndex;
 
-                                            // Calculate cell position relative to the table
-                                            // This ensures cells are positioned correctly within the table boundaries
-                                            const relativeX = cellX1 - x1;
-                                            const relativeY = cellY1 - y1;
-                                            const cellWidth = cellX2 - cellX1;
-                                            const cellHeight = cellY2 - cellY1;
+                                            // Calculate cell position based on grid coordinates
+                                            const tableWidth = x2 - x1;
+                                            const tableHeight = y2 - y1;
+                                            const gridCellWidth = tableWidth / table.num_cols;
+                                            const gridCellHeight = tableHeight / table.num_rows;
+
+                                            const cellX = colStart * gridCellWidth;
+                                            const cellY = rowStart * gridCellHeight;
+                                            const cellWidth = colSpan * gridCellWidth;
+                                            const cellHeight = rowSpan * gridCellHeight;
 
                                             // Scale cell coordinates
-                                            const scaledRelativeX = relativeX * scaleX;
-                                            const scaledRelativeY = relativeY * scaleY;
+                                            const scaledCellX = cellX * scaleX;
+                                            const scaledCellY = cellY * scaleY;
                                             const scaledCellWidth = cellWidth * scaleX;
                                             const scaledCellHeight = cellHeight * scaleY;
 
@@ -561,8 +601,8 @@ const PageTableStructureVisualizer: React.FC<PageTableStructureVisualizerProps> 
                                                         debugMode && "border-dashed border-2"
                                                     )}
                                                     style={{
-                                                        left: `${scaledRelativeX}px`,
-                                                        top: `${scaledRelativeY}px`,
+                                                        left: `${scaledCellX}px`,
+                                                        top: `${scaledCellY}px`,
                                                         width: `${scaledCellWidth}px`,
                                                         height: `${scaledCellHeight}px`,
                                                         zIndex: isCellSelected ? 10 : 5
@@ -577,9 +617,9 @@ const PageTableStructureVisualizer: React.FC<PageTableStructureVisualizerProps> 
                                                             H
                                                         </div>
                                                     )}
-                                                    {(cell.row_span > 1 || cell.col_span > 1) && (
+                                                    {(rowSpan > 1 || colSpan > 1) && (
                                                         <div className="absolute bottom-0 right-0 bg-blue-500 text-white text-xs px-1 rounded-tl-sm">
-                                                            {cell.row_span}×{cell.col_span}
+                                                            {rowSpan}×{colSpan}
                                                         </div>
                                                     )}
                                                     {debugMode && (
@@ -598,8 +638,8 @@ const PageTableStructureVisualizer: React.FC<PageTableStructureVisualizerProps> 
                 </div>
 
                 {/* Table and cell details */}
-                <div className="w-full lg:w-80 flex-shrink-0">
-                    <Card>
+                <div className="w-full lg:w-80 flex-shrink-0 max-h-[calc(100vh-200px)] overflow-auto">
+                    <Card className="sticky top-0">
                         <CardHeader className="pb-2">
                             <CardTitle className="text-base">Table Details</CardTitle>
                         </CardHeader>
@@ -703,9 +743,14 @@ const PageTableStructureVisualizer: React.FC<PageTableStructureVisualizerProps> 
             {selectedTable && (
                 <Card className="w-full">
                     <CardHeader className="pb-2">
-                        <CardTitle className="text-base">Table Structure</CardTitle>
+                        <CardTitle className="text-base flex items-center justify-between">
+                            <span>Table Structure</span>
+                            <Badge variant="outline" className="ml-2">
+                                {selectedTable.num_rows} × {selectedTable.num_cols}
+                            </Badge>
+                        </CardTitle>
                         <CardDescription>
-                            Visual representation of the table structure with {selectedTable.num_rows} rows and {selectedTable.num_cols} columns
+                            Visual representation of the table structure
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -755,8 +800,7 @@ const PageTableStructureVisualizer: React.FC<PageTableStructureVisualizerProps> 
                                                 }
 
                                                 // Get the cell and its grid position
-                                                const { cell, gridPosition } = cellWithPosition;
-                                                const cellIndex = selectedTable.cells.indexOf(cell);
+                                                const { cell, cellIndex, gridPosition } = cellWithPosition;
                                                 const isCellSelected = selectedCellIndex === cellIndex;
 
                                                 return (

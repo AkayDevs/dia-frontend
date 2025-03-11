@@ -30,7 +30,7 @@ export interface PageInfo {
  */
 export interface BaseStepOutput {
     total_pages_processed: number;
-    total_tables_processed: number;
+    total_tables_found: number;
     metadata: Record<string, any>;
 }
 

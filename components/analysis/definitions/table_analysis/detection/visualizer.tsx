@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { InfoIcon, AlertCircle, Table, ZoomIn, ZoomOut, Download, Clock, Calendar, FileText } from "lucide-react";
+import { InfoIcon, AlertCircle, Table, ZoomIn, ZoomOut, Download, Clock, Calendar, FileText, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -71,13 +71,34 @@ const TableDetectionVisualizer: React.FC<BaseStepComponentProps> = ({ stepResult
     if (isPagesLoading) {
         return (
             <div className="space-y-4">
+                {/* Summary Card Skeleton */}
                 <Card>
                     <CardHeader>
                         <Skeleton className="h-8 w-64" />
                         <Skeleton className="h-4 w-full" />
                     </CardHeader>
                     <CardContent>
-                        <Skeleton className="h-[600px] w-full" />
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                {[1, 2, 3].map((i) => (
+                                    <Skeleton key={i} className="h-24 w-full" />
+                                ))}
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* Page Visualization Card Skeleton */}
+                <Card>
+                    <CardHeader>
+                        <Skeleton className="h-8 w-64" />
+                        <Skeleton className="h-4 w-full" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="space-y-4">
+                            <Skeleton className="h-10 w-full" /> {/* Tabs skeleton */}
+                            <Skeleton className="h-[400px] w-full" /> {/* Page content skeleton */}
+                        </div>
                     </CardContent>
                 </Card>
             </div>
@@ -87,10 +108,15 @@ const TableDetectionVisualizer: React.FC<BaseStepComponentProps> = ({ stepResult
     // If there's an error loading pages, show error message
     if (pagesError) {
         return (
-            <Alert variant="destructive">
+            <Alert variant="destructive" className="animate-in fade-in-50">
                 <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Error loading document pages</AlertTitle>
-                <AlertDescription>{pagesError}</AlertDescription>
+                <AlertTitle>Unable to load document pages</AlertTitle>
+                <AlertDescription>
+                    <p className="mb-2">{pagesError}</p>
+                    <p className="text-sm text-muted-foreground">
+                        Please try refreshing the page or contact support if this issue persists.
+                    </p>
+                </AlertDescription>
             </Alert>
         );
     }
@@ -98,11 +124,23 @@ const TableDetectionVisualizer: React.FC<BaseStepComponentProps> = ({ stepResult
     // If no pages are available, show message
     if (!currentPages || !currentPages.pages || currentPages.pages.length === 0) {
         return (
-            <Alert>
+            <Alert variant="default" className="animate-in fade-in-50">
                 <InfoIcon className="h-4 w-4" />
-                <AlertTitle>No document pages available</AlertTitle>
+                <AlertTitle>Document Pages Unavailable</AlertTitle>
                 <AlertDescription>
-                    The document pages could not be loaded. Please check if the document exists.
+                    <p className="mb-2">We couldn't retrieve any pages for this document.</p>
+                    <div className="text-sm text-muted-foreground">
+                        This could be due to one of the following reasons:
+                    </div>
+                    <ul className="list-disc ml-5 mt-1 text-sm text-muted-foreground">
+                        <li>The document may have been deleted or moved</li>
+                        <li>The document processing may still be in progress</li>
+                        <li>There might be permission issues accessing this content</li>
+                    </ul>
+                    <Button variant="outline" size="sm" className="mt-3" onClick={() => window.location.reload()}>
+                        <RefreshCw className="h-3 w-3 mr-2" />
+                        Refresh Page
+                    </Button>
                 </AlertDescription>
             </Alert>
         );
@@ -131,7 +169,7 @@ const TableDetectionVisualizer: React.FC<BaseStepComponentProps> = ({ stepResult
                     <CardTitle className="flex items-center justify-between">
                         <span>Table Detection Results</span>
                         <Badge variant="outline" className="ml-2">
-                            {detectionResult.total_tables_processed} tables detected
+                            {detectionResult.total_tables_found} tables detected
                         </Badge>
                     </CardTitle>
                     <CardDescription>
@@ -203,17 +241,17 @@ const TableDetectionVisualizer: React.FC<BaseStepComponentProps> = ({ stepResult
                                 <div className="flex justify-between text-sm">
                                     <span>Tables Detected</span>
                                     <span className="font-medium">
-                                        {pageResults.reduce((total, page) => total + page.tables.length, 0)}
+                                        {detectionResult.total_tables_found}
                                     </span>
                                 </div>
                                 <Progress
-                                    value={pageResults.some(page => page.tables.length > 0) ? 100 : 0}
-                                    className={`h-2 ${pageResults.some(page => page.tables.length > 0) ? 'bg-green-100' : 'bg-gray-100'}`}
+                                    value={detectionResult.total_tables_found > 0 ? 100 : 0}
+                                    className={`h-2 ${detectionResult.total_tables_found > 0 ? 'bg-green-100' : 'bg-gray-100'}`}
                                 />
                                 <div className="text-xs text-muted-foreground">
-                                    {pageResults.some(page => page.tables.length > 0)
-                                        ? `Average ${(pageResults.reduce((total, page) => total + page.tables.length, 0) /
-                                            (pageResults.filter(page => page.tables.length > 0).length || 1)).toFixed(1)} tables per page with tables`
+                                    {detectionResult.total_tables_found > 0
+                                        ? `Average ${(detectionResult.total_tables_found /
+                                            (detectionResult.total_pages_processed || 1)).toFixed(1)} tables per page with tables`
                                         : 'No tables detected'}
                                 </div>
                             </div>
@@ -221,11 +259,11 @@ const TableDetectionVisualizer: React.FC<BaseStepComponentProps> = ({ stepResult
                             <div className="space-y-1">
                                 <div className="flex justify-between text-sm">
                                     <span>Pages Processed</span>
-                                    <span className="font-medium">{pageResults.length}</span>
+                                    <span className="font-medium">{detectionResult.total_pages_processed}</span>
                                 </div>
                                 <Progress value={100} className="h-2" />
                                 <div className="text-xs text-muted-foreground">
-                                    {pageResults.length} pages analyzed
+                                    {detectionResult.total_pages_processed} pages analyzed
                                 </div>
                             </div>
 
@@ -233,19 +271,19 @@ const TableDetectionVisualizer: React.FC<BaseStepComponentProps> = ({ stepResult
                                 <div className="flex justify-between text-sm">
                                     <span>Pages with Tables</span>
                                     <span className="font-medium">
-                                        {pageResults.filter(page => page.tables.length > 0).length}
+                                        {detectionResult.total_tables_found}
                                     </span>
                                 </div>
                                 <Progress
-                                    value={pageResults.length > 0
-                                        ? (pageResults.filter(page => page.tables.length > 0).length / pageResults.length) * 100
+                                    value={detectionResult.total_tables_found > 0
+                                        ? (detectionResult.total_tables_found / detectionResult.total_pages_processed) * 100
                                         : 0
                                     }
                                     className="h-2"
                                 />
                                 <div className="text-xs text-muted-foreground">
-                                    {pageResults.length > 0
-                                        ? `${Math.round((pageResults.filter(page => page.tables.length > 0).length / pageResults.length) * 100)}% of pages contain tables`
+                                    {detectionResult.total_pages_processed > 0
+                                        ? `${Math.round((detectionResult.total_tables_found / detectionResult.total_pages_processed) * 100)}% of pages contain tables`
                                         : 'No pages analyzed'}
                                 </div>
                             </div>
@@ -263,7 +301,7 @@ const TableDetectionVisualizer: React.FC<BaseStepComponentProps> = ({ stepResult
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
-                    {pageResults.length === 0 ? (
+                    {detectionResult.total_tables_found === 0 ? (
                         <Alert>
                             <InfoIcon className="h-4 w-4" />
                             <AlertTitle>No tables detected</AlertTitle>
