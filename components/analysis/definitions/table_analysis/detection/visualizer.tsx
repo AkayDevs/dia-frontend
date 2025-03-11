@@ -168,126 +168,143 @@ const TableDetectionVisualizer: React.FC<BaseStepComponentProps> = ({ stepResult
                 <CardHeader>
                     <CardTitle className="flex items-center justify-between">
                         <span>Table Detection Results</span>
-                        <Badge variant="outline" className="ml-2">
+                        <Badge variant="secondary" className="ml-2">
                             {detectionResult.total_tables_found} tables detected
                         </Badge>
                     </CardTitle>
-                    <CardDescription>
-                        Detected tables across {detectionResult.total_pages_processed} pages
+                    <CardDescription className="text-muted-foreground">
+                        Total pages processed: {detectionResult.total_pages_processed}
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                        <div className="space-y-2">
-                            <div className="text-sm font-medium">Processing Information</div>
-                            <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-sm">
-                                <div className="text-muted-foreground">Algorithm:</div>
-                                <div>{stepResult.algorithm_code}</div>
+                    <div className="space-y-6">
 
-                                <div className="text-muted-foreground">Status:</div>
-                                <div>
-                                    <Badge variant={stepResult.status === 'completed' ? 'outline' : 'secondary'}>
-                                        {stepResult.status}
-                                    </Badge>
+                        <Separator className="my-2" />
+
+                        {/* Table Detection Statistics */}
+                        <div className="mb-4">
+                            <div className="text-sm font-medium mb-2">Detection Statistics</div>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="space-y-1">
+                                    <div className="flex justify-between text-sm">
+                                        <span>Tables Detected</span>
+                                        <span className="font-medium">
+                                            {detectionResult.total_tables_found}
+                                        </span>
+                                    </div>
+                                    <Progress
+                                        value={detectionResult.total_tables_found > 0 ? 100 : 0}
+                                        className={`h-2 ${detectionResult.total_tables_found > 0 ? 'bg-green-100' : 'bg-gray-100'}`}
+                                    />
+                                    <div className="text-xs text-muted-foreground">
+                                        {detectionResult.total_tables_found > 0
+                                            ? `Average ${(detectionResult.total_tables_found /
+                                                (detectionResult.total_pages_processed || 1)).toFixed(1)} tables per page with tables`
+                                            : 'No tables detected'}
+                                    </div>
                                 </div>
 
-                                <div className="text-muted-foreground">Processing Time:</div>
-                                <div className="flex items-center">
-                                    <Clock className="h-3 w-3 mr-1" />
-                                    {processingTime} seconds
+                                <div className="space-y-1">
+                                    <div className="flex justify-between text-sm">
+                                        <span>Pages Processed</span>
+                                        <span className="font-medium">{detectionResult.total_pages_processed}</span>
+                                    </div>
+                                    <Progress value={100} className="h-2" />
+                                    <div className="text-xs text-muted-foreground">
+                                        {detectionResult.total_pages_processed} pages analyzed
+                                    </div>
+                                </div>
+
+                                <div className="space-y-1">
+                                    <div className="flex justify-between text-sm">
+                                        <span>Pages with Tables</span>
+                                        <span className="font-medium">
+                                            {detectionResult.total_tables_found}
+                                        </span>
+                                    </div>
+                                    <Progress
+                                        value={detectionResult.total_tables_found > 0
+                                            ? (detectionResult.total_tables_found / detectionResult.total_pages_processed) * 100
+                                            : 0
+                                        }
+                                        className="h-2"
+                                    />
+                                    <div className="text-xs text-muted-foreground">
+                                        {detectionResult.total_pages_processed > 0
+                                            ? `${Math.round((detectionResult.total_tables_found / detectionResult.total_pages_processed) * 100)}% of pages contain tables`
+                                            : 'No pages analyzed'}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Summary Section */}
+                        <div className="mb-4">
+                            <div className="text-sm font-medium mb-2">Document Information</div>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                {/* Processing Information */}
+                                <div className="space-y-2 p-3 bg-card rounded-lg border">
+                                    <div className="flex items-center text-sm font-medium mb-1">
+                                        <RefreshCw className="h-4 w-4 mr-2 text-primary" />
+                                        Processing Details
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-x-2 gap-y-2 text-sm">
+                                        <div className="text-muted-foreground">Algorithm:</div>
+                                        <div className="font-medium">{stepResult.algorithm_code}</div>
+
+                                        <div className="text-muted-foreground">Status:</div>
+                                        <div>
+                                            <Badge variant={stepResult.status === 'completed' ? 'outline' : 'secondary'}>
+                                                {stepResult.status}
+                                            </Badge>
+                                        </div>
+
+                                        <div className="text-muted-foreground">Duration:</div>
+                                        <div className="flex items-center font-medium">
+                                            <Clock className="h-3 w-3 mr-1 text-muted-foreground" />
+                                            {processingTime}s
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Timing Information */}
+                                <div className="space-y-2 p-3 bg-card rounded-lg border">
+                                    <div className="flex items-center text-sm font-medium mb-1">
+                                        <Calendar className="h-4 w-4 mr-2 text-primary" />
+                                        Timing
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-x-2 gap-y-2 text-sm">
+                                        <div className="text-muted-foreground">Started:</div>
+                                        <div className="font-medium">{startedAt}</div>
+
+                                        <div className="text-muted-foreground">Completed:</div>
+                                        <div className="font-medium">{completedAt}</div>
+                                    </div>
+                                </div>
+
+                                {/* Document Details */}
+                                <div className="space-y-2 p-3 bg-card rounded-lg border">
+                                    <div className="flex items-center text-sm font-medium mb-1">
+                                        <FileText className="h-4 w-4 mr-2 text-primary" />
+                                        Document Details
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-x-2 gap-y-2 text-sm">
+                                        <div className="text-muted-foreground">Document:</div>
+                                        <div className="truncate font-mono text-xs">{documentId}</div>
+
+                                        <div className="text-muted-foreground">Analysis:</div>
+                                        <div className="truncate font-mono text-xs">{analysisId}</div>
+
+                                        <div className="text-muted-foreground">Type:</div>
+                                        <div>
+                                            <Badge variant="outline">{analysisType}</Badge>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
-                        <div className="space-y-2">
-                            <div className="text-sm font-medium">Timing</div>
-                            <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-sm">
-                                <div className="text-muted-foreground">Started:</div>
-                                <div className="flex items-center">
-                                    <Calendar className="h-3 w-3 mr-1" />
-                                    {startedAt}
-                                </div>
-
-                                <div className="text-muted-foreground">Completed:</div>
-                                <div className="flex items-center">
-                                    <Calendar className="h-3 w-3 mr-1" />
-                                    {completedAt}
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="space-y-2">
-                            <div className="text-sm font-medium">Document Information</div>
-                            <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-sm">
-                                <div className="text-muted-foreground">Document ID:</div>
-                                <div className="truncate">{documentId}</div>
-
-                                <div className="text-muted-foreground">Analysis ID:</div>
-                                <div className="truncate">{analysisId}</div>
-
-                                <div className="text-muted-foreground">Analysis Type:</div>
-                                <div>{analysisType}</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <Separator className="my-4" />
-
-                    {/* Table Detection Statistics */}
-                    <div className="mb-4">
-                        <div className="text-sm font-medium mb-2">Detection Statistics</div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div className="space-y-1">
-                                <div className="flex justify-between text-sm">
-                                    <span>Tables Detected</span>
-                                    <span className="font-medium">
-                                        {detectionResult.total_tables_found}
-                                    </span>
-                                </div>
-                                <Progress
-                                    value={detectionResult.total_tables_found > 0 ? 100 : 0}
-                                    className={`h-2 ${detectionResult.total_tables_found > 0 ? 'bg-green-100' : 'bg-gray-100'}`}
-                                />
-                                <div className="text-xs text-muted-foreground">
-                                    {detectionResult.total_tables_found > 0
-                                        ? `Average ${(detectionResult.total_tables_found /
-                                            (detectionResult.total_pages_processed || 1)).toFixed(1)} tables per page with tables`
-                                        : 'No tables detected'}
-                                </div>
-                            </div>
-
-                            <div className="space-y-1">
-                                <div className="flex justify-between text-sm">
-                                    <span>Pages Processed</span>
-                                    <span className="font-medium">{detectionResult.total_pages_processed}</span>
-                                </div>
-                                <Progress value={100} className="h-2" />
-                                <div className="text-xs text-muted-foreground">
-                                    {detectionResult.total_pages_processed} pages analyzed
-                                </div>
-                            </div>
-
-                            <div className="space-y-1">
-                                <div className="flex justify-between text-sm">
-                                    <span>Pages with Tables</span>
-                                    <span className="font-medium">
-                                        {detectionResult.total_tables_found}
-                                    </span>
-                                </div>
-                                <Progress
-                                    value={detectionResult.total_tables_found > 0
-                                        ? (detectionResult.total_tables_found / detectionResult.total_pages_processed) * 100
-                                        : 0
-                                    }
-                                    className="h-2"
-                                />
-                                <div className="text-xs text-muted-foreground">
-                                    {detectionResult.total_pages_processed > 0
-                                        ? `${Math.round((detectionResult.total_tables_found / detectionResult.total_pages_processed) * 100)}% of pages contain tables`
-                                        : 'No pages analyzed'}
-                                </div>
-                            </div>
-                        </div>
+                        <Separator className="my-4" />
                     </div>
                 </CardContent>
             </Card>
@@ -310,47 +327,143 @@ const TableDetectionVisualizer: React.FC<BaseStepComponentProps> = ({ stepResult
                             </AlertDescription>
                         </Alert>
                     ) : (
-                        <Tabs
-                            value={activeTab}
-                            onValueChange={setActiveTab}
-                            className="w-full"
-                        >
-                            <TabsList className="mb-4 flex flex-wrap">
-                                {pageResults.map((pageResult) => (
-                                    <TabsTrigger
-                                        key={`page-${pageResult.page_info.page_number}`}
-                                        value={pageResult.page_info.page_number.toString()}
-                                        className="flex items-center gap-2"
-                                    >
-                                        Page {pageResult.page_info.page_number}
-                                        {pageResult.tables.length > 0 && (
-                                            <Badge variant="secondary" className="ml-1">
-                                                {pageResult.tables.length}
-                                            </Badge>
-                                        )}
-                                    </TabsTrigger>
-                                ))}
-                            </TabsList>
+                        <div className="space-y-6">
+                            {/* Page Navigation Bar */}
+                            <div className="flex flex-col space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center space-x-2">
+                                        <h3 className="text-sm font-medium">Document Pages</h3>
+                                        <Badge variant="outline" className="text-xs">
+                                            {pageResults.length} pages
+                                        </Badge>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => {
+                                                const currentIndex = pageResults.findIndex(
+                                                    p => p.page_info.page_number.toString() === activeTab
+                                                );
+                                                if (currentIndex > 0) {
+                                                    setActiveTab(pageResults[currentIndex - 1].page_info.page_number.toString());
+                                                }
+                                            }}
+                                            disabled={pageResults.findIndex(p => p.page_info.page_number.toString() === activeTab) <= 0}
+                                        >
+                                            Previous
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => {
+                                                const currentIndex = pageResults.findIndex(
+                                                    p => p.page_info.page_number.toString() === activeTab
+                                                );
+                                                if (currentIndex < pageResults.length - 1) {
+                                                    setActiveTab(pageResults[currentIndex + 1].page_info.page_number.toString());
+                                                }
+                                            }}
+                                            disabled={pageResults.findIndex(p => p.page_info.page_number.toString() === activeTab) >= pageResults.length - 1}
+                                        >
+                                            Next
+                                        </Button>
+                                    </div>
+                                </div>
 
-                            {pageResults.map((pageResult) => {
-                                const pageInfo = pageMap.get(pageResult.page_info.page_number);
-                                return (
-                                    <TabsContent
-                                        key={`content-${pageResult.page_info.page_number}`}
-                                        value={pageResult.page_info.page_number.toString()}
-                                        className="relative"
-                                    >
-                                        <PageTableVisualizer
-                                            pageResult={pageResult}
-                                            imageUrl={pageInfo?.url || ''}
-                                            actualWidth={pageInfo?.width || pageResult.page_info.width}
-                                            actualHeight={pageInfo?.height || pageResult.page_info.height}
-                                            processingInfo={pageResult.processing_info}
-                                        />
-                                    </TabsContent>
-                                );
-                            })}
-                        </Tabs>
+                                {/* Page Thumbnails */}
+                                <div className="relative">
+                                    <div className="flex pt-2 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
+                                        {pageResults.map((pageResult) => {
+                                            const pageInfo = pageMap.get(pageResult.page_info.page_number);
+                                            const isActive = activeTab === pageResult.page_info.page_number.toString();
+                                            const hasTables = pageResult.tables.length > 0;
+
+                                            return (
+                                                <div
+                                                    key={`thumb-${pageResult.page_info.page_number}`}
+                                                    className={cn(
+                                                        "flex-shrink-0 cursor-pointer mx-1 transition-all duration-200 relative",
+                                                        isActive ? "opacity-100 scale-100" : "opacity-70 scale-95 hover:opacity-90 hover:scale-98"
+                                                    )}
+                                                    onClick={() => setActiveTab(pageResult.page_info.page_number.toString())}
+                                                >
+                                                    <div className={cn(
+                                                        "w-24 h-32 border-2 rounded-md overflow-hidden flex items-center justify-center bg-gray-50",
+                                                        isActive ? "border-primary shadow-md" : "border-gray-200",
+                                                        hasTables ? "ring-2 ring-green-200 ring-opacity-50" : ""
+                                                    )}>
+                                                        {pageInfo?.url ? (
+                                                            <img
+                                                                src={pageInfo.url}
+                                                                alt={`Page ${pageResult.page_info.page_number} thumbnail`}
+                                                                className="w-full h-full object-contain"
+                                                            />
+                                                        ) : (
+                                                            <FileText className="h-6 w-6 text-gray-400" />
+                                                        )}
+                                                    </div>
+                                                    <div className={cn(
+                                                        "absolute -bottom-1 left-1/2 transform -translate-x-1/2 px-2 py-0.5 rounded-full text-xs font-medium",
+                                                        isActive ? "bg-primary text-white" : "bg-gray-200 text-gray-700"
+                                                    )}>
+                                                        {pageResult.page_info.page_number}
+                                                    </div>
+                                                    {hasTables && (
+                                                        <div className="absolute -top-1 -right-1 bg-green-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-medium">
+                                                            {pageResult.tables.length}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Page Content */}
+                            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                                {pageResults.map((pageResult) => {
+                                    const pageInfo = pageMap.get(pageResult.page_info.page_number);
+                                    return (
+                                        <TabsContent
+                                            key={`content-${pageResult.page_info.page_number}`}
+                                            value={pageResult.page_info.page_number.toString()}
+                                            className="relative mt-0"
+                                        >
+                                            <div className="bg-card rounded-lg border p-4">
+                                                <div className="flex items-center justify-between mb-4">
+                                                    <div className="flex items-center space-x-2">
+                                                        <FileText className="h-5 w-5 text-primary" />
+                                                        <h3 className="text-lg font-medium">Page {pageResult.page_info.page_number}</h3>
+                                                        {pageResult.tables.length > 0 ? (
+                                                            <Badge variant="secondary">
+                                                                {pageResult.tables.length} {pageResult.tables.length === 1 ? 'table' : 'tables'} detected
+                                                            </Badge>
+                                                        ) : (
+                                                            <Badge variant="outline" className="text-gray-500">
+                                                                No tables
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                    <div className="text-sm text-muted-foreground">
+                                                        {pageInfo ? `${pageInfo.width} × ${pageInfo.height} px` : ''}
+                                                    </div>
+                                                </div>
+
+                                                <PageTableVisualizer
+                                                    pageResult={pageResult}
+                                                    imageUrl={pageInfo?.url || ''}
+                                                    actualWidth={pageInfo?.width || pageResult.page_info.width}
+                                                    actualHeight={pageInfo?.height || pageResult.page_info.height}
+                                                    processingInfo={pageResult.processing_info}
+                                                />
+                                            </div>
+                                        </TabsContent>
+                                    );
+                                })}
+                            </Tabs>
+                        </div>
                     )}
                 </CardContent>
             </Card>
