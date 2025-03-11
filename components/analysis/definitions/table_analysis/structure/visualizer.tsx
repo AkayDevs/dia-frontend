@@ -3,6 +3,7 @@ import { BaseStepComponentProps } from "@/components/analysis/definitions/base";
 import { useDocumentStore } from '@/store/useDocumentStore';
 import { TableStructureOutput, PageTableStructureResult, TableStructure, Cell } from '@/types/analysis/definitions/table_analysis/table_structure';
 import { DocumentPage } from '@/types/document';
+import { format } from "date-fns";
 import {
     Card,
     CardContent,
@@ -46,9 +47,18 @@ import {
     Download,
     Maximize2,
     Minimize2,
-    AlertCircle
+    AlertCircle,
+    FileText,
+    RefreshCw,
+    Calendar,
+    Clock,
+    BarChart3,
+    ArrowRight,
+    ArrowDown
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Separator } from '@/components/ui/separator';
+import { Progress } from '@/components/ui/progress';
 
 interface PageTableStructureVisualizerProps {
     pageResult: PageTableStructureResult;
@@ -62,14 +72,15 @@ const TableStructureVisualizer: React.FC<BaseStepComponentProps> = ({ stepResult
     const { fetchDocumentPages, currentPages, isPagesLoading, pagesError } = useDocumentStore();
     const [activeTab, setActiveTab] = useState<string>('1');
 
-    // Cast stepResult to TableStructureOutput
-    const tableStructureResult = stepResult?.result as TableStructureOutput | undefined;
-
     useEffect(() => {
         if (documentId) {
             fetchDocumentPages(documentId);
         }
     }, [documentId, fetchDocumentPages]);
+
+
+    // Cast stepResult to TableStructureOutput
+    const tableStructureResult = stepResult?.result as TableStructureOutput | undefined;
 
     // Set active tab to the first page with tables when results load
     useEffect(() => {
@@ -80,37 +91,13 @@ const TableStructureVisualizer: React.FC<BaseStepComponentProps> = ({ stepResult
 
     if (!stepResult) {
         return (
-            <Card className="w-full">
-                <CardHeader>
-                    <CardTitle>Table Structure Analysis</CardTitle>
-                    <CardDescription>Loading table structure analysis results...</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div className="space-y-4">
-                        <Skeleton className="h-[400px] w-full" />
-                    </div>
-                </CardContent>
-            </Card>
-        );
-    }
-
-    if (!tableStructureResult || !tableStructureResult.results || tableStructureResult.results.length === 0) {
-        return (
-            <Card className="w-full">
-                <CardHeader>
-                    <CardTitle>Table Structure Analysis</CardTitle>
-                    <CardDescription>No table structure results available</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <Alert>
-                        <InfoIcon className="h-4 w-4" />
-                        <AlertTitle>No tables found</AlertTitle>
-                        <AlertDescription>
-                            No table structures were detected in this document. Please check if the document contains tables or try adjusting the analysis parameters.
-                        </AlertDescription>
-                    </Alert>
-                </CardContent>
-            </Card>
+            <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Error</AlertTitle>
+                <AlertDescription>
+                    No valid table structure result available.
+                </AlertDescription>
+            </Alert>
         );
     }
 
@@ -118,42 +105,105 @@ const TableStructureVisualizer: React.FC<BaseStepComponentProps> = ({ stepResult
     if (isPagesLoading) {
         return (
             <div className="space-y-4">
+                {/* Summary Card Skeleton */}
                 <Card>
                     <CardHeader>
-                        <CardTitle>Table Structure Analysis</CardTitle>
-                        <CardDescription>Loading document pages...</CardDescription>
+                        <Skeleton className="h-8 w-64" />
+                        <Skeleton className="h-4 w-full" />
                     </CardHeader>
                     <CardContent>
-                        <Skeleton className="h-[600px] w-full" />
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                {[1, 2, 3].map((i) => (
+                                    <Skeleton key={i} className="h-24 w-full" />
+                                ))}
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* Page Visualization Card Skeleton */}
+                <Card>
+                    <CardHeader>
+                        <Skeleton className="h-8 w-64" />
+                        <Skeleton className="h-4 w-full" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="space-y-4">
+                            <Skeleton className="h-10 w-full" /> {/* Tabs skeleton */}
+                            <Skeleton className="h-[400px] w-full" /> {/* Page content skeleton */}
+                        </div>
                     </CardContent>
                 </Card>
             </div>
         );
     }
 
-    // If there's an error loading pages, show error message
-    if (pagesError) {
+    if (!tableStructureResult || !tableStructureResult.results || tableStructureResult.results.length === 0) {
         return (
-            <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Error loading document pages</AlertTitle>
-                <AlertDescription>{pagesError}</AlertDescription>
-            </Alert>
+            <Card className="w-full animate-in fade-in-50">
+                <CardHeader>
+                    <CardTitle className="flex items-center">
+                        <TableIcon className="mr-2 h-5 w-5 text-primary" />
+                        Table Structure Analysis
+                    </CardTitle>
+                    <CardDescription>No table structure results detected in this document</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Alert variant="default" className="border-amber-200 bg-amber-50">
+                        <InfoIcon className="h-4 w-4 text-amber-500" />
+                        <AlertTitle className="font-medium">No Tables Detected</AlertTitle>
+                        <AlertDescription className="mt-2">
+                            <p className="mb-2">We couldn't find any table structures in this document.</p>
+                            <div className="text-sm text-muted-foreground">
+                                You might want to:
+                                <ul className="list-disc ml-5 mt-1">
+                                    <li>Verify the document contains properly formatted tables</li>
+                                    <li>Adjust the analysis sensitivity parameters</li>
+                                    <li>Try a different document with clearer table structures</li>
+                                </ul>
+                            </div>
+                            <Button variant="outline" size="sm" className="mt-3">
+                                <RefreshCw className="h-3 w-3 mr-2" />
+                                Run Analysis Again
+                            </Button>
+                        </AlertDescription>
+                    </Alert>
+                </CardContent>
+            </Card>
         );
     }
 
-    // If no pages are available, show message
-    if (!currentPages || !currentPages.pages || currentPages.pages.length === 0) {
+    // If there's an error loading pages, show error message
+    if (pagesError || !currentPages || !currentPages.pages || currentPages.pages.length === 0) {
         return (
-            <Alert>
+            <Alert variant="default" className="animate-in fade-in-50">
                 <InfoIcon className="h-4 w-4" />
-                <AlertTitle>No document pages available</AlertTitle>
+                <AlertTitle>Document Pages Unavailable</AlertTitle>
                 <AlertDescription>
-                    The document pages could not be loaded. Please check if the document exists.
+                    <p className="mb-2">We couldn't retrieve any pages for this document.</p>
+                    <div className="text-sm text-muted-foreground">
+                        This could be due to one of the following reasons:
+                    </div>
+                    <ul className="list-disc ml-5 mt-1 text-sm text-muted-foreground">
+                        <li>The document may have been deleted or moved</li>
+                        <li>The document processing may still be in progress</li>
+                        <li>There might be permission issues accessing this content</li>
+                    </ul>
+                    <Button variant="outline" size="sm" className="mt-3" onClick={() => window.location.reload()}>
+                        <RefreshCw className="h-3 w-3 mr-2" />
+                        Refresh Page
+                    </Button>
                 </AlertDescription>
             </Alert>
         );
     }
+    // Format dates for display
+    const startedAt = stepResult.started_at ? format(new Date(stepResult.started_at), 'PPpp') : 'N/A';
+    const completedAt = stepResult.completed_at ? format(new Date(stepResult.completed_at), 'PPpp') : 'N/A';
+    const processingTime = stepResult.started_at && stepResult.completed_at
+        ? ((new Date(stepResult.completed_at).getTime() - new Date(stepResult.started_at).getTime()) / 1000).toFixed(2)
+        : 'N/A';
 
     // Map page numbers to their image URLs and page dimensions
     const pageMap = new Map(
@@ -173,58 +223,208 @@ const TableStructureVisualizer: React.FC<BaseStepComponentProps> = ({ stepResult
     // Count total tables across all pages
     const totalTables = pageResults.reduce((sum, page) => sum + page.tables.length, 0);
 
+    // Calculate structure statistics
+    const totalCells = pageResults.reduce((sum, page) =>
+        sum + page.tables.reduce((tableSum, table) =>
+            tableSum + (table.cells?.length || 0), 0), 0);
+
+    const pagesWithTables = pageResults.filter(page => page.tables.length > 0).length;
+
     return (
-        <div className="w-full">
-            <Card className="w-full">
+        <div className="space-y-4">
+            <Card>
                 <CardHeader>
-                    <CardTitle className="flex items-center">
-                        <TableIcon className="mr-2 h-5 w-5" />
-                        Table Structure Analysis
+                    <CardTitle className="flex items-center justify-between">
+                        <div className="flex items-center">
+                            <TableIcon className="mr-2 h-5 w-5 text-primary" />
+                            <span>Table Structure Results</span>
+                        </div>
+                        <Badge variant="secondary" className="ml-2">
+                            {tableStructureResult.total_tables_found} tables processed
+                        </Badge>
                     </CardTitle>
-                    <CardDescription>
-                        {totalTables} {totalTables === 1 ? 'table' : 'tables'} detected across {pageResults.length} {pageResults.length === 1 ? 'page' : 'pages'}
+                    <CardDescription className="text-muted-foreground">
+                        Total pages processed: {tableStructureResult.total_pages_processed} • Structure analysis completed in {processingTime}s
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                        <TabsList className="mb-4 flex flex-wrap">
-                            {pageResults.map((pageResult) => (
-                                <TabsTrigger
-                                    key={`tab-${pageResult.page_info.page_number}`}
-                                    value={pageResult.page_info.page_number.toString()}
-                                    className="flex items-center"
-                                >
-                                    Page {pageResult.page_info.page_number}
-                                    {pageResult.tables.length > 0 && (
-                                        <Badge variant="secondary" className="ml-2">
-                                            {pageResult.tables.length}
-                                        </Badge>
-                                    )}
-                                </TabsTrigger>
-                            ))}
-                        </TabsList>
+                    <div className="space-y-6">
+                        {/* Key Statistics */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <Card className="bg-primary/5 border-primary/20">
+                                <CardContent className="p-4">
+                                    <div className="flex items-center justify-between">
+                                        <div className="text-sm font-medium text-muted-foreground">Tables Detected</div>
+                                        <TableIcon className="h-4 w-4 text-primary" />
+                                    </div>
+                                    <div className="mt-2">
+                                        <div className="text-2xl font-bold">{totalTables}</div>
+                                        <div className="text-xs text-muted-foreground mt-1">
+                                            Across {pagesWithTables} pages
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
 
-                        {pageResults.map((pageResult) => {
-                            const pageInfo = pageMap.get(pageResult.page_info.page_number);
-                            return (
-                                <TabsContent
-                                    key={`content-${pageResult.page_info.page_number}`}
-                                    value={pageResult.page_info.page_number.toString()}
-                                    className="relative"
-                                >
-                                    <PageTableStructureVisualizer
-                                        pageResult={pageResult}
-                                        imageUrl={pageInfo?.url || ''}
-                                        actualWidth={pageInfo?.width || pageResult.page_info.width}
-                                        actualHeight={pageInfo?.height || pageResult.page_info.height}
-                                        processingInfo={pageResult.processing_info}
-                                    />
-                                </TabsContent>
-                            );
-                        })}
-                    </Tabs>
+                            <Card className="bg-blue-500/5 border-blue-500/20">
+                                <CardContent className="p-4">
+                                    <div className="flex items-center justify-between">
+                                        <div className="text-sm font-medium text-muted-foreground">Pages Processed</div>
+                                        <FileText className="h-4 w-4 text-blue-500" />
+                                    </div>
+                                    <div className="mt-2">
+                                        <div className="text-2xl font-bold">{tableStructureResult.total_pages_processed}</div>
+                                        <div className="text-xs text-muted-foreground mt-1">
+                                            Document analysis complete
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+
+                            <Card className="bg-green-500/5 border-green-500/20">
+                                <CardContent className="p-4">
+                                    <div className="flex items-center justify-between">
+                                        <div className="text-sm font-medium text-muted-foreground">Processing Time</div>
+                                        <Clock className="h-4 w-4 text-green-500" />
+                                    </div>
+                                    <div className="mt-2">
+                                        <div className="text-2xl font-bold">{processingTime}s</div>
+                                        <div className="text-xs text-muted-foreground mt-1">
+                                            Total analysis duration
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </div>
+
+                        <Separator className="my-4" />
+
+                        {/* Summary Section */}
+                        <div className="mb-4">
+                            <div className="text-sm font-medium mb-2 flex items-center">
+                                <FileText className="h-4 w-4 mr-2 text-primary" />
+                                Document Information
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                {/* Processing Information */}
+                                <div className="space-y-2 p-3 bg-card rounded-lg border">
+                                    <div className="flex items-center text-sm font-medium mb-1">
+                                        <RefreshCw className="h-4 w-4 mr-2 text-primary" />
+                                        Processing Details
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-x-2 gap-y-2 text-sm">
+                                        <div className="text-muted-foreground">Algorithm:</div>
+                                        <div className="font-medium">{stepResult.algorithm_code}</div>
+
+                                        <div className="text-muted-foreground">Status:</div>
+                                        <div>
+                                            <Badge variant={stepResult.status === 'completed' ? 'outline' : 'secondary'}>
+                                                {stepResult.status}
+                                            </Badge>
+                                        </div>
+
+                                        <div className="text-muted-foreground">Duration:</div>
+                                        <div className="flex items-center font-medium">
+                                            <Clock className="h-3 w-3 mr-1 text-muted-foreground" />
+                                            {processingTime}s
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Timing Information */}
+                                <div className="space-y-2 p-3 bg-card rounded-lg border">
+                                    <div className="flex items-center text-sm font-medium mb-1">
+                                        <Calendar className="h-4 w-4 mr-2 text-primary" />
+                                        Timing
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-x-2 gap-y-2 text-sm">
+                                        <div className="text-muted-foreground">Started:</div>
+                                        <div className="font-medium">{startedAt}</div>
+
+                                        <div className="text-muted-foreground">Completed:</div>
+                                        <div className="font-medium">{completedAt}</div>
+                                    </div>
+                                </div>
+
+                                {/* Document Details */}
+                                <div className="space-y-2 p-3 bg-card rounded-lg border">
+                                    <div className="flex items-center text-sm font-medium mb-1">
+                                        <FileText className="h-4 w-4 mr-2 text-primary" />
+                                        Document Details
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-x-2 gap-y-2 text-sm">
+                                        <div className="text-muted-foreground">Document:</div>
+                                        <div className="truncate font-mono text-xs">{documentId}</div>
+
+                                        <div className="text-muted-foreground">Analysis:</div>
+                                        <div className="truncate font-mono text-xs">{analysisId}</div>
+
+                                        <div className="text-muted-foreground">Type:</div>
+                                        <div>
+                                            <Badge variant="outline">{analysisType}</Badge>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <Separator className="my-4" />
+                    </div>
                 </CardContent>
             </Card>
+
+            <div className="w-full">
+                <Card className="w-full">
+                    <CardHeader>
+                        <CardTitle className="flex items-center">
+                            <TableIcon className="mr-2 h-5 w-5" />
+                            Table Structure Analysis
+                        </CardTitle>
+                        <CardDescription>
+                            {totalTables} {totalTables === 1 ? 'table' : 'tables'} detected across {pageResults.length} {pageResults.length === 1 ? 'page' : 'pages'}
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                            <TabsList className="mb-4 flex flex-wrap">
+                                {pageResults.map((pageResult) => (
+                                    <TabsTrigger
+                                        key={`tab-${pageResult.page_info.page_number}`}
+                                        value={pageResult.page_info.page_number.toString()}
+                                        className="flex items-center"
+                                    >
+                                        Page {pageResult.page_info.page_number}
+                                        {pageResult.tables.length > 0 && (
+                                            <Badge variant="secondary" className="ml-2">
+                                                {pageResult.tables.length}
+                                            </Badge>
+                                        )}
+                                    </TabsTrigger>
+                                ))}
+                            </TabsList>
+
+                            {pageResults.map((pageResult) => {
+                                const pageInfo = pageMap.get(pageResult.page_info.page_number);
+                                return (
+                                    <TabsContent
+                                        key={`content-${pageResult.page_info.page_number}`}
+                                        value={pageResult.page_info.page_number.toString()}
+                                        className="relative"
+                                    >
+                                        <PageTableStructureVisualizer
+                                            pageResult={pageResult}
+                                            imageUrl={pageInfo?.url || ''}
+                                            actualWidth={pageInfo?.width || pageResult.page_info.width}
+                                            actualHeight={pageInfo?.height || pageResult.page_info.height}
+                                            processingInfo={pageResult.processing_info}
+                                        />
+                                    </TabsContent>
+                                );
+                            })}
+                        </Tabs>
+                    </CardContent>
+                </Card>
+            </div>
         </div>
     );
 };
