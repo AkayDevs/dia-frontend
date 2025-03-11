@@ -3,7 +3,16 @@
  * This file provides a registry for all analysis components and utility functions to access them
  */
 import { AnalysisDefinitionCode } from '../../constants/analysis/registry';
-import { BaseAnalysisComponents, BaseResults, BaseEdits, BaseOverview, BaseSummary, BaseStepComponent } from './definitions/base';
+import {
+    BaseAnalysisComponents,
+    BaseResults,
+    BaseEdits,
+    BaseOverview,
+    BaseSummary,
+    BaseStepComponent,
+    BaseStepComponentProps,
+    StepComponentType
+} from './definitions/base';
 import { TableAnalysisComponents } from './definitions/table_analysis';
 
 // Import other analysis components as they are created
@@ -87,13 +96,21 @@ export function getSummaryComponent(analysisType: string) {
 }
 
 /**
- * Get a step-specific component for a specific analysis type and step code
+ * Get a step-specific component for a specific analysis type, step code, and component type
  */
-export function getStepComponent(analysisType: string, stepCode: string) {
+export function getStepComponent(
+    analysisType: string,
+    stepCode: string,
+    componentType: StepComponentType = StepComponentType.VISUALIZER
+) {
     const components = getAnalysisComponents(analysisType);
 
-    if (components.StepComponents && components.StepComponents[stepCode]) {
-        return components.StepComponents[stepCode];
+    if (
+        components.StepComponents &&
+        components.StepComponents[stepCode] &&
+        components.StepComponents[stepCode][componentType]
+    ) {
+        return components.StepComponents[stepCode][componentType];
     }
 
     // Return default step component if specific one is not found

@@ -43,7 +43,7 @@ interface AnalysisState {
 
     // Analysis state
     analyses: Record<string, AnalysisRunWithResultsInfo | AnalysisRunWithResults>;
-    currentAnalysis: AnalysisRunWithResultsInfo | AnalysisRunWithResults | null;
+    currentAnalysis: AnalysisRunWithResults | null;
     currentStepResult: StepResultResponse & StepResult | null;
 
     // Cache control
@@ -342,11 +342,19 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
             // Check if the analysis is already in our record
             const cachedAnalysis = state.analyses[analysisId];
             if (cachedAnalysis) {
-                // If we already have this analysis and it's current, use it
-                if (state.currentAnalysis?.id !== analysisId) {
+                // Check if the cached analysis is of type AnalysisRunWithResults
+                // We can determine this by checking if the step_results contains items with 'result' property
+                // which is present in StepResultResponse but not in StepResultInfo
+                const isAnalysisRunWithResults =
+                    Array.isArray(cachedAnalysis.step_results) &&
+                    (cachedAnalysis.step_results.length === 0 ||
+                        'result' in (cachedAnalysis.step_results[0] || {}));
+
+                // Only use the cached data if it's AnalysisRunWithResults
+                if (isAnalysisRunWithResults && state.currentAnalysis?.id !== analysisId) {
                     // Only update if it's not already the current analysis
                     set({
-                        currentAnalysis: cachedAnalysis,
+                        currentAnalysis: cachedAnalysis as AnalysisRunWithResults,
                         // Update derived state
                         analysisId: cachedAnalysis.id || '',
                         documentId: cachedAnalysis.document_id,
@@ -355,8 +363,8 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
                         isTextAnalysis: cachedAnalysis.analysis_code === AnalysisDefinitionCode.TEXT_ANALYSIS,
                         constants: getAnalysisConstants(cachedAnalysis.analysis_code)
                     });
+                    return;
                 }
-                return;
             }
         }
 

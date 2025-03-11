@@ -3,12 +3,18 @@
  * This file defines the common interfaces that all analysis component definitions should follow
  */
 import { AnalysisStep } from '@/constants/analysis';
-
+import { StepResultResponse } from '@/types/analysis/base';
 // Base interface for analysis results component
 export interface BaseResultsProps {
     analysisId: string;
     analysisType: string;
     stepCode: string;
+    // Optional parameters for enhanced functionality
+    stepResult?: StepResultResponse; // Result from the current step
+    documentId?: string; // Associated document ID
+    pageNumber?: number; // Page number for the result
+    showControls?: boolean; // Whether to show interactive controls
+    onExport?: (format: string) => void; // Callback for exporting results
 }
 
 // Base interface for analysis edits component
@@ -42,8 +48,19 @@ export interface BaseSummaryProps {
 // Base interface for step-specific components
 export interface BaseStepComponentProps {
     analysisId: string;
+    documentId: string;
     analysisType: string;
     step: AnalysisStep;
+    stepResult?: StepResultResponse;
+}
+
+// Component types for step-specific components
+export enum StepComponentType {
+    VISUALIZER = 'visualizer',
+    EDITOR = 'editor',
+    DETAILS = 'details',
+    SUMMARY = 'summary',
+    CONFIGURATION = 'configuration'
 }
 
 // Base interface that all analysis component definitions must implement
@@ -55,8 +72,11 @@ export interface BaseAnalysisComponents {
     Summary: React.ComponentType<BaseSummaryProps>;
 
     // Optional step-specific components
+    // Now organized by step code and component type
     StepComponents?: {
-        [stepCode: string]: React.ComponentType<BaseStepComponentProps>;
+        [stepCode: string]: {
+            [componentType in StepComponentType]?: React.ComponentType<BaseStepComponentProps>;
+        };
     };
 }
 

@@ -23,15 +23,15 @@ export const TABLE_ANALYSIS_STEPS: AnalysisStep[] = [
         order: 1
     },
     {
-        step_code: 'table_analysis.table_extraction',
-        name: 'Table Extraction',
-        description: 'Extract data from detected tables',
+        step_code: 'table_analysis.table_structure',
+        name: 'Table Structure',
+        description: 'Extract table structure from the detected tables',
         order: 2
     },
     {
-        step_code: 'table_analysis.table_validation',
-        name: 'Table Validation',
-        description: 'Validate extracted table data',
+        step_code: 'table_analysis.table_data',
+        name: 'Table Data',
+        description: 'Extract data from the detected tables',
         order: 3
     }
 ];

@@ -20,11 +20,11 @@ export const ANALYSIS_STATUS_LABELS = {
 };
 
 export const ANALYSIS_STATUS_COLORS = {
-    pending: 'bg-yellow-100 text-yellow-800',
-    in_progress: 'bg-blue-100 text-blue-800',
-    completed: 'bg-green-100 text-green-800',
-    failed: 'bg-red-100 text-red-800',
-    cancelled: 'bg-gray-100 text-gray-800'
+    pending: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
+    in_progress: 'bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300',
+    completed: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
+    failed: 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300',
+    cancelled: 'bg-slate-100 text-slate-800 dark:bg-slate-800/40 dark:text-slate-300'
 };
 
 // export const ANALYSIS_STATUS_ICONS = {

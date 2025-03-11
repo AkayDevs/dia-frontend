@@ -57,6 +57,26 @@ const AnalysisResultsExample: React.FC<AnalysisResultsExampleProps> = ({
                     analysisId={analysisId}
                     analysisType={analysisType}
                     stepCode={stepCode}
+                    // Additional parameters for enhanced functionality
+                    documentId="doc-12345"
+                    pageNumber={1}
+                    showControls={true}
+                    onExport={(format) => alert(`Exporting as ${format}`)}
+                    stepResult={{
+                        confidence: 92,
+                        processing_time: 1250,
+                        algorithm: "TableNet",
+                        page_number: 1,
+                        result: {
+                            tables: [
+                                {
+                                    bbox: { x: 50, y: 100, width: 500, height: 300 },
+                                    confidence: 0.95
+                                }
+                            ],
+                            page_dimensions: { width: 600, height: 800 }
+                        }
+                    }}
                 />
             </section>
 

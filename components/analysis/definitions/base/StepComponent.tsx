@@ -5,7 +5,7 @@ import { BaseStepComponentProps } from './index';
  * Base Step Component
  * This component serves as a fallback when a specific analysis type doesn't provide its own step component
  */
-const BaseStepComponent: React.FC<BaseStepComponentProps> = ({ analysisId, analysisType, step }) => {
+const BaseStepComponent: React.FC<BaseStepComponentProps> = ({ analysisId, analysisType, step, stepResult }) => {
     return (
         <div className="p-4 border rounded-md bg-gray-50">
             <h2 className="text-lg font-medium mb-2">{step.name}</h2>

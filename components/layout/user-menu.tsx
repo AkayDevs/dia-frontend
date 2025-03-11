@@ -39,11 +39,9 @@ export function UserMenu() {
     };
 
     if (!user) {
-        console.log('No user found in UserMenu');
+        // console.log('No user found in UserMenu');
         return null;
     }
-
-    console.log('Rendering UserMenu for user:', user.name);
 
     const userInitials = user.name
         .split(' ')

@@ -1,16 +1,16 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAnalysisStore } from '@/store/useAnalysisStore';
 import { useDocumentStore } from '@/store/useDocumentStore';
-import { useToast } from '@/hooks/use-toast';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { getSummaryComponent, getResultsComponent, getStepComponent } from '@/components/analysis/registry';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Separator } from '@/components/ui/separator';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import React from 'react';
+import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useToast } from '@/hooks/use-toast';
 import {
     Loader2,
     ArrowLeft,
@@ -18,12 +18,20 @@ import {
     FileText,
     BarChart4,
     Clock,
-    CheckCircle2
+    CheckCircle2,
+    ChevronLeft,
+    Table,
+    Layers,
+    AlertCircle
 } from 'lucide-react';
 import { AnalysisStatus } from '@/enums/analysis';
 import { formatDistanceToNow } from 'date-fns';
 import { motion } from 'framer-motion';
-import { getSummaryComponent } from '@/components/analysis/registry';
+import { TableAnalysisStepCode } from '@/enums/analysis';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { ANALYSIS_STATUS_COLORS, AnalysisStep, AnalysisDefinitionName, getAnalysisSteps, getAnalysisName, AnalysisDefinitionIcon, getAnalysisIcon } from '@/constants/analysis';
+import { StepComponentType } from '@/components/analysis/definitions/base';
+import { StepResultResponse } from '@/types/analysis/base';
 
 interface AnalysisDetailPageProps {
     params: {
@@ -39,8 +47,13 @@ export default function AnalysisDetailPage({ params }: AnalysisDetailPageProps) 
     const router = useRouter();
     const { toast } = useToast();
     const [activeTab, setActiveTab] = useState('summary');
+    const [selectedStep, setSelectedStep] = useState<string>(TableAnalysisStepCode.TABLE_DETECTION);
+    const [analysisSteps, setAnalysisSteps] = useState<AnalysisStep[]>();
+    const [analysisName, setAnalysisName] = useState<AnalysisDefinitionName>();
+    const [analysisIcon, setAnalysisIcon] = useState<AnalysisDefinitionIcon>();
 
     const {
+        analyses,
         currentAnalysis,
         analysisType,
         documentId,
@@ -50,22 +63,43 @@ export default function AnalysisDetailPage({ params }: AnalysisDetailPageProps) 
     } = useAnalysisStore();
 
     const {
-        currentDocument,
+        documents,
         fetchDocument,
+        currentDocument
     } = useDocumentStore();
 
-    // Default to TABLE_ANALYSIS if analysisType is not available
-    const effectiveAnalysisType = analysisType || 'table_analysis';
-
-    const SummaryComponent = getSummaryComponent(effectiveAnalysisType);
-
-    // Load analysis and document data
+    // Check if the current analysis is the same as the one requested in the URL
     useEffect(() => {
-        const loadData = async () => {
+        const loadAnalysisData = async () => {
             try {
-                await fetchAnalysis(analysisId);
+                // Only fetch if the current analysis doesn't match the requested ID
+                // or if the current analysis doesn't have step_results
+                if (currentAnalysis?.id !== analysisId) {
+                    await fetchAnalysis(analysisId);
+                    toast({
+                        title: 'Analysis data loaded',
+                        description: 'Analysis data loaded successfully',
+                        variant: 'default'
+                    });
+                    setAnalysisSteps(getAnalysisSteps(analysisType));
+                    setAnalysisName(getAnalysisName(analysisType));
+                    setAnalysisIcon(getAnalysisIcon(analysisType));
+                }
+
+                // Check if we need to fetch the document
                 if (documentId) {
-                    await fetchDocument(documentId);
+                    // Check if the document is already in the documents state
+                    const documentExists = documents.some(doc => doc.id === documentId);
+
+                    // If the document doesn't exist in the state or if the current document doesn't match
+                    if (!documentExists || (currentDocument?.id !== documentId)) {
+                        await fetchDocument(documentId);
+                        toast({
+                            title: 'Document data loaded',
+                            description: 'Document data loaded successfully',
+                            variant: 'default'
+                        });
+                    }
                 }
             } catch (error) {
                 console.error('Error loading analysis data:', error);
@@ -77,32 +111,52 @@ export default function AnalysisDetailPage({ params }: AnalysisDetailPageProps) 
             }
         };
 
-        loadData();
-    }, [analysisId, fetchAnalysis, documentId, fetchDocument, toast]);
+        loadAnalysisData();
+    }, [analysisId, currentAnalysis, fetchAnalysis]);
 
-    // Get components from registry based on analysis type
-    // const StepperComponent = analysisType ? getAnalysisComponent(analysisType, 'Stepper') as React.ComponentType<StepperProps> : null;
-    // const ResultsComponent = analysisType ? getAnalysisComponent(analysisType, 'Results') as React.ComponentType<ResultsProps> : null;
-    // const OptionsComponent = analysisType ? getAnalysisComponent(analysisType, 'Options') as React.ComponentType<OptionsProps> : null;
-    // const SummaryComponent = analysisType ? getAnalysisComponent(analysisType, 'Summary') as React.ComponentType<SummaryProps> : null;
+
+
+    const SummaryComponent = getSummaryComponent(analysisType);
+    const StepVisualizerComponent = getStepComponent(analysisType, selectedStep, StepComponentType.VISUALIZER);
 
     // Loading state
     if (isLoading || !currentAnalysis) {
         return (
-            <div className="flex items-center justify-center min-h-[500px]">
+            <div className="flex flex-col items-center justify-center min-h-[500px] w-full">
                 <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    className="flex flex-col items-center gap-4"
+                    className="w-full max-w-3xl space-y-6"
                 >
-                    <div className="relative">
-                        <Loader2 className="w-12 h-12 animate-spin text-primary" />
-                        <div className="absolute inset-0 flex items-center justify-center">
-                            <BarChart4 className="w-6 h-6 text-primary" />
+                    {/* Analysis header skeleton */}
+                    <div className="space-y-2">
+                        <Skeleton className="h-8 w-3/4" />
+                        <Skeleton className="h-4 w-1/2" />
+                    </div>
+
+                    {/* Analysis summary card skeleton */}
+                    <div className="border rounded-lg p-6 space-y-4">
+                        <Skeleton className="h-6 w-1/3" />
+                        <div className="grid grid-cols-3 gap-4">
+                            <Skeleton className="h-20" />
+                            <Skeleton className="h-20" />
+                            <Skeleton className="h-20" />
                         </div>
                     </div>
-                    <p className="text-lg font-medium">Loading analysis data</p>
-                    <p className="text-sm text-muted-foreground">Please wait while we prepare your analysis</p>
+
+                    {/* Analysis results skeleton */}
+                    <div className="border rounded-lg p-6">
+                        <Skeleton className="h-6 w-1/4 mb-4" />
+                        <div className="space-y-2">
+                            <Skeleton className="h-4 w-full" />
+                            <Skeleton className="h-4 w-full" />
+                            <Skeleton className="h-4 w-3/4" />
+                        </div>
+                    </div>
+
+                    <p className="text-sm text-center text-muted-foreground mt-4">
+                        Loading analysis data...
+                    </p>
                 </motion.div>
             </div>
         );
@@ -115,37 +169,44 @@ export default function AnalysisDetailPage({ params }: AnalysisDetailPageProps) 
                 <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="text-center"
+                    transition={{ duration: 0.3 }}
+                    className="w-full max-w-md"
                 >
-                    <h2 className="text-xl font-semibold mb-2">Error Loading Analysis</h2>
-                    <p className="text-muted-foreground mb-4">{error}</p>
-                    <Button
-                        variant="outline"
-                        onClick={() => fetchAnalysis(analysisId)}
-                        className="gap-2"
-                    >
-                        <RefreshCw className="h-4 w-4" />
-                        Retry
-                    </Button>
+                    <Alert variant="destructive" className="mb-4">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertTitle>Error Loading Analysis</AlertTitle>
+                        <AlertDescription>
+                            {error || "An unexpected error occurred while loading the analysis. Please try again."}
+                        </AlertDescription>
+                    </Alert>
+
+                    <div className="flex justify-center gap-3">
+                        <Button
+                            variant="outline"
+                            onClick={() => fetchAnalysis(analysisId, true)}
+                            className="gap-2"
+                        >
+                            <RefreshCw className="h-4 w-4" />
+                            Retry
+                        </Button>
+                        <Button
+                            variant="secondary"
+                            onClick={() => router.back()}
+                            className="gap-2"
+                        >
+                            <ArrowLeft className="h-4 w-4" />
+                            Go Back
+                        </Button>
+                    </div>
                 </motion.div>
             </div>
         );
     }
 
-    // Get status badge color
     const getStatusColor = (status: string | undefined) => {
-        if (!status) return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400';
+        if (!status) return ANALYSIS_STATUS_COLORS.pending;
 
-        switch (status) {
-            case AnalysisStatus.COMPLETED:
-                return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400';
-            case AnalysisStatus.IN_PROGRESS:
-                return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400';
-            case AnalysisStatus.FAILED:
-                return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400';
-            default:
-                return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400';
-        }
+        return ANALYSIS_STATUS_COLORS[status as keyof typeof ANALYSIS_STATUS_COLORS] || ANALYSIS_STATUS_COLORS.pending;
     };
 
     return (
@@ -168,9 +229,8 @@ export default function AnalysisDetailPage({ params }: AnalysisDetailPageProps) 
                             <ArrowLeft className="h-4 w-4" />
                         </Button>
                         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-                            {/* <AnalysisTypeIcon type={analysisType} className="h-6 w-6 text-primary" /> */}
-                            {effectiveAnalysisType === 'table_analysis' ? 'Table Analysis' :
-                                effectiveAnalysisType === 'text_analysis' ? 'Text Analysis' : 'Analysis'}
+                            <div dangerouslySetInnerHTML={{ __html: analysisIcon?.icon || '' }} />
+                            {analysisName?.name}
                         </h1>
                     </div>
                     <div className="flex items-center gap-2">
@@ -194,15 +254,6 @@ export default function AnalysisDetailPage({ params }: AnalysisDetailPageProps) 
                     >
                         <FileText className="h-4 w-4" />
                         View Document
-                    </Button>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => fetchAnalysis(analysisId)}
-                        className="gap-1"
-                    >
-                        <RefreshCw className="h-4 w-4" />
-                        Refresh
                     </Button>
                 </div>
             </div>
@@ -273,12 +324,56 @@ export default function AnalysisDetailPage({ params }: AnalysisDetailPageProps) 
                 </div>
 
                 <TabsContent value="results" className="space-y-6">
-                    {/* {ResultsComponent && (
-                        <ResultsComponent
-                            analysisId={analysisId}
+                    {/* Step selector */}
+                    <Card>
+                        <CardHeader className="pb-3">
+                            <CardTitle className="text-lg">Select Step</CardTitle>
+                            <CardDescription>
+                                Choose a step to view its results
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="flex flex-wrap gap-2">
+                                {analysisSteps && analysisSteps.map((step) => (
+                                    <Button
+                                        key={step.step_code}
+                                        variant={selectedStep === step.step_code ? "default" : "outline"}
+                                        size="sm"
+                                        onClick={() => setSelectedStep(step.step_code)}
+                                    >
+                                        {step.name}
+                                    </Button>
+                                ))}
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* Results component */}
+
+                    {StepVisualizerComponent && (
+                        <StepVisualizerComponent
                             documentId={documentId}
+                            analysisId={analysisId}
+                            analysisType={analysisType}
+                            step={analysisSteps?.find(step => step.step_code === selectedStep) as AnalysisStep}
+                            stepResult={currentAnalysis?.step_results.find(step => step.step_code === selectedStep) as StepResultResponse}
                         />
-                    )} */}
+                    )}
+                    {/* <ResultsComponent
+                        analysisId={analysisId}
+                        analysisType={analysisType}
+                        stepCode={selectedStep}
+                        documentId={documentId}
+                        pageNumber={1}
+                        showControls={true}
+                        stepResult={currentAnalysis?.step_results.find(step => step.step_code === selectedStep) as StepResultResponse}
+                        onExport={(format) => {
+                            toast({
+                                title: "Export Initiated",
+                                description: `Exporting results as ${format}`,
+                            });
+                        }}
+                    /> */}
                 </TabsContent>
 
                 <TabsContent value="steps" className="space-y-6">
@@ -302,7 +397,7 @@ export default function AnalysisDetailPage({ params }: AnalysisDetailPageProps) 
                 <TabsContent value="summary" className="space-y-6">
                     <SummaryComponent
                         analysisId={analysisId}
-                        analysisType={effectiveAnalysisType}
+                        analysisType={analysisType}
                         stepCode="extract"
                         documentId={documentId}
                         status={currentAnalysis?.status}
