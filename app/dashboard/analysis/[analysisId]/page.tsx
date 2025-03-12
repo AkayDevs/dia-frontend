@@ -119,6 +119,7 @@ export default function AnalysisDetailPage({ params }: AnalysisDetailPageProps) 
 
     const SummaryComponent = getSummaryComponent(analysisType);
     const StepVisualizerComponent = getStepComponent(analysisType, selectedStep, StepComponentType.VISUALIZER);
+    const StepEditorComponent = getStepComponent(analysisType, selectedStep, StepComponentType.EDITOR);
 
     // Loading state
     if (isLoading || !currentAnalysis) {
@@ -410,12 +411,15 @@ export default function AnalysisDetailPage({ params }: AnalysisDetailPageProps) 
                 </TabsContent>
 
                 <TabsContent value="steps" className="space-y-6">
-                    {/* {StepperComponent && (
-                        <StepperComponent
-                            analysisId={analysisId}
+                    {StepEditorComponent && (
+                        <StepEditorComponent
                             documentId={documentId}
+                            analysisId={analysisId}
+                            analysisType={analysisType}
+                            step={analysisSteps?.find(step => step.step_code === selectedStep) as AnalysisStep}
+                            stepResult={currentAnalysis?.step_results.find(step => step.step_code === selectedStep) as StepResultResponse}
                         />
-                    )} */}
+                    )}
                 </TabsContent>
 
                 <TabsContent value="options" className="space-y-6">
