@@ -13,9 +13,7 @@ import {
 } from '@/components/ui/card';
 import {
     Tabs,
-    TabsContent,
-    TabsList,
-    TabsTrigger
+    TabsContent
 } from '@/components/ui/tabs';
 import {
     Alert,
