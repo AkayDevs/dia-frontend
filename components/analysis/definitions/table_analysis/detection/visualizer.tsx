@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { InfoIcon, AlertCircle, Table, ZoomIn, ZoomOut, Download, Clock, Calendar, FileText, RefreshCw } from "lucide-react";
+import { InfoIcon, AlertCircle, Table, ZoomIn, ZoomOut, Download, Clock, Calendar, FileText, RefreshCw, TableIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -167,76 +167,70 @@ const TableDetectionVisualizer: React.FC<BaseStepComponentProps> = ({ stepResult
             <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center justify-between">
-                        <span>Table Detection Results</span>
+                    <div className="flex items-center">
+                            <TableIcon className="mr-2 h-5 w-5 text-primary" />
+                            <span>Table Detection Results</span>
+                        </div>
                         <Badge variant="secondary" className="ml-2">
                             {detectionResult.total_tables_found} tables detected
                         </Badge>
                     </CardTitle>
                     <CardDescription className="text-muted-foreground">
-                        Total pages processed: {detectionResult.total_pages_processed}
+                        Total pages processed: {detectionResult.total_pages_processed} • Detection analysis completed in {processingTime}s
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
+
                     <div className="space-y-6">
+                        {/* Key Statistics */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <Card className="bg-primary/5 border-primary/20">
+                                <CardContent className="p-4">
+                                    <div className="flex items-center justify-between">
+                                        <div className="text-sm font-medium text-muted-foreground">Tables Detected</div>
+                                        <TableIcon className="h-4 w-4 text-primary" />
+                                    </div>
+                                    <div className="mt-2">
+                                        <div className="text-2xl font-bold">{detectionResult.total_tables_found}</div>
+                                        <div className="text-xs text-muted-foreground mt-1">
+                                            Across {detectionResult.total_pages_processed} pages
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
 
-                        <Separator className="my-2" />
+                            <Card className="bg-blue-500/5 border-blue-500/20">
+                                <CardContent className="p-4">
+                                    <div className="flex items-center justify-between">
+                                        <div className="text-sm font-medium text-muted-foreground">Pages Processed</div>
+                                        <FileText className="h-4 w-4 text-blue-500" />
+                                    </div>
+                                    <div className="mt-2">
+                                        <div className="text-2xl font-bold">{detectionResult.total_pages_processed}</div>
+                                        <div className="text-xs text-muted-foreground mt-1">
+                                            Document analysis complete
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
 
-                        {/* Table Detection Statistics */}
-                        <div className="mb-4">
-                            <div className="text-sm font-medium mb-2">Detection Statistics</div>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div className="space-y-1">
-                                    <div className="flex justify-between text-sm">
-                                        <span>Tables Detected</span>
-                                        <span className="font-medium">
-                                            {detectionResult.total_tables_found}
-                                        </span>
+                            <Card className="bg-green-500/5 border-green-500/20">
+                                <CardContent className="p-4">
+                                    <div className="flex items-center justify-between">
+                                        <div className="text-sm font-medium text-muted-foreground">Processing Time</div>
+                                        <Clock className="h-4 w-4 text-green-500" />
                                     </div>
-                                    <Progress
-                                        value={detectionResult.total_tables_found > 0 ? 100 : 0}
-                                        className={`h-2 ${detectionResult.total_tables_found > 0 ? 'bg-green-100' : 'bg-gray-100'}`}
-                                    />
-                                    <div className="text-xs text-muted-foreground">
-                                        {detectionResult.total_tables_found > 0
-                                            ? `Average ${(detectionResult.total_tables_found /
-                                                (detectionResult.total_pages_processed || 1)).toFixed(1)} tables per page with tables`
-                                            : 'No tables detected'}
+                                    <div className="mt-2">
+                                        <div className="text-2xl font-bold">{processingTime}s</div>
+                                        <div className="text-xs text-muted-foreground mt-1">
+                                            Total analysis duration
+                                        </div>
                                     </div>
-                                </div>
-
-                                <div className="space-y-1">
-                                    <div className="flex justify-between text-sm">
-                                        <span>Pages Processed</span>
-                                        <span className="font-medium">{detectionResult.total_pages_processed}</span>
-                                    </div>
-                                    <Progress value={100} className="h-2" />
-                                    <div className="text-xs text-muted-foreground">
-                                        {detectionResult.total_pages_processed} pages analyzed
-                                    </div>
-                                </div>
-
-                                <div className="space-y-1">
-                                    <div className="flex justify-between text-sm">
-                                        <span>Pages with Tables</span>
-                                        <span className="font-medium">
-                                            {detectionResult.total_tables_found}
-                                        </span>
-                                    </div>
-                                    <Progress
-                                        value={detectionResult.total_tables_found > 0
-                                            ? (detectionResult.total_tables_found / detectionResult.total_pages_processed) * 100
-                                            : 0
-                                        }
-                                        className="h-2"
-                                    />
-                                    <div className="text-xs text-muted-foreground">
-                                        {detectionResult.total_pages_processed > 0
-                                            ? `${Math.round((detectionResult.total_tables_found / detectionResult.total_pages_processed) * 100)}% of pages contain tables`
-                                            : 'No pages analyzed'}
-                                    </div>
-                                </div>
-                            </div>
+                                </CardContent>
+                            </Card>
                         </div>
+
+                        <Separator className="my-4" />
 
                         {/* Summary Section */}
                         <div className="mb-4">

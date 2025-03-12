@@ -386,41 +386,141 @@ const TableStructureVisualizer: React.FC<BaseStepComponentProps> = ({ stepResult
                     </CardHeader>
                     <CardContent>
                         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                            <TabsList className="mb-4 flex flex-wrap">
-                                {pageResults.map((pageResult) => (
-                                    <TabsTrigger
-                                        key={`tab-${pageResult.page_info.page_number}`}
-                                        value={pageResult.page_info.page_number.toString()}
-                                        className="flex items-center"
-                                    >
-                                        Page {pageResult.page_info.page_number}
-                                        {pageResult.tables.length > 0 && (
-                                            <Badge variant="secondary" className="ml-2">
-                                                {pageResult.tables.length}
+                            <div className="space-y-6">
+                                {/* Page Navigation Bar */}
+                                <div className="flex flex-col space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center space-x-2">
+                                            <h3 className="text-sm font-medium">Document Pages</h3>
+                                            <Badge variant="outline" className="text-xs">
+                                                {pageResults.length} pages
                                             </Badge>
-                                        )}
-                                    </TabsTrigger>
-                                ))}
-                            </TabsList>
+                                        </div>
+                                        <div className="flex items-center space-x-2">
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => {
+                                                    const currentIndex = pageResults.findIndex(
+                                                        p => p.page_info.page_number.toString() === activeTab
+                                                    );
+                                                    if (currentIndex > 0) {
+                                                        setActiveTab(pageResults[currentIndex - 1].page_info.page_number.toString());
+                                                    }
+                                                }}
+                                                disabled={pageResults.findIndex(p => p.page_info.page_number.toString() === activeTab) <= 0}
+                                            >
+                                                Previous
+                                            </Button>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => {
+                                                    const currentIndex = pageResults.findIndex(
+                                                        p => p.page_info.page_number.toString() === activeTab
+                                                    );
+                                                    if (currentIndex < pageResults.length - 1) {
+                                                        setActiveTab(pageResults[currentIndex + 1].page_info.page_number.toString());
+                                                    }
+                                                }}
+                                                disabled={pageResults.findIndex(p => p.page_info.page_number.toString() === activeTab) >= pageResults.length - 1}
+                                            >
+                                                Next
+                                            </Button>
+                                        </div>
+                                    </div>
 
-                            {pageResults.map((pageResult) => {
-                                const pageInfo = pageMap.get(pageResult.page_info.page_number);
-                                return (
-                                    <TabsContent
-                                        key={`content-${pageResult.page_info.page_number}`}
-                                        value={pageResult.page_info.page_number.toString()}
-                                        className="relative"
-                                    >
-                                        <PageTableStructureVisualizer
-                                            pageResult={pageResult}
-                                            imageUrl={pageInfo?.url || ''}
-                                            actualWidth={pageInfo?.width || pageResult.page_info.width}
-                                            actualHeight={pageInfo?.height || pageResult.page_info.height}
-                                            processingInfo={pageResult.processing_info}
-                                        />
-                                    </TabsContent>
-                                );
-                            })}
+                                    {/* Page Thumbnails */}
+                                    <div className="relative">
+                                        <div className="flex pt-2 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
+                                            {pageResults.map((pageResult) => {
+                                                const pageInfo = pageMap.get(pageResult.page_info.page_number);
+                                                const isActive = activeTab === pageResult.page_info.page_number.toString();
+                                                const hasTables = pageResult.tables.length > 0;
+
+                                                return (
+                                                    <div
+                                                        key={`thumb-${pageResult.page_info.page_number}`}
+                                                        className={cn(
+                                                            "flex-shrink-0 cursor-pointer mx-1 transition-all duration-200 relative",
+                                                            isActive ? "opacity-100 scale-100" : "opacity-70 scale-95 hover:opacity-90 hover:scale-98"
+                                                        )}
+                                                        onClick={() => setActiveTab(pageResult.page_info.page_number.toString())}
+                                                    >
+                                                        <div className={cn(
+                                                            "w-24 h-32 border-2 rounded-md overflow-hidden flex items-center justify-center bg-gray-50",
+                                                            isActive ? "border-primary shadow-md" : "border-gray-200",
+                                                            hasTables ? "ring-2 ring-green-200 ring-opacity-50" : ""
+                                                        )}>
+                                                            {pageInfo?.url ? (
+                                                                <img
+                                                                    src={pageInfo.url}
+                                                                    alt={`Page ${pageResult.page_info.page_number} thumbnail`}
+                                                                    className="w-full h-full object-contain"
+                                                                />
+                                                            ) : (
+                                                                <FileText className="h-6 w-6 text-gray-400" />
+                                                            )}
+                                                        </div>
+                                                        <div className={cn(
+                                                            "absolute -bottom-1 left-1/2 transform -translate-x-1/2 px-2 py-0.5 rounded-full text-xs font-medium",
+                                                            isActive ? "bg-primary text-white" : "bg-gray-200 text-gray-700"
+                                                        )}>
+                                                            {pageResult.page_info.page_number}
+                                                        </div>
+                                                        {hasTables && (
+                                                            <div className="absolute -top-1 -right-1 bg-green-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-medium">
+                                                                {pageResult.tables.length}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Page Content */}
+                                {pageResults.map((pageResult) => {
+                                    const pageInfo = pageMap.get(pageResult.page_info.page_number);
+                                    return (
+                                        <TabsContent
+                                            key={`content-${pageResult.page_info.page_number}`}
+                                            value={pageResult.page_info.page_number.toString()}
+                                            className="relative mt-0"
+                                        >
+                                            <div className="bg-card rounded-lg border p-4">
+                                                <div className="flex items-center justify-between mb-4">
+                                                    <div className="flex items-center space-x-2">
+                                                        <FileText className="h-5 w-5 text-primary" />
+                                                        <h3 className="text-lg font-medium">Page {pageResult.page_info.page_number}</h3>
+                                                        {pageResult.tables.length > 0 ? (
+                                                            <Badge variant="secondary">
+                                                                {pageResult.tables.length} {pageResult.tables.length === 1 ? 'table' : 'tables'} detected
+                                                            </Badge>
+                                                        ) : (
+                                                            <Badge variant="outline" className="text-gray-500">
+                                                                No tables
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                    <div className="text-sm text-muted-foreground">
+                                                        {pageInfo ? `${pageInfo.width} × ${pageInfo.height} px` : ''}
+                                                    </div>
+                                                </div>
+
+                                                <PageTableStructureVisualizer
+                                                    pageResult={pageResult}
+                                                    imageUrl={pageInfo?.url || ''}
+                                                    actualWidth={pageInfo?.width || pageResult.page_info.width}
+                                                    actualHeight={pageInfo?.height || pageResult.page_info.height}
+                                                    processingInfo={pageResult.processing_info}
+                                                />
+                                            </div>
+                                        </TabsContent>
+                                    );
+                                })}
+                            </div>
                         </Tabs>
                     </CardContent>
                 </Card>
@@ -445,6 +545,9 @@ const PageTableStructureVisualizer: React.FC<PageTableStructureVisualizerProps> 
     const containerRef = useRef<HTMLDivElement>(null);
     const imageRef = useRef<HTMLImageElement>(null);
 
+    // Calculate aspect ratio first
+    const aspectRatio = actualWidth / actualHeight;
+
     // State to track if image is loaded and its natural dimensions
     const [imageLoaded, setImageLoaded] = useState<boolean>(false);
     const [imageDimensions, setImageDimensions] = useState<{ width: number, height: number }>({
@@ -468,6 +571,31 @@ const PageTableStructureVisualizer: React.FC<PageTableStructureVisualizerProps> 
         setSelectedCellIndex(null);
     }, [selectedTableIndex]);
 
+    // Add window resize handler with debounce
+    useEffect(() => {
+        let resizeTimeout: NodeJS.Timeout;
+
+        const handleResize = () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                const newMaxWidth = Math.min(1200, window.innerWidth - (fullScreen ? 32 : 64));
+                const newContainerWidth = fullScreen ? window.innerWidth - 32 : newMaxWidth;
+                const newContainerHeight = newContainerWidth / aspectRatio;
+
+                if (containerRef.current) {
+                    containerRef.current.style.width = `${newContainerWidth}px`;
+                    containerRef.current.style.height = `${newContainerHeight}px`;
+                }
+            }, 150); // Debounce resize events
+        };
+
+        window.addEventListener('resize', handleResize);
+        return () => {
+            window.removeEventListener('resize', handleResize);
+            clearTimeout(resizeTimeout);
+        };
+    }, [fullScreen, aspectRatio]);
+
     if (!imageUrl) {
         return (
             <Alert>
@@ -480,10 +608,9 @@ const PageTableStructureVisualizer: React.FC<PageTableStructureVisualizerProps> 
         );
     }
 
-    // Calculate container dimensions
-    const aspectRatio = actualWidth / actualHeight;
-    const maxWidth = Math.min(800, window.innerWidth - 64); // Responsive max width
-    const containerWidth = fullScreen ? window.innerWidth - 64 : maxWidth;
+    // Calculate container dimensions with improved responsiveness
+    const maxWidth = Math.min(1200, window.innerWidth - (fullScreen ? 32 : 64));
+    const containerWidth = fullScreen ? window.innerWidth - 32 : maxWidth;
     const containerHeight = containerWidth / aspectRatio;
 
     // Zoom in/out handlers
@@ -646,247 +773,279 @@ const PageTableStructureVisualizer: React.FC<PageTableStructureVisualizerProps> 
     };
 
     return (
-        <div className={cn("space-y-4", fullScreen && "fixed inset-0 z-50 bg-white p-6")}>
-            <div className="flex flex-col lg:flex-row gap-4">
-                {/* Image container with zoom controls */}
-                <div className="flex flex-col space-y-2 flex-grow">
-                    <div className="flex justify-between items-center mb-2">
-                        <div className="text-sm font-medium">
-                            Page {pageResult.page_info.page_number} • {actualWidth}×{actualHeight}px
+        <div className={cn(
+            "w-full max-w-full overflow-hidden transition-all duration-300 ease-in-out",
+            fullScreen ? "fixed inset-0 z-50 bg-white/95 backdrop-blur-sm p-4 lg:p-6" : "relative"
+        )}>
+            <div className="flex flex-col xl:flex-row gap-4 max-w-full">
+                {/* Main content area with image and controls */}
+                <div className="flex-grow flex flex-col space-y-4 min-w-0">
+                    {/* Controls bar */}
+                    <div className="flex flex-wrap gap-4 p-4 bg-white rounded-lg border shadow-sm">
+                        <div className="flex items-center gap-4 flex-grow min-w-[200px]">
+                            <div className="flex items-center gap-2 overflow-hidden">
+                                <FileText className="h-5 w-5 text-primary flex-shrink-0" />
+                                <div className="text-sm font-medium truncate">
+                                    Page {pageResult.page_info.page_number}
+                                </div>
+                                <Badge variant="outline" className="text-xs whitespace-nowrap">
+                                    {actualWidth}×{actualHeight}px
+                                </Badge>
+                            </div>
                         </div>
-                        <div className="flex items-center space-x-2">
-                            <Button
-                                variant="outline"
-                                size="icon"
-                                onClick={zoomOut}
-                                disabled={zoomLevel <= 0.5}
-                                title="Zoom out"
-                            >
-                                <ZoomOut className="h-4 w-4" />
-                            </Button>
-                            <span className="text-sm font-medium">{Math.round(zoomLevel * 100)}%</span>
-                            <Button
-                                variant="outline"
-                                size="icon"
-                                onClick={zoomIn}
-                                disabled={zoomLevel >= 3}
-                                title="Zoom in"
-                            >
-                                <ZoomIn className="h-4 w-4" />
-                            </Button>
-                            <Button
-                                variant={showGrid ? "secondary" : "outline"}
-                                size="icon"
-                                onClick={() => setShowGrid(prev => !prev)}
-                                title={showGrid ? "Hide grid" : "Show grid"}
-                            >
-                                <GridIcon className="h-4 w-4" />
-                            </Button>
-                            <Button
-                                variant="outline"
-                                size="icon"
-                                onClick={toggleFullScreen}
-                                title={fullScreen ? "Exit full screen" : "Full screen"}
-                            >
-                                {fullScreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-                            </Button>
-                            <Button
-                                variant={debugMode ? "secondary" : "outline"}
-                                size="sm"
-                                onClick={() => setDebugMode(prev => !prev)}
-                                title="Toggle debug mode"
-                                className="ml-2"
-                            >
-                                Debug
-                            </Button>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <div className="flex items-center bg-gray-50 rounded-md p-1">
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={zoomOut}
+                                    disabled={zoomLevel <= 0.5}
+                                    className="h-8 w-8"
+                                >
+                                    <ZoomOut className="h-4 w-4" />
+                                </Button>
+                                <div className="w-16 text-center text-sm font-medium">
+                                    {Math.round(zoomLevel * 100)}%
+                                </div>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={zoomIn}
+                                    disabled={zoomLevel >= 3}
+                                    className="h-8 w-8"
+                                >
+                                    <ZoomIn className="h-4 w-4" />
+                                </Button>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    variant={showGrid ? "secondary" : "outline"}
+                                    size="sm"
+                                    onClick={() => setShowGrid(prev => !prev)}
+                                    className="h-8 whitespace-nowrap"
+                                >
+                                    <GridIcon className="h-4 w-4 mr-2" />
+                                    {showGrid ? "Hide Grid" : "Show Grid"}
+                                </Button>
+                                <Button
+                                    variant={debugMode ? "secondary" : "outline"}
+                                    size="sm"
+                                    onClick={() => setDebugMode(prev => !prev)}
+                                    className="h-8"
+                                >
+                                    <InfoIcon className="h-4 w-4 mr-2" />
+                                    Debug
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={toggleFullScreen}
+                                    className="h-8 whitespace-nowrap"
+                                >
+                                    {fullScreen ? (
+                                        <Minimize2 className="h-4 w-4 mr-2" />
+                                    ) : (
+                                        <Maximize2 className="h-4 w-4 mr-2" />
+                                    )}
+                                    {fullScreen ? "Exit" : "Fullscreen"}
+                                </Button>
+                            </div>
                         </div>
                     </div>
 
-                    <div
-                        ref={containerRef}
-                        className="relative border rounded-md overflow-auto bg-gray-50"
-                        style={{
-                            width: containerWidth,
-                            height: containerHeight,
-                            maxWidth: '100%'
-                        }}
-                    >
+                    {/* Image viewer with improved container */}
+                    <div className="relative w-full overflow-hidden bg-[#f8fafc] rounded-lg border shadow-inner">
                         <div
+                            ref={containerRef}
+                            className="relative overflow-auto"
                             style={{
-                                width: displayWidth,
-                                height: displayHeight,
-                                position: 'relative'
+                                width: containerWidth,
+                                height: containerHeight,
+                                maxWidth: '100%',
+                                maxHeight: fullScreen ? 'calc(100vh - 200px)' : '70vh'
                             }}
                         >
-                            <img
-                                ref={imageRef}
-                                src={imageUrl}
-                                alt={`Page ${pageResult.page_info.page_number}`}
-                                className="w-full h-full"
-                                style={{ objectFit: 'contain' }}
-                                onLoad={handleImageLoad}
-                            />
+                            <div
+                                className="transition-transform duration-200 ease-out"
+                                style={{
+                                    width: displayWidth,
+                                    height: displayHeight,
+                                    position: 'relative'
+                                }}
+                            >
+                                <img
+                                    ref={imageRef}
+                                    src={imageUrl}
+                                    alt={`Page ${pageResult.page_info.page_number}`}
+                                    className="w-full h-full transition-opacity duration-300"
+                                    style={{
+                                        objectFit: 'contain',
+                                        opacity: imageLoaded ? 1 : 0,
+                                        maxWidth: '100%'
+                                    }}
+                                    onLoad={handleImageLoad}
+                                />
 
-                            {/* Only render tables and cells after image is loaded */}
-                            {imageLoaded && pageResult.tables.map((table, tableIndex) => {
-                                const { x1, y1, x2, y2 } = table.bbox;
-                                const isSelected = selectedTableIndex === tableIndex;
+                                {/* Tables overlay with improved styling */}
+                                {imageLoaded && pageResult.tables.map((table, tableIndex) => {
+                                    const { x1, y1, x2, y2 } = table.bbox;
+                                    const isSelected = selectedTableIndex === tableIndex;
 
-                                // Scale coordinates to match the displayed image size
-                                const scaledX1 = x1 * scaleX;
-                                const scaledY1 = y1 * scaleY;
-                                const scaledWidth = (x2 - x1) * scaleX;
-                                const scaledHeight = (y2 - y1) * scaleY;
+                                    const scaledX1 = x1 * scaleX;
+                                    const scaledY1 = y1 * scaleY;
+                                    const scaledWidth = (x2 - x1) * scaleX;
+                                    const scaledHeight = (y2 - y1) * scaleY;
 
-                                // Calculate grid positions for cells
-                                const cellsWithGridPositions = isSelected ? calculateGridPositions(table) : [];
+                                    return (
+                                        <div
+                                            key={`table-${tableIndex}`}
+                                            className={cn(
+                                                "absolute border-2 cursor-pointer transition-all duration-300 ease-in-out hover:shadow-lg",
+                                                isSelected
+                                                    ? "border-blue-500 bg-blue-500/10 shadow-blue-500/20"
+                                                    : "border-green-500 bg-green-500/5 hover:bg-green-500/10"
+                                            )}
+                                            style={{
+                                                left: `${scaledX1}px`,
+                                                top: `${scaledY1}px`,
+                                                width: `${scaledWidth}px`,
+                                                height: `${scaledHeight}px`,
+                                            }}
+                                            onClick={() => setSelectedTableIndex(isSelected ? null : tableIndex)}
+                                        >
+                                            <div className={cn(
+                                                "absolute -top-6 left-0 px-3 py-1 text-xs font-medium rounded-t-md transition-all duration-200",
+                                                isSelected ? "bg-blue-500 text-white" : "bg-green-500 text-white"
+                                            )}>
+                                                Table {tableIndex + 1}
+                                            </div>
 
-                                return (
-                                    <div
-                                        key={`table-${tableIndex}`}
-                                        className={cn(
-                                            "absolute border-2 cursor-pointer transition-all duration-200",
-                                            isSelected
-                                                ? "border-blue-500 bg-blue-500/10"
-                                                : "border-green-500 bg-green-500/5 hover:bg-green-500/10"
-                                        )}
-                                        style={{
-                                            left: `${scaledX1}px`,
-                                            top: `${scaledY1}px`,
-                                            width: `${scaledWidth}px`,
-                                            height: `${scaledHeight}px`,
-                                        }}
-                                        onClick={() => setSelectedTableIndex(isSelected ? null : tableIndex)}
-                                    >
-                                        {/* Table label */}
-                                        <div className={cn(
-                                            "absolute top-0 left-0 transform -translate-y-full px-2 py-1 text-xs font-medium rounded-t-sm",
-                                            isSelected ? "bg-blue-500 text-white" : "bg-green-500 text-white"
-                                        )}>
-                                            Table {tableIndex + 1}
+                                            {/* Enhanced cell visualization */}
+                                            {isSelected && showGrid && calculateGridPositions(table).map(({ cell, cellIndex, gridPosition }) => {
+                                                const { rowStart, colStart, rowSpan, colSpan } = gridPosition;
+                                                const isCellSelected = selectedCellIndex === cellIndex;
+
+                                                const tableWidth = x2 - x1;
+                                                const tableHeight = y2 - y1;
+                                                const gridCellWidth = tableWidth / table.num_cols;
+                                                const gridCellHeight = tableHeight / table.num_rows;
+
+                                                const cellX = colStart * gridCellWidth;
+                                                const cellY = rowStart * gridCellHeight;
+                                                const cellWidth = colSpan * gridCellWidth;
+                                                const cellHeight = rowSpan * gridCellHeight;
+
+                                                const scaledCellX = cellX * scaleX;
+                                                const scaledCellY = cellY * scaleY;
+                                                const scaledCellWidth = cellWidth * scaleX;
+                                                const scaledCellHeight = cellHeight * scaleY;
+
+                                                return (
+                                                    <div
+                                                        key={`cell-${cellIndex}`}
+                                                        className={cn(
+                                                            "absolute border transition-all duration-200 hover:shadow-md",
+                                                            isCellSelected
+                                                                ? "border-purple-500 bg-purple-500/20 shadow-purple-500/20"
+                                                                : cell.is_header
+                                                                    ? "border-amber-500 bg-amber-500/20"
+                                                                    : "border-gray-400 bg-white/50",
+                                                            debugMode && "border-dashed border-2"
+                                                        )}
+                                                        style={{
+                                                            left: `${scaledCellX}px`,
+                                                            top: `${scaledCellY}px`,
+                                                            width: `${scaledCellWidth}px`,
+                                                            height: `${scaledCellHeight}px`,
+                                                            zIndex: isCellSelected ? 10 : 5
+                                                        }}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setSelectedCellIndex(isCellSelected ? null : cellIndex);
+                                                        }}
+                                                    >
+                                                        {cell.is_header && (
+                                                            <div className="absolute top-0 left-0 bg-amber-500 text-white text-xs px-2 py-0.5 rounded-br-sm">
+                                                                Header
+                                                            </div>
+                                                        )}
+                                                        {(rowSpan > 1 || colSpan > 1) && (
+                                                            <div className="absolute bottom-0 right-0 bg-blue-500 text-white text-xs px-2 py-0.5 rounded-tl-sm">
+                                                                {rowSpan}×{colSpan}
+                                                            </div>
+                                                        )}
+                                                        {debugMode && (
+                                                            <div className="absolute inset-0 flex items-center justify-center text-xs font-mono bg-black/5">
+                                                                {cellIndex}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
-
-                                        {/* Only show cells for the selected table */}
-                                        {isSelected && showGrid && cellsWithGridPositions.map(({ cell, cellIndex, gridPosition }) => {
-                                            const { rowStart, colStart, rowSpan, colSpan } = gridPosition;
-                                            const isCellSelected = selectedCellIndex === cellIndex;
-
-                                            // Calculate cell position based on grid coordinates
-                                            const tableWidth = x2 - x1;
-                                            const tableHeight = y2 - y1;
-                                            const gridCellWidth = tableWidth / table.num_cols;
-                                            const gridCellHeight = tableHeight / table.num_rows;
-
-                                            const cellX = colStart * gridCellWidth;
-                                            const cellY = rowStart * gridCellHeight;
-                                            const cellWidth = colSpan * gridCellWidth;
-                                            const cellHeight = rowSpan * gridCellHeight;
-
-                                            // Scale cell coordinates
-                                            const scaledCellX = cellX * scaleX;
-                                            const scaledCellY = cellY * scaleY;
-                                            const scaledCellWidth = cellWidth * scaleX;
-                                            const scaledCellHeight = cellHeight * scaleY;
-
-                                            return (
-                                                <div
-                                                    key={`cell-${cellIndex}`}
-                                                    className={cn(
-                                                        "absolute border transition-all duration-200",
-                                                        isCellSelected
-                                                            ? "border-purple-500 bg-purple-500/20"
-                                                            : cell.is_header
-                                                                ? "border-amber-500 bg-amber-500/20"
-                                                                : "border-gray-400 bg-white/50",
-                                                        debugMode && "border-dashed border-2"
-                                                    )}
-                                                    style={{
-                                                        left: `${scaledCellX}px`,
-                                                        top: `${scaledCellY}px`,
-                                                        width: `${scaledCellWidth}px`,
-                                                        height: `${scaledCellHeight}px`,
-                                                        zIndex: isCellSelected ? 10 : 5
-                                                    }}
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setSelectedCellIndex(isCellSelected ? null : cellIndex);
-                                                    }}
-                                                >
-                                                    {cell.is_header && (
-                                                        <div className="absolute top-0 left-0 bg-amber-500 text-white text-xs px-1 rounded-br-sm">
-                                                            H
-                                                        </div>
-                                                    )}
-                                                    {(rowSpan > 1 || colSpan > 1) && (
-                                                        <div className="absolute bottom-0 right-0 bg-blue-500 text-white text-xs px-1 rounded-tl-sm">
-                                                            {rowSpan}×{colSpan}
-                                                        </div>
-                                                    )}
-                                                    {debugMode && (
-                                                        <div className="absolute inset-0 flex items-center justify-center text-xs text-gray-700 font-mono">
-                                                            {cellIndex}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                );
-                            })}
+                                    );
+                                })}
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                {/* Table and cell details */}
-                <div className="w-full lg:w-80 flex-shrink-0 max-h-[calc(100vh-200px)] overflow-auto">
-                    <Card className="sticky top-0">
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-base">Table Details</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            {selectedTable ? (
-                                <div className="space-y-4">
-                                    <div className="grid grid-cols-2 gap-2 text-sm">
-                                        <div className="font-medium">Table:</div>
-                                        <div>{selectedTableIndex !== null ? selectedTableIndex + 1 : ''}</div>
+                {/* Sidebar with table details - now with improved styling */}
+                <div className="w-full xl:w-96 flex-shrink-0 overflow-visible">
+                    <div className="sticky top-4">
+                        <Card className="shadow-lg border-gray-200">
+                            <CardHeader className="pb-3 border-b bg-gray-50/50">
+                                <CardTitle className="text-lg flex items-center space-x-2">
+                                    <TableIcon className="h-5 w-5 text-primary" />
+                                    <span>Table Details</span>
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-4 max-h-[calc(100vh-300px)] overflow-auto">
+                                {selectedTable ? (
+                                    <div className="space-y-6">
+                                        <div className="grid grid-cols-2 gap-3 text-sm">
+                                            <div className="font-medium text-gray-600">Table:</div>
+                                            <div className="font-mono">{selectedTableIndex !== null ? selectedTableIndex + 1 : ''}</div>
 
-                                        <div className="font-medium">Dimensions:</div>
-                                        <div>
-                                            {selectedTable.num_rows} × {selectedTable.num_cols} cells
+                                            <div className="font-medium text-gray-600">Dimensions:</div>
+                                            <div className="font-mono">
+                                                {selectedTable.num_rows} × {selectedTable.num_cols}
+                                            </div>
+
+                                            <div className="font-medium text-gray-600">Cells:</div>
+                                            <div className="font-mono">{selectedTable.cells.length}</div>
+
+                                            <div className="font-medium text-gray-600">Headers:</div>
+                                            <div className="font-mono">{selectedTable.cells.filter(c => c.is_header).length}</div>
+
+                                            <div className="font-medium text-gray-600">Confidence:</div>
+                                            <div className="flex items-center">
+                                                <Badge variant={getConfidenceBadgeVariant(selectedTable.confidence.score)}>
+                                                    {Math.round(selectedTable.confidence.score * 100)}%
+                                                </Badge>
+                                            </div>
+
+                                            <div className="font-medium text-gray-600">Position:</div>
+                                            <div className="font-mono text-xs">
+                                                ({selectedTable.bbox.x1.toFixed(0)}, {selectedTable.bbox.y1.toFixed(0)}) -
+                                                ({selectedTable.bbox.x2.toFixed(0)}, {selectedTable.bbox.y2.toFixed(0)})
+                                            </div>
+
+                                            <div className="font-medium text-gray-600">Size:</div>
+                                            <div className="font-mono">
+                                                {Math.round(selectedTable.bbox.x2 - selectedTable.bbox.x1)} ×
+                                                {Math.round(selectedTable.bbox.y2 - selectedTable.bbox.y1)} px
+                                            </div>
                                         </div>
 
-                                        <div className="font-medium">Cells:</div>
-                                        <div>{selectedTable.cells.length}</div>
-
-                                        <div className="font-medium">Headers:</div>
-                                        <div>{selectedTable.cells.filter(c => c.is_header).length}</div>
-
-                                        <div className="font-medium">Confidence:</div>
-                                        <div className="flex items-center">
-                                            <Badge variant={getConfidenceBadgeVariant(selectedTable.confidence.score)}>
-                                                {Math.round(selectedTable.confidence.score * 100)}%
-                                            </Badge>
-                                        </div>
-
-                                        <div className="font-medium">Position:</div>
-                                        <div className="text-xs">
-                                            ({selectedTable.bbox.x1.toFixed(0)}, {selectedTable.bbox.y1.toFixed(0)}) -
-                                            ({selectedTable.bbox.x2.toFixed(0)}, {selectedTable.bbox.y2.toFixed(0)})
-                                        </div>
-
-                                        <div className="font-medium">Size:</div>
-                                        <div>
-                                            {Math.round(selectedTable.bbox.x2 - selectedTable.bbox.x1)} ×
-                                            {Math.round(selectedTable.bbox.y2 - selectedTable.bbox.y1)} px
-                                        </div>
-                                    </div>
-
-                                    {selectedCell && (
-                                        <>
-                                            <div className="border-t pt-3">
-                                                <h4 className="font-medium mb-2">Selected Cell</h4>
-                                                <div className="grid grid-cols-2 gap-2 text-sm">
-                                                    <div className="font-medium">Type:</div>
+                                        {selectedCell && (
+                                            <div className="border-t pt-4">
+                                                <h4 className="font-medium text-gray-900 mb-3 flex items-center">
+                                                    <GridIcon className="h-4 w-4 mr-2 text-primary" />
+                                                    Selected Cell
+                                                </h4>
+                                                <div className="grid grid-cols-2 gap-3 text-sm">
+                                                    <div className="font-medium text-gray-600">Type:</div>
                                                     <div>
                                                         {selectedCell.is_header ? (
                                                             <Badge variant="secondary">Header</Badge>
@@ -895,66 +1054,72 @@ const PageTableStructureVisualizer: React.FC<PageTableStructureVisualizerProps> 
                                                         )}
                                                     </div>
 
-                                                    <div className="font-medium">Span:</div>
-                                                    <div>
+                                                    <div className="font-medium text-gray-600">Span:</div>
+                                                    <div className="font-mono">
                                                         {selectedCell.row_span} × {selectedCell.col_span}
                                                     </div>
 
-                                                    <div className="font-medium">Confidence:</div>
+                                                    <div className="font-medium text-gray-600">Confidence:</div>
                                                     <div>
                                                         <Badge variant={getConfidenceBadgeVariant(selectedCell.confidence.score)}>
                                                             {Math.round(selectedCell.confidence.score * 100)}%
                                                         </Badge>
                                                     </div>
 
-                                                    <div className="font-medium">Position:</div>
-                                                    <div className="text-xs">
+                                                    <div className="font-medium text-gray-600">Position:</div>
+                                                    <div className="font-mono text-xs">
                                                         ({selectedCell.bbox.x1.toFixed(0)}, {selectedCell.bbox.y1.toFixed(0)}) -
                                                         ({selectedCell.bbox.x2.toFixed(0)}, {selectedCell.bbox.y2.toFixed(0)})
                                                     </div>
                                                 </div>
                                             </div>
-                                        </>
-                                    )}
+                                        )}
 
-                                    <div className="pt-2">
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="w-full"
-                                            onClick={() => selectedTable && exportTableAsCSV(selectedTable)}
-                                        >
-                                            <Download className="h-4 w-4 mr-2" />
-                                            Export Table Data
-                                        </Button>
+                                        <div className="pt-2">
+                                            <Button
+                                                variant="default"
+                                                size="sm"
+                                                className="w-full shadow-sm hover:shadow-md transition-all duration-200"
+                                                onClick={() => selectedTable && exportTableAsCSV(selectedTable)}
+                                            >
+                                                <Download className="h-4 w-4 mr-2" />
+                                                Export Table Data
+                                            </Button>
+                                        </div>
                                     </div>
-                                </div>
-                            ) : (
-                                <div className="text-sm text-gray-500 py-4 text-center">
-                                    Click on a table to view its details
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
+                                ) : (
+                                    <div className="flex flex-col items-center justify-center py-8 text-center text-gray-500">
+                                        <TableIcon className="h-12 w-12 mb-4 text-gray-300" />
+                                        <p className="text-sm">
+                                            Select a table to view its details
+                                        </p>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </div>
                 </div>
             </div>
 
-            {/* Table structure visualization */}
+            {/* Table structure visualization with improved styling */}
             {selectedTable && (
-                <Card className="w-full">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-base flex items-center justify-between">
-                            <span>Table Structure</span>
+                <Card className="w-full shadow-lg mt-6 border-gray-200">
+                    <CardHeader className="pb-3 border-b bg-gray-50/50">
+                        <CardTitle className="text-lg flex items-center justify-between">
+                            <div className="flex items-center space-x-2">
+                                <GridIcon className="h-5 w-5 text-primary" />
+                                <span>Table Structure</span>
+                            </div>
                             <Badge variant="outline" className="ml-2">
                                 {selectedTable.num_rows} × {selectedTable.num_cols}
                             </Badge>
                         </CardTitle>
                         <CardDescription>
-                            Visual representation of the table structure
+                            Visual representation of the detected table structure
                         </CardDescription>
                     </CardHeader>
-                    <CardContent>
-                        <div className="overflow-auto border rounded-md">
+                    <CardContent className="p-4">
+                        <div className="overflow-auto border rounded-lg max-h-[500px]">
                             <table className="min-w-full divide-y divide-gray-200">
                                 <tbody className="bg-white divide-y divide-gray-200">
                                     {/* Create a grid based on the table dimensions */}
