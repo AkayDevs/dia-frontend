@@ -12,7 +12,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useDocumentStore } from '@/store/useDocumentStore';
 import { AnalysisStatus } from '@/enums/analysis';
 import { AnalysisRunWithResults } from '@/types/analysis/base';
-import { Document, DocumentWithAnalysis } from '@/types/document';
+import { DocumentWithAnalysis } from '@/types/document';
 import {
     DocumentIcon,
     ChartBarIcon,
@@ -193,7 +193,7 @@ export function Sidebar({ className }: SidebarProps) {
                     'transition-all duration-200 ease-in-out',
                     'hover:bg-muted/80 hover:shadow-sm',
                     isActive
-                        ? 'bg-primary text-primary-foreground shadow-sm shadow-primary/20'
+                        ? 'bg-primary text-white hover:bg-primary/80 shadow-sm shadow-primary/20'
                         : 'text-muted-foreground hover:text-foreground'
                 )}
                 onClick={() => setIsOpen(false)}
@@ -207,21 +207,13 @@ export function Sidebar({ className }: SidebarProps) {
                 <div className="flex-1">
                     <div>{item.title}</div>
                     {item.description && (
-                        <div className="text-xs text-muted-foreground/70 font-normal">
+                        <div className={cn("text-xs text-muted-foreground/70 font-normal", isActive ? "text-white" : "")}>
                             {item.description}
                         </div>
                     )}
                 </div>
-                {item.showProcessingCount && processingCount > 0 && (
-                    <Badge
-                        variant="secondary"
-                        className="ml-auto px-2 py-0.5 bg-primary/10 text-primary hover:bg-primary/15"
-                    >
-                        {processingCount}
-                    </Badge>
-                )}
                 {isActive && (
-                    <ChevronRightIcon className="ml-auto h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <ChevronRightIcon className="ml-auto h-4 w-4 group-hover:opacity-0 opacity-100 transition-opacity" />
                 )}
             </Link>
         );
