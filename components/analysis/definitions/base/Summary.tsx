@@ -9,13 +9,7 @@ const BaseSummary: React.FC<BaseSummaryProps> = ({
     analysisId,
     analysisType,
     stepCode,
-    documentId,
-    status,
-    createdAt,
-    completedAt,
-    metadata,
-    stepResults,
-    allStepResults
+    analysisRun
 }) => {
     return (
         <div className="p-4 border rounded-md bg-gray-50">
@@ -29,59 +23,38 @@ const BaseSummary: React.FC<BaseSummaryProps> = ({
                 <p className="text-sm"><span className="font-medium">Analysis Type:</span> {analysisType}</p>
                 <p className="text-sm"><span className="font-medium">Step Code:</span> {stepCode}</p>
 
-                {documentId && (
-                    <p className="text-sm"><span className="font-medium">Document ID:</span> {documentId}</p>
+                {analysisRun.document_id && (
+                    <p className="text-sm"><span className="font-medium">Document ID:</span> {analysisRun.document_id}</p>
                 )}
 
-                {status && (
-                    <p className="text-sm"><span className="font-medium">Status:</span> {status}</p>
+                {analysisRun.status && (
+                    <p className="text-sm"><span className="font-medium">Status:</span> {analysisRun.status}</p>
                 )}
 
-                {createdAt && (
+                {analysisRun.created_at && (
                     <p className="text-sm">
-                        <span className="font-medium">Created At:</span> {new Date(createdAt).toLocaleString()}
+                        <span className="font-medium">Created At:</span> {new Date(analysisRun.created_at).toLocaleString()}
                     </p>
                 )}
 
-                {completedAt && (
+                {analysisRun.completed_at && (
                     <p className="text-sm">
-                        <span className="font-medium">Completed At:</span> {new Date(completedAt).toLocaleString()}
+                        <span className="font-medium">Completed At:</span> {new Date(analysisRun.completed_at).toLocaleString()}
                     </p>
                 )}
             </div>
 
-            {metadata && Object.keys(metadata).length > 0 && (
-                <div className="mt-4">
-                    <h3 className="text-md font-medium mb-1">Metadata</h3>
-                    <div className="bg-white p-2 rounded border">
-                        <pre className="text-xs overflow-auto">
-                            {JSON.stringify(metadata, null, 2)}
-                        </pre>
-                    </div>
-                </div>
-            )}
-
-            {stepResults && Object.keys(stepResults).length > 0 && (
+            {analysisRun.step_results && analysisRun.step_results.length > 0 && (
                 <div className="mt-4">
                     <h3 className="text-md font-medium mb-1">Step Results</h3>
                     <div className="bg-white p-2 rounded border">
                         <pre className="text-xs overflow-auto">
-                            {JSON.stringify(stepResults, null, 2)}
+                            {JSON.stringify(analysisRun.step_results, null, 2)}
                         </pre>
                     </div>
                 </div>
             )}
 
-            {allStepResults && Object.keys(allStepResults).length > 0 && (
-                <div className="mt-4">
-                    <h3 className="text-md font-medium mb-1">All Step Results</h3>
-                    <div className="bg-white p-2 rounded border">
-                        <pre className="text-xs overflow-auto">
-                            {JSON.stringify(allStepResults, null, 2)}
-                        </pre>
-                    </div>
-                </div>
-            )}
         </div>
     );
 };

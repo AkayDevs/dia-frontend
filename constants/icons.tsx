@@ -25,6 +25,14 @@ export const ANALYSIS_STATUS_ICONS = {
     cancelled: <XCircleIcon className="h-4 w-4 text-red-500" />
 };
 
+export const ANALYSIS_STATUS_COLORS = {
+    pending: 'bg-yellow-500/10 text-yellow-600 border border-yellow-200 hover:bg-yellow-500/20',
+    in_progress: 'bg-blue-500/10 text-blue-600 border border-blue-200 hover:bg-blue-500/20',
+    completed: 'bg-green-500/10 text-green-600 border border-green-200 hover:bg-green-500/20',
+    failed: 'bg-red-500/10 text-red-600 border border-red-200 hover:bg-red-500/20',
+    cancelled: 'bg-gray-500/10 text-gray-600 border border-gray-200 hover:bg-gray-500/20'
+};
+
 /**
  * Document type icons with distinctive colors
  */

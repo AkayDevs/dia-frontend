@@ -4,14 +4,10 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
     Search,
-    PlusCircle,
     AlertCircle,
     Info,
     FileText,
     Hourglass,
-    ArrowRight,
-    ChevronDown,
-    ChevronUp,
     Layers,
     Code,
     Settings,
@@ -38,17 +34,7 @@ import {
     AccordionItem,
     AccordionTrigger,
 } from "@/components/ui/accordion";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { getAnalysisIcon } from '@/constants/analysis/registry';
-
-// Temporary component until the actual AnalysisTypeIcon is fixed
-const AnalysisTypeIcon = ({ type, className }: { type: string, className?: string }) => {
-    // Map analysis types to appropriate icons based on name
-    if (type.toLowerCase().includes('document')) return <FileText className={className} />;
-    if (type.toLowerCase().includes('process')) return <Hourglass className={className} />;
-    // Default icon
-    return <Info className={className} />;
-};
 
 interface AnalysisTypesTabProps {
     analysisDefinitions: AnalysisDefinitionInfo[];

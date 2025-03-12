@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAnalysisStore } from '@/store/useAnalysisStore';
 import { useDocumentStore } from '@/store/useDocumentStore';
-import { getSummaryComponent, getResultsComponent, getStepComponent } from '@/components/analysis/registry';
+import { getSummaryComponent, getStepComponent } from '@/components/analysis/registry';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -12,15 +12,12 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import {
-    Loader2,
     ArrowLeft,
     RefreshCw,
     FileText,
     BarChart4,
     Clock,
     CheckCircle2,
-    ChevronLeft,
-    Table,
     Layers,
     AlertCircle
 } from 'lucide-react';
@@ -29,11 +26,11 @@ import { formatDistanceToNow } from 'date-fns';
 import { motion } from 'framer-motion';
 import { TableAnalysisStepCode } from '@/enums/analysis';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { ANALYSIS_STATUS_COLORS, AnalysisStep, AnalysisDefinitionName, getAnalysisSteps, getAnalysisName, AnalysisDefinitionIcon, getAnalysisIcon } from '@/constants/analysis';
+import { AnalysisStep, AnalysisDefinitionName, getAnalysisSteps, getAnalysisName, AnalysisDefinitionIcon, getAnalysisIcon } from '@/constants/analysis';
 import { StepComponentType } from '@/components/analysis/definitions/base';
 import { StepResultResponse } from '@/types/analysis/base';
 import { cn } from '@/lib/utils';
-
+import { DOCUMENT_TYPE_ICONS, ANALYSIS_STATUS_ICONS } from '@/constants/icons';
 interface AnalysisDetailPageProps {
     params: {
         analysisId: string;
@@ -54,7 +51,6 @@ export default function AnalysisDetailPage({ params }: AnalysisDetailPageProps) 
     const [analysisIcon, setAnalysisIcon] = useState<AnalysisDefinitionIcon>();
 
     const {
-        analyses,
         currentAnalysis,
         analysisType,
         documentId,
@@ -205,12 +201,6 @@ export default function AnalysisDetailPage({ params }: AnalysisDetailPageProps) 
         );
     }
 
-    const getStatusColor = (status: string | undefined) => {
-        if (!status) return ANALYSIS_STATUS_COLORS.pending;
-
-        return ANALYSIS_STATUS_COLORS[status as keyof typeof ANALYSIS_STATUS_COLORS] || ANALYSIS_STATUS_COLORS.pending;
-    };
-
     return (
         <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -242,14 +232,11 @@ export default function AnalysisDetailPage({ params }: AnalysisDetailPageProps) 
                                 <> • Completed {formatDistanceToNow(new Date(currentAnalysis.completed_at), { addSuffix: true })}</>
                             )}
                         </p>
-                        <Badge variant="outline" className={`${getStatusColor(currentAnalysis.status)}`}>
-                            {currentAnalysis.status}
-                        </Badge>
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
                     <Button
-                        variant="outline"
+                        variant="secondary"
                         size="sm"
                         onClick={() => router.push(`/dashboard/documents/${documentId}`)}
                         className="gap-1"
@@ -261,54 +248,97 @@ export default function AnalysisDetailPage({ params }: AnalysisDetailPageProps) 
             </div>
 
             {/* Analysis Overview */}
-            <div className="border rounded-lg bg-card/50">
-                <div className="flex items-center p-3 border-b">
-                    <BarChart4 className="h-5 w-5 text-muted-foreground mr-2" />
-                    <h3 className="text-sm font-medium">Analysis Overview</h3>
+            <div className="border rounded-lg bg-card/50 shadow-sm overflow-hidden">
+                <div className="flex items-center p-3 border-b bg-muted/20">
+                    <BarChart4 className="h-4 w-4 text-primary/70 mr-2" />
+                    <h3 className="text-sm font-medium text-primary/90">Analysis Overview</h3>
                 </div>
 
                 <div className="p-4">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         {/* Document Info */}
                         {currentDocument && (
-                            <div className="space-y-1">
-                                <div className="flex items-center text-sm text-muted-foreground">
-                                    <FileText className="h-4 w-4 mr-1.5 text-blue-500/70" />
+                            <div className="space-y-1.5 p-3 bg-card/30 rounded-md border border-border/30 transition-all hover:border-border/50 hover:shadow-sm">
+                                <div className="flex items-center text-xs font-medium text-muted-foreground">
+                                    <FileText className="h-3.5 w-3.5 mr-1.5 text-blue-500/80" />
                                     <span>Document</span>
                                 </div>
-                                <p className="font-medium">{currentDocument.name}</p>
-                                <p className="text-xs text-muted-foreground">
-                                    Type: {currentDocument.type.toString().toUpperCase()}
+                                <p className="text-sm font-medium truncate" title={currentDocument.name}>
+                                    {currentDocument.name}
                                 </p>
+                                <div className="flex items-center gap-2">
+                                    <Badge variant="outline" className="text-[10px] bg-secondary/10 border-secondary/20 px-1.5 py-0.5">
+                                        {DOCUMENT_TYPE_ICONS[currentDocument.type as keyof typeof DOCUMENT_TYPE_ICONS]}
+                                        <span className="ml-1">{currentDocument.type.toString().toUpperCase()}</span>
+                                    </Badge>
+                                    <span className="text-[10px] text-muted-foreground">
+                                        ID: {currentDocument.id.substring(0, 8)}...
+                                    </span>
+                                </div>
                             </div>
                         )}
 
                         {/* Analysis Status */}
-                        <div className="space-y-1">
-                            <div className="flex items-center text-sm text-muted-foreground">
-                                <CheckCircle2 className="h-4 w-4 mr-1.5 text-green-500/70" />
-                                <span>Status</span>
+                        <div className="space-y-1.5 p-3 bg-card/30 rounded-md border border-border/30 transition-all hover:border-border/50 hover:shadow-sm">
+                            <div className="flex items-center text-xs font-medium text-muted-foreground">
+                                {ANALYSIS_STATUS_ICONS[currentAnalysis.status as keyof typeof ANALYSIS_STATUS_ICONS]}
+                                <span className="ml-1.5">Status</span>
                             </div>
-                            <p className="font-medium capitalize">{currentAnalysis.status?.toLowerCase() || 'unknown'}</p>
-                            <p className="text-xs text-muted-foreground">
-                                Analysis ID: {currentAnalysis.id}
-                            </p>
+                            <div className="flex items-center gap-2">
+                                <p className="text-sm font-medium capitalize">
+                                    {currentAnalysis.status?.toLowerCase() || 'unknown'}
+                                </p>
+                                <Badge
+                                    variant="outline"
+                                    className={cn(
+                                        "text-[10px] px-1.5 py-0.5",
+                                        currentAnalysis.status === AnalysisStatus.COMPLETED ? "bg-green-500/10 text-green-600 border-green-200" :
+                                            currentAnalysis.status === AnalysisStatus.IN_PROGRESS ? "bg-amber-500/10 text-amber-600 border-amber-200" :
+                                                currentAnalysis.status === AnalysisStatus.FAILED ? "bg-red-500/10 text-red-600 border-red-200" :
+                                                    "bg-secondary/10 border-secondary/20"
+                                    )}
+                                >
+                                    {currentAnalysis.step_results?.length || 0} steps
+                                </Badge>
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <span className="text-[10px] text-muted-foreground">
+                                    Started {formatDistanceToNow(new Date(currentAnalysis.created_at), { addSuffix: true })}
+                                </span>
+                                {currentAnalysis.completed_at && (
+                                    <span className="text-[10px] text-muted-foreground">
+                                        Completed {formatDistanceToNow(new Date(currentAnalysis.completed_at), { addSuffix: true })}
+                                    </span>
+                                )}
+                            </div>
                         </div>
 
                         {/* Timing Info */}
-                        <div className="space-y-1">
-                            <div className="flex items-center text-sm text-muted-foreground">
-                                <Clock className="h-4 w-4 mr-1.5 text-amber-500/70" />
-                                <span>Timing</span>
+                        <div className="space-y-1.5 p-3 bg-card/30 rounded-md border border-border/30 transition-all hover:border-border/50 hover:shadow-sm">
+                            <div className="flex items-center text-xs font-medium text-muted-foreground">
+                                <Clock className="h-3.5 w-3.5 mr-1.5 text-amber-500/80" />
+                                <span>Processing Time</span>
                             </div>
-                            <p className="font-medium">
+                            <p className="text-sm font-medium">
                                 {currentAnalysis.completed_at ?
                                     `${Math.round((new Date(currentAnalysis.completed_at).getTime() - new Date(currentAnalysis.created_at).getTime()) / 1000)} seconds` :
                                     'In progress'}
                             </p>
-                            <p className="text-xs text-muted-foreground">
-                                {currentAnalysis.completed_at ? 'Total processing time' : 'Processing time so far'}
-                            </p>
+                            <div className="flex items-center justify-between">
+                                <span className="text-[10px] text-muted-foreground">
+                                    {currentAnalysis.completed_at ? 'Total processing time' : 'Processing time so far'}
+                                </span>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 text-[10px] px-2 text-muted-foreground hover:text-foreground"
+                                    onClick={() => fetchAnalysis(analysisId, true)}
+                                    disabled={isLoading}
+                                >
+                                    <RefreshCw className="h-3 w-3 mr-1" />
+                                    Refresh
+                                </Button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -393,21 +423,6 @@ export default function AnalysisDetailPage({ params }: AnalysisDetailPageProps) 
                             stepResult={currentAnalysis?.step_results.find(step => step.step_code === selectedStep) as StepResultResponse}
                         />
                     )}
-                    {/* <ResultsComponent
-                        analysisId={analysisId}
-                        analysisType={analysisType}
-                        stepCode={selectedStep}
-                        documentId={documentId}
-                        pageNumber={1}
-                        showControls={true}
-                        stepResult={currentAnalysis?.step_results.find(step => step.step_code === selectedStep) as StepResultResponse}
-                        onExport={(format) => {
-                            toast({
-                                title: "Export Initiated",
-                                description: `Exporting results as ${format}`,
-                            });
-                        }}
-                    /> */}
                 </TabsContent>
 
                 <TabsContent value="steps" className="space-y-6">
@@ -423,12 +438,6 @@ export default function AnalysisDetailPage({ params }: AnalysisDetailPageProps) 
                 </TabsContent>
 
                 <TabsContent value="options" className="space-y-6">
-                    {/* {OptionsComponent && (
-                        <OptionsComponent
-                            analysisId={analysisId}
-                            documentId={documentId}
-                        />
-                    )} */}
                 </TabsContent>
 
                 <TabsContent value="summary" className="space-y-6">
@@ -436,12 +445,7 @@ export default function AnalysisDetailPage({ params }: AnalysisDetailPageProps) 
                         analysisId={analysisId}
                         analysisType={analysisType}
                         stepCode="extract"
-                        documentId={documentId}
-                        status={currentAnalysis?.status}
-                        metadata={{
-                            documentName: currentDocument?.name || 'Unknown',
-                            documentType: currentDocument?.type || 'Unknown'
-                        }}
+                        analysisRun={currentAnalysis}
                     />
                 </TabsContent>
             </Tabs>

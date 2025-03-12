@@ -5,7 +5,8 @@ import {
     CardContent,
     CardDescription,
     CardHeader,
-    CardTitle
+    CardTitle,
+    CardFooter
 } from '@/components/ui/card';
 import {
     Tabs,
@@ -23,6 +24,8 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
 import {
     BarChart,
     CheckCircle,
@@ -30,72 +33,240 @@ import {
     Info,
     FileSpreadsheet,
     FileText,
-    Clock
+    Clock,
+    Table as TableIcon,
+    Download,
+    ExternalLink,
+    ChevronRight,
+    Layers,
+    CheckCircle2,
+    XCircle,
+    AlertCircle
 } from 'lucide-react';
-
+import { cn } from '@/lib/utils';
+import { formatDistanceToNow } from 'date-fns';
+import { AnalysisStatus } from '@/enums/analysis';
+import { ANALYSIS_STATUS_COLORS } from '@/constants/icons';
+import { getAnalysisIcon, getAnalysisName } from '@/constants/analysis/registry';
+import { TableDetectionOutput } from '@/types/analysis/definitions/table_analysis/table_detection';
+import { TableStructureOutput } from '@/types/analysis/definitions/table_analysis/table_structure';
+import { TableDataOutput } from '@/types/analysis/definitions/table_analysis/table_data';
 /**
  * Enhanced Table Analysis Summary Component
  * Provides a comprehensive summary of table analysis results
  */
+
+interface TableInfo {
+    id: string;
+    name: string;
+    page: number;
+    rowCount: number;
+    columnCount: number;
+    cellCount: number;
+    confidence: number;
+    hasHeader: boolean;
+    hasFooter: boolean;
+}
+
+interface QualityMetrics {
+    structureAccuracy: number;
+    contentAccuracy: number;
+    headerAccuracy: number;
+    lowConfidenceCells: number;
+}
+
+interface ColumnConfidence {
+    name: string;
+    confidence: number;
+}
+
+interface Issue {
+    type: string;
+    message: string;
+    affectedColumns?: string[];
+}
+
+interface SummaryData {
+    status: string;
+    completedAt: string;
+    createdAt: string;
+    duration: string;
+    confidence: number;
+    tables: TableInfo[];
+    qualityMetrics: QualityMetrics;
+    columnConfidence: ColumnConfidence[];
+    issues: Issue[];
+    recommendations: string[];
+}
+
 const TableSummary: React.FC<BaseSummaryProps> = ({
     analysisId,
     analysisType,
     stepCode,
-    stepResults,
-    allStepResults,
-    documentId,
-    status: analysisStatus,
-    createdAt,
-    completedAt,
-    metadata
+    analysisRun
 }) => {
-    // In a real application, you would use the provided parameters instead of mock data
-    // This is mock data for demonstration purposes, but would be replaced with real data
-    const [summaryData, setSummaryData] = useState({
-        status: analysisStatus || 'completed',
-        completedAt: completedAt || new Date().toISOString(),
-        createdAt: createdAt || new Date(Date.now() - 105000).toISOString(), // 1m 45s ago
-        duration: '1m 45s',
-        confidence: 92,
-        tableStats: {
-            rowCount: 24,
-            columnCount: 8,
-            cellCount: 192,
-            headerRowDetected: true,
-            footerRowDetected: false
-        },
+    // Process step results to get table information
+    const processStepResults = () => {
+        const detectionResults = analysisRun.step_results.find(
+            result => result.step_code === 'table_analysis.table_detection' 
+        )?.result as TableDetectionOutput;
+
+
+        const structureResults = analysisRun.step_results.find(
+            result => result.step_code === 'table_analysis.table_structure'
+        )?.result as TableStructureOutput;
+
+        const dataResults = analysisRun.step_results.find(
+            result => result.step_code === 'table_analysis.table_data'
+        )?.result as TableDataOutput;
+
+        const tables = detectionResults?.results.flatMap(pageResult =>
+            pageResult.tables.map((table, index) => {
+                const structureTable = structureResults?.results
+                    .flatMap(r => r.tables)
+                    .find((_, i) => i === index);
+
+                const dataTable = dataResults?.results
+                    .flatMap(r => r.tables)
+                    .find((_, i) => i === index);
+
+                return {
+                    id: `table-${index + 1}`,
+                    name: `Table ${index + 1}`,
+                    page: pageResult.page_info.page_number,
+                    rowCount: structureTable?.num_rows || 0,
+                    columnCount: structureTable?.num_cols || 0,
+                    cellCount: (structureTable?.num_rows || 0) * (structureTable?.num_cols || 0),
+                    confidence: Math.round((table.confidence.score || 0) * 100),
+                    hasHeader: structureTable?.cells.some(cell => cell.is_header) || false,
+                    hasFooter: false
+                };
+            })
+        ) || [];
+
+        // Calculate column confidence from data results
+        const columnConfidence: ColumnConfidence[] = [];
+        if (dataResults?.results.length && dataResults.results[0].tables.length) {
+            const firstTable = dataResults.results[0].tables[0];
+            if (firstTable.cells.length) {
+                firstTable.cells[0].forEach((cell, index) => {
+                    const confidenceSum = dataResults.results.reduce((acc, result) =>
+                        acc + result.tables.reduce((tableAcc, table) =>
+                            tableAcc + (table.cells[0]?.[index]?.confidence.score || 0), 0
+                        ), 0
+                    );
+                    const avgConfidence = Math.round((confidenceSum / dataResults.results.length) * 100);
+                    columnConfidence.push({
+                        name: cell.text || `Column ${index + 1}`,
+                        confidence: avgConfidence
+                    });
+                });
+            }
+        }
+
+        // Calculate quality metrics
+        const qualityMetrics = {
+            structureAccuracy: Math.round(
+                (structureResults?.results.reduce(
+                    (acc, result) => acc + result.tables.reduce(
+                        (tableAcc, table) => tableAcc + (table.confidence.score || 0), 0
+                    ), 0
+                ) / (structureResults?.results.length || 1) || 0) * 100
+            ),
+            contentAccuracy: Math.round(
+                (dataResults?.results.reduce(
+                    (acc, result) => acc + result.tables.reduce(
+                        (tableAcc, table) => tableAcc + (table.confidence.score || 0), 0
+                    ), 0
+                ) / (dataResults?.results.length || 1) || 0) * 100
+            ),
+            headerAccuracy: Math.round(
+                (structureResults?.results.reduce(
+                    (acc, result) => acc + result.tables.reduce(
+                        (tableAcc, table) => tableAcc +
+                            (table.cells.filter(cell => cell.is_header).reduce(
+                                (cellAcc, cell) => cellAcc + (cell.confidence.score || 0), 0
+                            ) / (table.cells.filter(cell => cell.is_header).length || 1)), 0
+                    ), 0
+                ) / (structureResults?.results.length || 1) || 0) * 100
+            ),
+            lowConfidenceCells: dataResults?.results.reduce(
+                (acc, result) => acc + result.tables.reduce(
+                    (tableAcc, table) => tableAcc + table.cells.flat().filter(
+                        cell => (cell.confidence.score || 0) < 0.75
+                    ).length, 0
+                ), 0
+            ) || 0
+        };
+
+        // Generate issues based on analysis
+        const issues: Issue[] = [];
+        if (qualityMetrics.lowConfidenceCells > 0) {
+            const lowConfColumns = columnConfidence
+                .filter(col => col.confidence < 75)
+                .map(col => col.name);
+            issues.push({
+                type: 'warning',
+                message: `Low confidence in ${qualityMetrics.lowConfidenceCells} cells`,
+                affectedColumns: lowConfColumns
+            });
+        }
+
+        if (structureResults?.results.some(result =>
+            result.tables.some(table =>
+                table.cells.some(cell => cell.row_span > 1 || cell.col_span > 1)
+            )
+        )) {
+            issues.push({
+                type: 'info',
+                message: 'Merged cells detected and resolved'
+            });
+        }
+
+        // Generate recommendations based on issues
+        const recommendations: string[] = [];
+        if (qualityMetrics.lowConfidenceCells > 0) {
+            recommendations.push('Review cells marked with low confidence');
+        }
+        if (qualityMetrics.headerAccuracy < 90) {
+            recommendations.push('Verify header row detection accuracy');
+        }
+        if (qualityMetrics.contentAccuracy < 85) {
+            recommendations.push('Check table content for potential extraction errors');
+        }
+
+        return {
+            tables,
+            qualityMetrics,
+            columnConfidence,
+            issues,
+            recommendations
+        };
+    };
+
+    const [summaryData, setSummaryData] = useState<SummaryData>({
+        status: analysisRun.status || 'completed',
+        completedAt: analysisRun.completed_at || new Date().toISOString(),
+        createdAt: analysisRun.created_at || new Date(Date.now() - 105000).toISOString(),
+        duration: '0s',
+        confidence: 0,
+        tables: [],
         qualityMetrics: {
-            structureAccuracy: 98,
-            contentAccuracy: 92,
-            headerAccuracy: 95,
-            lowConfidenceCells: 7
+            structureAccuracy: 0,
+            contentAccuracy: 0,
+            headerAccuracy: 0,
+            lowConfidenceCells: 0
         },
-        columnConfidence: [
-            { name: 'Invoice Number', confidence: 98 },
-            { name: 'Date', confidence: 96 },
-            { name: 'Customer ID', confidence: 94 },
-            { name: 'Description', confidence: 87 },
-            { name: 'Quantity', confidence: 95 },
-            { name: 'Unit Price', confidence: 93 },
-            { name: 'Tax', confidence: 89 },
-            { name: 'Total', confidence: 92 }
-        ],
-        issues: [
-            { type: 'warning', message: 'Low confidence in 7 cells', affectedColumns: ['Description', 'Tax'] },
-            { type: 'info', message: 'Merged cells detected and resolved', affectedColumns: ['Description'] }
-        ],
-        recommendations: [
-            'Review the Description column values for accuracy',
-            'Verify tax calculations in the Tax column',
-            'Check for any missing rows at the bottom of the table'
-        ]
+        columnConfidence: [],
+        issues: [],
+        recommendations: []
     });
 
-    // Calculate duration if both timestamps are available
+    // Calculate duration when timestamps change
     useEffect(() => {
-        if (createdAt && completedAt) {
-            const start = new Date(createdAt).getTime();
-            const end = new Date(completedAt).getTime();
+        if (analysisRun.created_at && analysisRun.completed_at) {
+            const start = new Date(analysisRun.created_at).getTime();
+            const end = new Date(analysisRun.completed_at).getTime();
             const durationMs = end - start;
 
             // Format duration
@@ -108,30 +279,22 @@ const TableSummary: React.FC<BaseSummaryProps> = ({
                 duration: formattedDuration
             }));
         }
-    }, [createdAt, completedAt]);
+    }, [analysisRun.created_at, analysisRun.completed_at]);
 
-    // Use step results if available
+    // Process step results when they change
     useEffect(() => {
-        if (stepResults) {
-            // In a real application, you would process the step results here
-            // and update the summary data accordingly
-            console.log('Step results available:', stepResults);
+        if (analysisRun.step_results) {
+            const processedData = processStepResults();
+            setSummaryData(prev => ({
+                ...prev,
+                ...processedData,
+                confidence: Math.round(
+                    processedData.tables.reduce((acc, table) => acc + table.confidence, 0) /
+                    (processedData.tables.length || 1)
+                )
+            }));
         }
-    }, [stepResults]);
-
-    // Function to get status badge color
-    const getStatusBadge = (status: string) => {
-        switch (status) {
-            case 'completed':
-                return <Badge className="bg-green-500 hover:bg-green-600"><CheckCircle className="h-3 w-3 mr-1" /> Completed</Badge>;
-            case 'processing':
-                return <Badge className="bg-blue-500 hover:bg-blue-600"><Clock className="h-3 w-3 mr-1" /> Processing</Badge>;
-            case 'failed':
-                return <Badge className="bg-red-500 hover:bg-red-600"><AlertTriangle className="h-3 w-3 mr-1" /> Failed</Badge>;
-            default:
-                return <Badge className="bg-gray-500 hover:bg-gray-600"><Info className="h-3 w-3 mr-1" /> Unknown</Badge>;
-        }
-    };
+    }, [analysisRun.step_results]);
 
     // Function to format date
     const formatDate = (dateString: string | undefined) => {
@@ -139,166 +302,203 @@ const TableSummary: React.FC<BaseSummaryProps> = ({
         return new Date(dateString).toLocaleString();
     };
 
+    // Function to get confidence color
+    const getConfidenceColor = (confidence: number) => {
+        if (confidence >= 95) return "text-green-600";
+        if (confidence >= 85) return "text-blue-600";
+        if (confidence >= 75) return "text-amber-600";
+        return "text-red-600";
+    };
+
     return (
         <div className="space-y-6">
             {/* Overview Card */}
-            <Card>
-                <CardHeader className="pb-3">
+            <Card className="border-border/40 shadow-sm overflow-hidden">
+                <div className="bg-gradient-to-r from-primary/80 to-primary/60 h-1.5 w-full" />
+                <CardHeader className="pb-3 bg-muted/20 border-b">
                     <div className="flex justify-between items-center">
                         <div>
-                            <CardTitle className="text-xl font-bold">Table Analysis Summary</CardTitle>
-                            <CardDescription>
-                                Summary for step: {stepCode}
+                            <CardTitle className="text-lg font-medium flex items-center gap-2">
+                                <span className="text-md font-medium text-muted-foreground">
+                                    Analysis ID: {analysisId}
+                                </span>
+                            </CardTitle>
+                            <CardDescription className="text-sm text-muted-foreground">
+                                {summaryData.tables.length} tables extracted from document
                             </CardDescription>
                         </div>
-                        <div className="flex items-center space-x-2">
-                            {getStatusBadge(summaryData.status)}
-                            <Badge variant="outline" className="ml-2">
-                                <FileSpreadsheet className="h-3 w-3 mr-1" /> Table Analysis
+                        <div className="flex items-center gap-2">
+                            <Badge
+                                className={ANALYSIS_STATUS_COLORS[summaryData.status as keyof typeof ANALYSIS_STATUS_COLORS]}
+                            >
+                                {summaryData.status}
                             </Badge>
                         </div>
                     </div>
                 </CardHeader>
-                <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                        <div className="bg-gray-50 p-4 rounded-md">
-                            <div className="text-sm font-medium text-gray-500 mb-1">Overall Confidence</div>
-                            <div className="flex items-center">
-                                <span className="text-2xl font-bold mr-2">{summaryData.confidence}%</span>
-                                <Progress value={summaryData.confidence} className="h-2 flex-1" />
+
+                <CardContent className="p-4 pt-5">
+                    {/* Key Metrics */}
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                        <div className="space-y-1.5 p-3 bg-card/30 rounded-md border border-border/30 transition-all hover:border-border/50 hover:shadow-sm">
+                            <div className="flex items-center text-xs font-medium text-muted-foreground">
+                                <TableIcon className="h-3.5 w-3.5 mr-1.5 text-blue-500/80" />
+                                <span>Tables Extracted</span>
                             </div>
+                            <p className="text-xl font-medium text-foreground/90">{summaryData.tables.length}</p>
+                            <p className="text-xs text-muted-foreground">
+                                {summaryData.tables.reduce((acc, table) => acc + table.cellCount, 0)} total cells
+                            </p>
                         </div>
-                        <div className="bg-gray-50 p-4 rounded-md">
-                            <div className="text-sm font-medium text-gray-500 mb-1">Table Size</div>
-                            <div className="text-2xl font-bold">{summaryData.tableStats.rowCount} × {summaryData.tableStats.columnCount}</div>
-                            <div className="text-xs text-gray-500">{summaryData.tableStats.cellCount} cells total</div>
+
+                        <div className="space-y-1.5 p-3 bg-card/30 rounded-md border border-border/30 transition-all hover:border-border/50 hover:shadow-sm">
+                            <div className="flex items-center text-xs font-medium text-muted-foreground">
+                                <CheckCircle className="h-3.5 w-3.5 mr-1.5 text-green-500/80" />
+                                <span>Overall Confidence</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <p className={cn("text-xl font-medium", getConfidenceColor(summaryData.confidence))}>
+                                    {summaryData.confidence}%
+                                </p>
+                                <Progress value={summaryData.confidence} className="h-1.5 w-16" />
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                                {summaryData.qualityMetrics.lowConfidenceCells} low confidence cells
+                            </p>
                         </div>
-                        <div className="bg-gray-50 p-4 rounded-md">
-                            <div className="text-sm font-medium text-gray-500 mb-1">Completed At</div>
-                            <div className="text-md font-medium">{formatDate(summaryData.completedAt)}</div>
-                            <div className="text-xs text-gray-500">Duration: {summaryData.duration}</div>
+
+                        <div className="space-y-1.5 p-3 bg-card/30 rounded-md border border-border/30 transition-all hover:border-border/50 hover:shadow-sm">
+                            <div className="flex items-center text-xs font-medium text-muted-foreground">
+                                <Clock className="h-3.5 w-3.5 mr-1.5 text-amber-500/80" />
+                                <span>Processing Time</span>
+                            </div>
+                            <p className="text-xl font-medium text-foreground/90">{summaryData.duration}</p>
+                            <p className="text-xs text-muted-foreground">
+                                Completed {formatDistanceToNow(new Date(summaryData.completedAt), { addSuffix: true })}
+                            </p>
                         </div>
-                        <div className="bg-gray-50 p-4 rounded-md">
-                            <div className="text-sm font-medium text-gray-500 mb-1">Quality Check</div>
-                            <div className="flex items-center">
-                                <div className="text-2xl font-bold mr-2">{summaryData.qualityMetrics.structureAccuracy}%</div>
-                                <div className="text-xs">
-                                    <div className="text-green-600">✓ Structure</div>
-                                    <div className={summaryData.qualityMetrics.lowConfidenceCells > 0 ? "text-amber-600" : "text-green-600"}>
-                                        {summaryData.qualityMetrics.lowConfidenceCells > 0 ? "⚠" : "✓"} Content
-                                    </div>
-                                </div>
+
+                        <div className="space-y-1.5 p-3 bg-card/30 rounded-md border border-border/30 transition-all hover:border-border/50 hover:shadow-sm">
+                            <div className="flex items-center text-xs font-medium text-muted-foreground">
+                                <Layers className="h-3.5 w-3.5 mr-1.5 text-purple-500/80" />
+                                <span>Structure Quality</span>
+                            </div>
+                            <p className={cn("text-xl font-medium", getConfidenceColor(summaryData.qualityMetrics.structureAccuracy))}>
+                                {summaryData.qualityMetrics.structureAccuracy}%
+                            </p>
+                            <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                <span>Headers: {summaryData.qualityMetrics.headerAccuracy}%</span>
+                                <span>Content: {summaryData.qualityMetrics.contentAccuracy}%</span>
                             </div>
                         </div>
                     </div>
 
                     {/* Document information if available */}
-                    {documentId && (
-                        <div className="mb-6 p-4 bg-blue-50 rounded-md border border-blue-100">
+                    {analysisRun.document_id && (
+                        <div className="mb-6 p-3 bg-blue-50/50 rounded-md border border-blue-100/70">
                             <div className="flex items-center mb-2">
-                                <FileText className="h-5 w-5 text-blue-500 mr-2" />
-                                <h3 className="text-md font-medium text-blue-700">Document Information</h3>
+                                <FileText className="h-4 w-4 text-blue-500/80 mr-2" />
+                                <h3 className="text-sm font-medium text-blue-700/90">Document Information</h3>
                             </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
                                 <div>
-                                    <p className="text-sm font-medium text-blue-700">Document ID</p>
-                                    <p className="text-sm text-blue-600">{documentId}</p>
+                                    <p className="font-medium text-blue-700/90">Document ID</p>
+                                    <p className="text-blue-600/80 truncate">
+                                        {analysisRun.document_id}
+                                    </p>
                                 </div>
-                                {metadata?.documentName && (
-                                    <div>
-                                        <p className="text-sm font-medium text-blue-700">Document Name</p>
-                                        <p className="text-sm text-blue-600">{metadata.documentName}</p>
-                                    </div>
-                                )}
-                                {metadata?.documentType && (
-                                    <div>
-                                        <p className="text-sm font-medium text-blue-700">Document Type</p>
-                                        <p className="text-sm text-blue-600">{metadata.documentType}</p>
-                                    </div>
-                                )}
-                                {metadata?.pageCount && (
-                                    <div>
-                                        <p className="text-sm font-medium text-blue-700">Page Count</p>
-                                        <p className="text-sm text-blue-600">{metadata.pageCount} pages</p>
-                                    </div>
-                                )}
+                                <div>
+                                    <p className="font-medium text-blue-700/90">Analysis ID</p>
+                                    <p className="text-blue-600/80 truncate">
+                                        {analysisId}
+                                    </p>
+                                </div>
+                                <div>
+                                    <p className="font-medium text-blue-700/90">Analysis Type</p>
+                                    <p className="text-blue-600/80">
+                                        {String(getAnalysisName(analysisType).name)}
+                                    </p>
+                                </div>
+                                <div>
+                                    <p className="font-medium text-blue-700/90">Status</p>
+                                    <p className="text-blue-600/80">
+                                        {analysisRun.status}
+                                    </p>
+                                </div>
                             </div>
                         </div>
                     )}
 
-                    <Tabs defaultValue="details">
-                        <TabsList className="mb-4">
-                            <TabsTrigger value="details">Details</TabsTrigger>
-                            <TabsTrigger value="columns">Column Analysis</TabsTrigger>
-                            <TabsTrigger value="issues">Issues & Recommendations</TabsTrigger>
-                            {allStepResults && Object.keys(allStepResults).length > 0 && (
-                                <TabsTrigger value="steps">Step Results</TabsTrigger>
-                            )}
+                    <Tabs defaultValue="tables" className="w-full">
+                        <TabsList className="mb-4 bg-muted/50 p-0.5 border border-border/30">
+                            <TabsTrigger value="tables" className="text-xs data-[state=active]:bg-background">
+                                Extracted Tables
+                            </TabsTrigger>
+                            <TabsTrigger value="quality" className="text-xs data-[state=active]:bg-background">
+                                Quality Analysis
+                            </TabsTrigger>
+                            <TabsTrigger value="issues" className="text-xs data-[state=active]:bg-background">
+                                Issues & Recommendations
+                            </TabsTrigger>
                         </TabsList>
 
-                        <TabsContent value="details">
-                            <div className="bg-gray-50 p-4 rounded-md">
-                                <h3 className="text-md font-medium mb-3">Table Structure Details</h3>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <p className="text-sm font-medium text-gray-500">Header Row</p>
-                                        <p className="text-sm">{summaryData.tableStats.headerRowDetected ? "Detected" : "Not Detected"}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-sm font-medium text-gray-500">Footer Row</p>
-                                        <p className="text-sm">{summaryData.tableStats.footerRowDetected ? "Detected" : "Not Detected"}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-sm font-medium text-gray-500">Structure Accuracy</p>
-                                        <p className="text-sm">{summaryData.qualityMetrics.structureAccuracy}%</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-sm font-medium text-gray-500">Content Accuracy</p>
-                                        <p className="text-sm">{summaryData.qualityMetrics.contentAccuracy}%</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-sm font-medium text-gray-500">Header Accuracy</p>
-                                        <p className="text-sm">{summaryData.qualityMetrics.headerAccuracy}%</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-sm font-medium text-gray-500">Low Confidence Cells</p>
-                                        <p className="text-sm">{summaryData.qualityMetrics.lowConfidenceCells} cells</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </TabsContent>
-
-                        <TabsContent value="columns">
-                            <div className="bg-gray-50 p-4 rounded-md">
-                                <h3 className="text-md font-medium mb-3">Column Confidence Analysis</h3>
+                        <TabsContent value="tables" className="mt-0">
+                            <div className="rounded-md border border-border/40 overflow-hidden">
                                 <Table>
-                                    <TableHeader>
+                                    <TableHeader className="bg-muted/30">
                                         <TableRow>
-                                            <TableHead>Column Name</TableHead>
+                                            <TableHead className="w-[180px]">Table Name</TableHead>
+                                            <TableHead>Page</TableHead>
+                                            <TableHead>Size</TableHead>
+                                            <TableHead>Structure</TableHead>
                                             <TableHead>Confidence</TableHead>
-                                            <TableHead>Status</TableHead>
+                                            <TableHead className="text-right">Actions</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {summaryData.columnConfidence.map((column, index) => (
-                                            <TableRow key={index}>
-                                                <TableCell className="font-medium">{column.name}</TableCell>
+                                        {summaryData.tables.map((table) => (
+                                            <TableRow key={table.id} className="hover:bg-muted/20">
+                                                <TableCell className="font-medium">{table.name}</TableCell>
+                                                <TableCell>Page {table.page}</TableCell>
                                                 <TableCell>
-                                                    <div className="flex items-center">
-                                                        <span className="mr-2">{column.confidence}%</span>
-                                                        <Progress value={column.confidence} className="h-2 w-24" />
+                                                    {table.rowCount} × {table.columnCount}
+                                                    <span className="text-xs text-muted-foreground ml-1">
+                                                        ({table.cellCount} cells)
+                                                    </span>
+                                                </TableCell>
+                                                <TableCell>
+                                                    <div className="flex flex-col text-xs">
+                                                        <span>{table.hasHeader ? "Header ✓" : "No Header"}</span>
+                                                        <span>{table.hasFooter ? "Footer ✓" : "No Footer"}</span>
                                                     </div>
                                                 </TableCell>
                                                 <TableCell>
-                                                    {column.confidence >= 95 ? (
-                                                        <Badge className="bg-green-100 text-green-800 hover:bg-green-200">High</Badge>
-                                                    ) : column.confidence >= 90 ? (
-                                                        <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-200">Good</Badge>
-                                                    ) : column.confidence >= 80 ? (
-                                                        <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-200">Fair</Badge>
-                                                    ) : (
-                                                        <Badge className="bg-red-100 text-red-800 hover:bg-red-200">Low</Badge>
-                                                    )}
+                                                    <div className="flex items-center gap-2">
+                                                        <span className={cn("text-sm font-medium", getConfidenceColor(table.confidence))}>
+                                                            {table.confidence}%
+                                                        </span>
+                                                        <Progress
+                                                            value={table.confidence}
+                                                            className={cn(
+                                                                "h-1.5 w-16",
+                                                                table.confidence >= 95 ? "bg-green-100" :
+                                                                    table.confidence >= 85 ? "bg-blue-100" :
+                                                                        table.confidence >= 75 ? "bg-amber-100" : "bg-red-100"
+                                                            )}
+                                                        />
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    <div className="flex items-center justify-end gap-2">
+                                                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs">
+                                                            <Download className="h-3 w-3 mr-1" />
+                                                            Export
+                                                        </Button>
+                                                        <Button variant="outline" size="sm" className="h-7 px-2 text-xs">
+                                                            <ExternalLink className="h-3 w-3 mr-1" />
+                                                            View
+                                                        </Button>
+                                                    </div>
                                                 </TableCell>
                                             </TableRow>
                                         ))}
@@ -307,104 +507,168 @@ const TableSummary: React.FC<BaseSummaryProps> = ({
                             </div>
                         </TabsContent>
 
-                        <TabsContent value="issues">
-                            <div className="space-y-4">
-                                <div className="bg-gray-50 p-4 rounded-md">
-                                    <h3 className="text-md font-medium mb-3">Detected Issues</h3>
-                                    {summaryData.issues.length > 0 ? (
-                                        <ul className="space-y-2">
-                                            {summaryData.issues.map((issue, index) => (
-                                                <li key={index} className="flex items-start">
-                                                    {issue.type === 'warning' ? (
-                                                        <AlertTriangle className="h-5 w-5 text-amber-500 mr-2 flex-shrink-0 mt-0.5" />
-                                                    ) : (
-                                                        <Info className="h-5 w-5 text-blue-500 mr-2 flex-shrink-0 mt-0.5" />
-                                                    )}
-                                                    <div>
-                                                        <p className="text-sm font-medium">{issue.message}</p>
-                                                        {issue.affectedColumns && (
-                                                            <p className="text-xs text-gray-500">
-                                                                Affected columns: {issue.affectedColumns.join(', ')}
-                                                            </p>
-                                                        )}
-                                                    </div>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    ) : (
-                                        <p className="text-sm text-gray-500">No issues detected</p>
-                                    )}
-                                </div>
-
-                                <div className="bg-gray-50 p-4 rounded-md">
-                                    <h3 className="text-md font-medium mb-3">Recommendations</h3>
-                                    {summaryData.recommendations.length > 0 ? (
-                                        <ul className="list-disc pl-5 text-sm space-y-1">
-                                            {summaryData.recommendations.map((recommendation, index) => (
-                                                <li key={index}>{recommendation}</li>
-                                            ))}
-                                        </ul>
-                                    ) : (
-                                        <p className="text-sm text-gray-500">No recommendations available</p>
-                                    )}
-                                </div>
-                            </div>
-                        </TabsContent>
-
-                        {allStepResults && Object.keys(allStepResults).length > 0 && (
-                            <TabsContent value="steps">
-                                <div className="bg-gray-50 p-4 rounded-md">
-                                    <h3 className="text-md font-medium mb-3">Analysis Steps</h3>
-                                    <div className="space-y-4">
-                                        {Object.entries(allStepResults).map(([stepKey, stepData], index) => (
-                                            <div key={stepKey} className="border border-gray-200 rounded-md p-3">
-                                                <div className="flex items-center justify-between mb-2">
-                                                    <h4 className="text-sm font-medium">{stepData.name || `Step ${index + 1}`}</h4>
-                                                    <Badge
-                                                        className={
-                                                            stepData.status === 'completed' ? 'bg-green-100 text-green-800' :
-                                                                stepData.status === 'processing' ? 'bg-blue-100 text-blue-800' :
-                                                                    stepData.status === 'failed' ? 'bg-red-100 text-red-800' :
-                                                                        'bg-gray-100 text-gray-800'
-                                                        }
-                                                    >
-                                                        {stepData.status || 'Unknown'}
-                                                    </Badge>
+                        <TabsContent value="quality" className="mt-0">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="border border-border/40 rounded-md p-4 bg-card/30">
+                                    <h3 className="text-sm font-medium mb-3 flex items-center">
+                                        <BarChart className="h-4 w-4 mr-1.5 text-primary/70" />
+                                        Column Confidence Analysis
+                                    </h3>
+                                    <div className="space-y-3">
+                                        {summaryData.columnConfidence.map((column, index) => (
+                                            <div key={index} className="space-y-1">
+                                                <div className="flex justify-between items-center text-xs">
+                                                    <span className="font-medium">{column.name}</span>
+                                                    <span className={getConfidenceColor(column.confidence)}>
+                                                        {column.confidence}%
+                                                    </span>
                                                 </div>
-
-                                                {stepData.description && (
-                                                    <p className="text-xs text-gray-500 mb-2">{stepData.description}</p>
-                                                )}
-
-                                                {stepData.metrics && (
-                                                    <div className="grid grid-cols-2 gap-2 mt-2">
-                                                        {Object.entries(stepData.metrics).map(([metricKey, metricValue]) => (
-                                                            <div key={metricKey} className="text-xs">
-                                                                <span className="font-medium text-gray-600">{metricKey}: </span>
-                                                                <span>{String(metricValue)}</span>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                )}
-
-                                                {stepKey === stepCode && (
-                                                    <div className="mt-2 pt-2 border-t border-gray-200">
-                                                        <Badge className="bg-indigo-100 text-indigo-800">Current Step</Badge>
-                                                    </div>
-                                                )}
+                                                <div className="h-1.5 w-full bg-muted/50 rounded-full overflow-hidden">
+                                                    <div
+                                                        className={cn(
+                                                            "h-full rounded-full transition-all",
+                                                            column.confidence >= 95 ? "bg-green-500/80" :
+                                                                column.confidence >= 85 ? "bg-blue-500/80" :
+                                                                    column.confidence >= 75 ? "bg-amber-500/80" : "bg-red-500/80"
+                                                        )}
+                                                        style={{ width: `${column.confidence}%` }}
+                                                    />
+                                                </div>
                                             </div>
                                         ))}
                                     </div>
                                 </div>
-                            </TabsContent>
-                        )}
+
+                                <div className="border border-border/40 rounded-md p-4 bg-card/30">
+                                    <h3 className="text-sm font-medium mb-3 flex items-center">
+                                        <CheckCircle className="h-4 w-4 mr-1.5 text-primary/70" />
+                                        Quality Metrics
+                                    </h3>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-1">
+                                            <p className="text-xs font-medium text-muted-foreground">Structure Accuracy</p>
+                                            <div className="flex items-center gap-2">
+                                                <p className={cn("text-sm font-medium", getConfidenceColor(summaryData.qualityMetrics.structureAccuracy))}>
+                                                    {summaryData.qualityMetrics.structureAccuracy}%
+                                                </p>
+                                                <Progress
+                                                    value={summaryData.qualityMetrics.structureAccuracy}
+                                                    className="h-1.5 w-16"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <p className="text-xs font-medium text-muted-foreground">Content Accuracy</p>
+                                            <div className="flex items-center gap-2">
+                                                <p className={cn("text-sm font-medium", getConfidenceColor(summaryData.qualityMetrics.contentAccuracy))}>
+                                                    {summaryData.qualityMetrics.contentAccuracy}%
+                                                </p>
+                                                <Progress
+                                                    value={summaryData.qualityMetrics.contentAccuracy}
+                                                    className="h-1.5 w-16"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <p className="text-xs font-medium text-muted-foreground">Header Accuracy</p>
+                                            <div className="flex items-center gap-2">
+                                                <p className={cn("text-sm font-medium", getConfidenceColor(summaryData.qualityMetrics.headerAccuracy))}>
+                                                    {summaryData.qualityMetrics.headerAccuracy}%
+                                                </p>
+                                                <Progress
+                                                    value={summaryData.qualityMetrics.headerAccuracy}
+                                                    className="h-1.5 w-16"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <p className="text-xs font-medium text-muted-foreground">Low Confidence Cells</p>
+                                            <p className="text-sm font-medium">
+                                                {summaryData.qualityMetrics.lowConfidenceCells} cells
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </TabsContent>
+
+                        <TabsContent value="issues" className="mt-0">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="border border-border/40 rounded-md p-4 bg-card/30">
+                                    <h3 className="text-sm font-medium mb-3 flex items-center">
+                                        <AlertCircle className="h-4 w-4 mr-1.5 text-primary/70" />
+                                        Detected Issues
+                                    </h3>
+                                    {summaryData.issues.length > 0 ? (
+                                        <div className="space-y-3">
+                                            {summaryData.issues.map((issue, index) => (
+                                                <div key={index} className="flex items-start p-2 rounded-md bg-muted/30 border border-border/30">
+                                                    {issue.type === 'warning' ? (
+                                                        <AlertTriangle className="h-4 w-4 text-amber-500 mr-2 flex-shrink-0 mt-0.5" />
+                                                    ) : (
+                                                        <Info className="h-4 w-4 text-blue-500 mr-2 flex-shrink-0 mt-0.5" />
+                                                    )}
+                                                    <div>
+                                                        <p className="text-xs font-medium">{issue.message}</p>
+                                                        {issue.affectedColumns && (
+                                                            <p className="text-[10px] text-muted-foreground">
+                                                                Affected columns: {issue.affectedColumns.join(', ')}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="text-center py-4 text-muted-foreground text-sm border border-dashed border-border/40 rounded-md bg-muted/10">
+                                            <p>No issues detected</p>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="border border-border/40 rounded-md p-4 bg-card/30">
+                                    <h3 className="text-sm font-medium mb-3 flex items-center">
+                                        <CheckCircle2 className="h-4 w-4 mr-1.5 text-primary/70" />
+                                        Recommendations
+                                    </h3>
+                                    {summaryData.recommendations.length > 0 ? (
+                                        <div className="space-y-2">
+                                            {summaryData.recommendations.map((recommendation, index) => (
+                                                <div key={index} className="flex items-start">
+                                                    <div className="flex-shrink-0 flex items-center justify-center w-5 h-5 rounded-full bg-primary/10 text-primary text-[10px] font-medium mr-2 mt-0.5">
+                                                        {index + 1}
+                                                    </div>
+                                                    <p className="text-xs">{recommendation}</p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="text-center py-4 text-muted-foreground text-sm border border-dashed border-border/40 rounded-md bg-muted/10">
+                                            <p>No recommendations available</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </TabsContent>
                     </Tabs>
                 </CardContent>
-            </Card>
 
-            <div className="text-xs text-gray-400">
-                Analysis ID: {analysisId} | Step: {stepCode} | Type: {analysisType}
-            </div>
+                <CardFooter className="bg-muted/10 border-t px-4 py-3 flex justify-between items-center">
+                    <div className="text-xs text-muted-foreground">
+                        Analysis completed on {formatDate(summaryData.completedAt)}
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm" className="h-8 text-xs">
+                            <Download className="h-3.5 w-3.5 mr-1.5" />
+                            Export All Tables
+                        </Button>
+                        <Button size="sm" className="h-8 text-xs bg-primary/90 hover:bg-primary">
+                            View Detailed Results
+                            <ChevronRight className="h-3.5 w-3.5 ml-1.5" />
+                        </Button>
+                    </div>
+                </CardFooter>
+            </Card>
         </div>
     );
 };

@@ -3,7 +3,7 @@
  * This file defines the common interfaces that all analysis component definitions should follow
  */
 import { AnalysisStep } from '@/constants/analysis';
-import { StepResultResponse } from '@/types/analysis/base';
+import { AnalysisRunWithResults, StepResultResponse } from '@/types/analysis/base';
 // Base interface for analysis results component
 export interface BaseResultsProps {
     analysisId: string;
@@ -35,14 +35,7 @@ export interface BaseSummaryProps {
     analysisId: string;
     analysisType: string;
     stepCode: string;
-    // Optional parameters for enhanced functionality
-    stepResults?: any; // Results from the current step
-    allStepResults?: Record<string, any>; // Results from all steps
-    documentId?: string; // Associated document ID
-    status?: string; // Analysis status
-    createdAt?: string; // Creation timestamp
-    completedAt?: string; // Completion timestamp
-    metadata?: Record<string, any>; // Any additional metadata
+    analysisRun: AnalysisRunWithResults;
 }
 
 // Base interface for step-specific components
