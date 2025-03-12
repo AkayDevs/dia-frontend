@@ -32,6 +32,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ANALYSIS_STATUS_COLORS, AnalysisStep, AnalysisDefinitionName, getAnalysisSteps, getAnalysisName, AnalysisDefinitionIcon, getAnalysisIcon } from '@/constants/analysis';
 import { StepComponentType } from '@/components/analysis/definitions/base';
 import { StepResultResponse } from '@/types/analysis/base';
+import { cn } from '@/lib/utils';
 
 interface AnalysisDetailPageProps {
     params: {
@@ -325,14 +326,17 @@ export default function AnalysisDetailPage({ params }: AnalysisDetailPageProps) 
 
                 <TabsContent value="results" className="space-y-6">
                     {/* Step selector */}
-                    <Card>
-                        <CardHeader className="pb-3">
-                            <CardTitle className="text-lg">Select Step</CardTitle>
+                    <Card className="shadow-sm border-gray-200 overflow-hidden">
+                        <CardHeader className="pb-3 bg-gray-50/50 border-b">
+                            <CardTitle className="text-lg flex items-center">
+                                <Layers className="h-5 w-5 mr-2 text-primary" />
+                                Analysis Steps
+                            </CardTitle>
                             <CardDescription>
-                                Choose a step to view its results
+                                Select a step to view detailed results and visualizations
                             </CardDescription>
                         </CardHeader>
-                        <CardContent>
+                        <CardContent className="p-4">
                             <div className="flex flex-wrap gap-2">
                                 {analysisSteps && analysisSteps.map((step) => (
                                     <Button
@@ -340,11 +344,40 @@ export default function AnalysisDetailPage({ params }: AnalysisDetailPageProps) 
                                         variant={selectedStep === step.step_code ? "default" : "outline"}
                                         size="sm"
                                         onClick={() => setSelectedStep(step.step_code)}
+                                        className={cn(
+                                            "transition-all duration-200 font-medium",
+                                            selectedStep === step.step_code
+                                                ? "shadow-sm"
+                                                : "hover:border-primary/50 hover:bg-primary/5"
+                                        )}
                                     >
                                         {step.name}
+                                        {currentAnalysis?.step_results.find(s => s.step_code === step.step_code)?.status === 'completed' && (
+                                            <CheckCircle2 className="ml-1.5 h-3.5 w-3.5 text-green-500" />
+                                        )}
                                     </Button>
                                 ))}
                             </div>
+
+                            {selectedStep && (
+                                <div className="mt-4 pt-4 border-t">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center">
+                                            <Badge variant="outline" className="mr-2 bg-primary/5">
+                                                {analysisSteps?.find(s => s.step_code === selectedStep)?.name}
+                                            </Badge>
+                                            <span className="text-sm text-muted-foreground">
+                                                {currentAnalysis?.step_results.find(s => s.step_code === selectedStep)?.status === 'completed'
+                                                    ? 'Completed'
+                                                    : 'In progress'}
+                                            </span>
+                                        </div>
+                                        <div className="text-sm text-muted-foreground">
+                                            {currentAnalysis?.step_results.find(s => s.step_code === selectedStep)?.algorithm_code}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
 
