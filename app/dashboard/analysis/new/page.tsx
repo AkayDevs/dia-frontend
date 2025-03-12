@@ -73,8 +73,8 @@ export default function AnalysisSetupPage() {
 
     // Fetch analysis definition when selected
     useEffect(() => {
-        if (selectedAnalysisType?.id) {
-            fetchAnalysisDefinition(selectedAnalysisType.id);
+        if (selectedAnalysisType?.code) {
+            fetchAnalysisDefinition(selectedAnalysisType.code);
         }
     }, [selectedAnalysisType, fetchAnalysisDefinition]);
 
@@ -86,13 +86,13 @@ export default function AnalysisSetupPage() {
 
             currentDefinition.steps.forEach(step => {
                 // Just initialize with enabled flag, no algorithm selection yet
-                initialStepsConfig[step.id] = {
+                initialStepsConfig[step.code] = {
                     enabled: true,
                     algorithm: undefined
                 };
 
                 // Fetch algorithms for this step
-                fetchStepAlgorithms(step.id);
+                fetchStepAlgorithms(step.code);
             });
 
             setAnalysisConfig(prev => ({
@@ -115,7 +115,7 @@ export default function AnalysisSetupPage() {
 
         if (currentDefinition?.steps && currentDefinition.steps.length > 0) {
             const allRequiredParamsSet = currentDefinition.steps.every(step => {
-                const stepConfig = analysisConfig.steps[step.id];
+                    const stepConfig = analysisConfig.steps[step.code];
                 if (!stepConfig?.enabled) return true; // Skip disabled steps
 
                 // If no algorithm is selected, mark as incomplete
@@ -205,7 +205,7 @@ export default function AnalysisSetupPage() {
 
         currentDefinition.steps.forEach(step => {
             // Skip if already configured
-            if (updatedStepsConfig[step.id]?.algorithm?.parameters) return;
+            if (updatedStepsConfig[step.code]?.algorithm?.parameters) return;
 
             // Default to first algorithm if available
             const defaultAlgorithm = step.algorithms[0];
@@ -214,8 +214,8 @@ export default function AnalysisSetupPage() {
                 // Create empty parameters object
                 const defaultParameters: Record<string, any> = {};
 
-                updatedStepsConfig[step.id] = {
-                    ...updatedStepsConfig[step.id],
+                updatedStepsConfig[step.code] = {
+                    ...updatedStepsConfig[step.code],
                     algorithm: {
                         code: defaultAlgorithm.code,
                         version: defaultAlgorithm.version,

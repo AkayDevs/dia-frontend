@@ -93,8 +93,8 @@ class AnalysisService {
     /**
      * Get detailed analysis definition with steps and algorithms
      */
-    async getAnalysisDefinition(definitionId: string): Promise<AnalysisDefinition> {
-        const response = await fetch(`${this.baseUrl}/definitions/${definitionId}`, {
+    async getAnalysisDefinition(definitionCode: string): Promise<AnalysisDefinition> {
+        const response = await fetch(`${this.baseUrl}/definitions/${definitionCode}`, {
             headers: this.getHeaders(),
         });
 

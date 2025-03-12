@@ -19,14 +19,13 @@ export interface AnalysisDefinition extends AnalysisDefinitionInfo {
 }
 
 export interface AnalysisStepInfo {
-    id: string;
     code: string;
     name: string;
     version: string;
     description: string;
+    base_parameters: AnalysisParameter[];
     order: number;
     is_active: boolean;
-    base_parameters: AnalysisParameter[];
 }
 
 export interface AnalysisStep extends AnalysisStepInfo {
@@ -38,18 +37,17 @@ export interface AnalysisStepWithResults extends AnalysisStepInfo {
 }
 
 export interface AnalysisAlgorithmInfo {
-    id: string;
     code: string;
     name: string;
     version: string;
     description: string;
     supported_document_types: DocumentType[];
     is_active: boolean;
-    parameters: AnalysisParameter[];
 }
 
 export interface AnalysisAlgorithm extends AnalysisAlgorithmInfo {
     // results: AnalysisAlgorithmResult[];
+    parameters: AnalysisParameter[];
 }
 
 

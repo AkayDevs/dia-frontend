@@ -65,9 +65,9 @@ interface AnalysisState {
 
     // Methods for analysis definitions
     fetchAnalysisDefinitions: () => Promise<void>;
-    fetchAnalysisDefinition: (definitionId: string) => Promise<void>;
+    fetchAnalysisDefinition: (definitionCode: string) => Promise<void>;
     setCurrentDefinition: (definition: AnalysisDefinition | null) => void;
-    fetchStepAlgorithms: (stepId: string) => Promise<void>;
+    fetchStepAlgorithms: (stepCode: string) => Promise<void>;
 
     // Methods for analysis operations
     startAnalysis: (
@@ -143,11 +143,11 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
         }
     },
 
-    fetchAnalysisDefinition: async (definitionId: string) => {
+    fetchAnalysisDefinition: async (definitionCode: string) => {
         set({ isLoading: true, error: null });
         try {
             // Use the analysis service to fetch a specific definition
-            const definition = await analysisService.getAnalysisDefinition(definitionId);
+            const definition = await analysisService.getAnalysisDefinition(definitionCode);
 
             // Ensure each step has the algorithms property
             if (definition.steps) {
@@ -178,15 +178,15 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
         set({ currentDefinition: definition });
     },
 
-    fetchStepAlgorithms: async (stepId: string) => {
+    fetchStepAlgorithms: async (stepCode: string) => {
         set({ isLoading: true, error: null });
         try {
             // Use the analysis service to fetch algorithms for a step
-            const algorithms = await analysisService.getStepAlgorithms(stepId);
+            const algorithms = await analysisService.getStepAlgorithms(stepCode);
             set(state => ({
                 availableAlgorithms: {
                     ...state.availableAlgorithms,
-                    [stepId]: algorithms
+                    [stepCode]: algorithms
                 },
                 isLoading: false
             }));
