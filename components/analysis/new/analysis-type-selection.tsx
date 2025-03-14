@@ -76,9 +76,9 @@ export function AnalysisTypeSelection({
 
             <ScrollArea className="h-[400px] pr-4">
                 <RadioGroup
-                    value={selectedAnalysisType?.id}
+                    value={selectedAnalysisType?.code}
                     onValueChange={(value) => {
-                        const analysisType = analysisDefinitions.find((type: AnalysisDefinitionInfo) => type.id === value);
+                        const analysisType = analysisDefinitions.find((type: AnalysisDefinitionInfo) => type.code === value);
                         if (analysisType) {
                             onSelect(analysisType as AnalysisDefinition);
                         }
@@ -90,14 +90,14 @@ export function AnalysisTypeSelection({
 
                             return (
                                 <Label
-                                    key={analysisType.id}
+                                    key={analysisType.code}
                                     className={`flex items-start space-x-4 p-4 rounded-lg border cursor-pointer transition-colors ${!isCompatible
                                         ? 'opacity-50 cursor-not-allowed'
                                         : 'hover:bg-muted/50'
                                         }`}
                                 >
                                     <RadioGroupItem
-                                        value={analysisType.id}
+                                        value={analysisType.code}
                                         disabled={!isCompatible}
                                         className="mt-1"
                                     />

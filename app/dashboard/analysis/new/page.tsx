@@ -2,13 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { useAnalysisStore } from '@/store/useAnalysisStore';
 import { Document } from '@/types/document';
 import { AnalysisDefinition } from '@/types/analysis/configs';
 import { AnalysisRunConfig, AnalysisStepConfig } from '@/types/analysis/base';
+import { AnalysisMode } from '@/enums/analysis';
 import { motion } from 'framer-motion';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 
@@ -30,14 +30,6 @@ export const setupSteps = [
     { id: 'review', title: 'Review & Start', icon: 'CheckCircle', description: 'Review your configuration and start the analysis' }
 ];
 
-// Helper function to format file size
-export const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-};
 
 export default function AnalysisSetupPage() {
     const router = useRouter();
@@ -65,10 +57,11 @@ export default function AnalysisSetupPage() {
 
     const {
         currentDefinition,
+        availableAlgorithms,
         fetchAnalysisDefinition,
-        fetchStepAlgorithms,
         startAnalysis,
-        isLoading
+        isLoading,
+        currentAnalysis,
     } = useAnalysisStore();
 
     // Fetch analysis definition when selected
@@ -90,9 +83,6 @@ export default function AnalysisSetupPage() {
                     enabled: true,
                     algorithm: undefined
                 };
-
-                // Fetch algorithms for this step
-                fetchStepAlgorithms(step.code);
             });
 
             setAnalysisConfig(prev => ({
@@ -100,50 +90,59 @@ export default function AnalysisSetupPage() {
                 steps: initialStepsConfig
             }));
         }
-    }, [currentDefinition, fetchStepAlgorithms]);
+    }, [currentDefinition]);
 
     // Update completed steps when data changes
     useEffect(() => {
-
         const newCompletedSteps = {
-            review: false,
             document: !!selectedDocument,
             'analysis-type': !!selectedAnalysisType,
+            algorithm: false,
             mode: !!selectedMode,
-            algorithm: false
+            review: false,
         };
 
+        // Only check algorithm parameters if we have a definition with steps
         if (currentDefinition?.steps && currentDefinition.steps.length > 0) {
-            const allRequiredParamsSet = currentDefinition.steps.every(step => {
-                    const stepConfig = analysisConfig.steps[step.code];
-                if (!stepConfig?.enabled) return true; // Skip disabled steps
+            // Check if all required algorithm parameters are set
+            newCompletedSteps.algorithm = currentDefinition.steps.every(step => {
+                const stepConfig = analysisConfig.steps[step.code];
+
+                // Skip disabled steps
+                if (!stepConfig?.enabled) return true;
 
                 // If no algorithm is selected, mark as incomplete
                 if (!stepConfig.algorithm) return false;
 
-                // Get the selected algorithm
-                const selectedAlgorithm = step.algorithms.find(
+                // Get the full step code
+                const fullStepCode = `${currentDefinition.code}.${step.code}`;
+
+                // Get algorithm with parameters from availableAlgorithms
+                const algorithmWithParams = availableAlgorithms[fullStepCode]?.find(
                     algo => algo.code === stepConfig.algorithm?.code
                 );
 
-                if (!selectedAlgorithm) return false;
+                // If we don't have the algorithm details yet, consider it complete for now
+                if (!algorithmWithParams) return true;
 
-                // Check required parameters
-                return selectedAlgorithm.parameters?.every(param => {
-                    if (!param.required) return true;
-                    const paramValue = stepConfig.algorithm?.parameters?.[param.name]?.value;
-                    return paramValue !== undefined && paramValue !== null && paramValue !== '';
-                }) ?? true; // If no parameters, consider it complete
+                // If algorithm has parameters, check if all required ones are set
+                if ('parameters' in algorithmWithParams) {
+                    return (algorithmWithParams.parameters as any[])?.every(param => {
+                        if (!param.required) return true;
+                        const paramValue = stepConfig.algorithm?.parameters?.[param.name]?.value;
+                        return paramValue !== undefined && paramValue !== null && paramValue !== '';
+                    }) ?? true;
+                }
+
+                return true;
             });
-
-            newCompletedSteps.algorithm = allRequiredParamsSet;
         }
 
         // Only update state if values have changed to avoid infinite loops
         if (JSON.stringify(completedSteps) !== JSON.stringify(newCompletedSteps)) {
             setCompletedSteps(newCompletedSteps);
         }
-    }, [selectedDocument, selectedAnalysisType, selectedMode, analysisConfig, currentDefinition, completedSteps]);
+    }, [selectedDocument, selectedAnalysisType, selectedMode, analysisConfig, currentDefinition, completedSteps, availableAlgorithms]);
 
     const handleStartAnalysis = async () => {
         if (!selectedDocument || !selectedAnalysisType || !selectedMode) {
@@ -157,12 +156,14 @@ export default function AnalysisSetupPage() {
 
         setIsSubmitting(true);
         try {
+            // Convert the selected mode to AnalysisMode enum
+            const mode = selectedMode === 'automatic' ? AnalysisMode.AUTOMATIC : AnalysisMode.STEP_BY_STEP;
 
             await startAnalysis(
                 selectedDocument.id,
                 selectedAnalysisType.code,
-                // selectedMode === 'automatic' ? AnalysisMode.AUTOMATIC : AnalysisMode.STEP_BY_STEP,
-                // analysisConfig
+                mode,
+                analysisConfig
             );
 
             toast({
@@ -171,7 +172,7 @@ export default function AnalysisSetupPage() {
             });
 
             // Navigate to the document analysis page
-            router.push(`/dashboard/analysis/document/${selectedDocument.id}`);
+            router.push(`/dashboard/analysis/${currentAnalysis?.id}`);
         } catch (error) {
             toast({
                 title: "Error",
@@ -188,57 +189,56 @@ export default function AnalysisSetupPage() {
         const targetIndex = setupSteps.findIndex(step => step.id === stepId);
 
         // Check if all previous steps are completed
-        for (let i = 0; i < targetIndex; i++) {
-            if (!completedSteps[setupSteps[i].id]) {
-                return false;
-            }
-        }
-
-        return true;
+        return setupSteps
+            .slice(0, targetIndex)
+            .every(step => completedSteps[step.id]);
     };
 
-    // Add a new function to initialize default parameters for all algorithms
-    const initializeDefaultParameters = () => {
+    // Simplified function to initialize default algorithms when entering the algorithm step
+    const initializeDefaultAlgorithms = () => {
         if (!currentDefinition?.steps) return;
 
+        // Only initialize algorithms that haven't been set yet
         const updatedStepsConfig = { ...analysisConfig.steps };
+        let hasChanges = false;
 
         currentDefinition.steps.forEach(step => {
-            // Skip if already configured
-            if (updatedStepsConfig[step.code]?.algorithm?.parameters) return;
+            // Skip if algorithm is already configured
+            if (updatedStepsConfig[step.code]?.algorithm?.code) return;
 
             // Default to first algorithm if available
             const defaultAlgorithm = step.algorithms[0];
+            if (!defaultAlgorithm) return;
 
-            if (defaultAlgorithm) {
-                // Create empty parameters object
-                const defaultParameters: Record<string, any> = {};
+            // Update config with default algorithm (parameters will be set by AlgorithmConfiguration)
+            updatedStepsConfig[step.code] = {
+                ...updatedStepsConfig[step.code],
+                algorithm: {
+                    code: defaultAlgorithm.code,
+                    version: defaultAlgorithm.version,
+                    parameters: {}
+                }
+            };
 
-                updatedStepsConfig[step.code] = {
-                    ...updatedStepsConfig[step.code],
-                    algorithm: {
-                        code: defaultAlgorithm.code,
-                        version: defaultAlgorithm.version,
-                        parameters: defaultParameters
-                    }
-                };
-            }
+            hasChanges = true;
         });
 
-        setAnalysisConfig(prev => ({
-            ...prev,
-            steps: updatedStepsConfig
-        }));
+        // Only update state if changes were made
+        if (hasChanges) {
+            setAnalysisConfig(prev => ({
+                ...prev,
+                steps: updatedStepsConfig
+            }));
+        }
     };
 
-    // Modify handleStepChange to initialize parameters when entering algorithm step
+    // Handle step change with simplified initialization
     const handleStepChange = (stepId: string) => {
         if (canNavigateTo(stepId)) {
-            // If moving to algorithm step, initialize default algorithms without parameters
+            // Initialize default algorithms when moving to algorithm step
             if (stepId === 'algorithm' && activeStep !== 'algorithm') {
-                initializeDefaultParameters();
+                initializeDefaultAlgorithms();
             }
-
             setActiveStep(stepId);
         } else {
             toast({
@@ -249,17 +249,15 @@ export default function AnalysisSetupPage() {
         }
     };
 
-    // Also modify handleNext to do the same
     const handleNext = () => {
         const currentIndex = setupSteps.findIndex(step => step.id === activeStep);
         if (currentIndex < setupSteps.length - 1) {
             const nextStep = setupSteps[currentIndex + 1];
             if (canNavigateTo(nextStep.id)) {
-                // If moving to algorithm step, initialize default algorithms without parameters
+                // Initialize default algorithms when moving to algorithm step
                 if (nextStep.id === 'algorithm' && activeStep !== 'algorithm') {
-                    initializeDefaultParameters();
+                    initializeDefaultAlgorithms();
                 }
-
                 setActiveStep(nextStep.id);
             }
         }

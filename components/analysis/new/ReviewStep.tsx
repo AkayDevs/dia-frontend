@@ -8,7 +8,15 @@ import {
     PlayIcon,
     InformationCircleIcon
 } from '@heroicons/react/24/outline';
-import { formatFileSize } from '@/app/dashboard/analysis/new/page';
+
+// Add formatFileSize function directly to this component
+const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+};
 
 interface ReviewStepProps {
     selectedDocument: Document | null;
@@ -75,7 +83,8 @@ export function ReviewStep({
                     <h4 className="text-sm font-medium text-muted-foreground mb-2">Algorithm Configuration</h4>
                     <div className="bg-white rounded-md border p-4 space-y-4">
                         {currentDefinition?.steps.map(step => {
-                            const stepConfig = analysisConfig.steps[step.id];
+                            // Change step.id to step.code
+                            const stepConfig = analysisConfig.steps[step.code];
                             if (!stepConfig) return null;
 
                             const algorithm = step.algorithms.find(
@@ -83,7 +92,8 @@ export function ReviewStep({
                             );
 
                             return (
-                                <div key={step.id} className="border-b last:border-b-0 pb-4 last:pb-0">
+                                // Change step.id to step.code
+                                <div key={step.code} className="border-b last:border-b-0 pb-4 last:pb-0">
                                     <div className="flex items-center justify-between mb-2">
                                         <div className="flex items-center">
                                             <Badge variant={stepConfig.enabled ? "default" : "outline"} className="mr-2">

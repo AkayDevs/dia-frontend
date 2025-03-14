@@ -121,7 +121,10 @@ class AnalysisService {
         mode: AnalysisMode = AnalysisMode.AUTOMATIC,
         config?: AnalysisRunConfig
     ): Promise<AnalysisRunInfo> {
-        const response = await fetch(`${this.baseUrl}/documents/${documentId}/analyze?analysis_code=${analysisCode}&mode=${mode}`, {
+
+        console.log('config', config);
+
+        const response = await fetch(`${this.baseUrl}/document/${documentId}?analysis_code=${analysisCode}&mode=${mode}`, {
             method: 'POST',
             headers: this.getHeaders(),
             body: JSON.stringify(config)
