@@ -19,7 +19,9 @@ import {
     Clock,
     CheckCircle2,
     Layers,
-    AlertCircle
+    AlertCircle,
+    Edit,
+    Pencil
 } from 'lucide-react';
 import { AnalysisStatus } from '@/enums/analysis';
 import { formatDistanceToNow } from 'date-fns';
@@ -403,8 +405,10 @@ export default function AnalysisDetailPage({ params }: AnalysisDetailPageProps) 
                                                     : 'In progress'}
                                             </span>
                                         </div>
-                                        <div className="text-sm text-muted-foreground">
-                                            {currentAnalysis?.step_results.find(s => s.step_code === selectedStep)?.algorithm_code}
+                                        <div className="flex items-center gap-2">
+                                            <div className="text-sm text-muted-foreground">
+                                                {currentAnalysis?.step_results.find(s => s.step_code === selectedStep)?.algorithm_code}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -415,17 +419,53 @@ export default function AnalysisDetailPage({ params }: AnalysisDetailPageProps) 
                     {/* Results component */}
 
                     {StepVisualizerComponent && (
-                        <StepVisualizerComponent
-                            documentId={documentId}
-                            analysisId={analysisId}
-                            analysisType={analysisType}
-                            step={analysisSteps?.find(step => step.step_code === selectedStep) as AnalysisStep}
-                            stepResult={currentAnalysis?.step_results.find(step => step.step_code === selectedStep) as StepResultResponse}
-                        />
+                        <>
+                            <div className="flex justify-end mb-4">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setActiveTab('steps')}
+                                    className="gap-2 text-sm"
+                                >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                    Edit Results
+                                </Button>
+                            </div>
+                            <StepVisualizerComponent
+                                documentId={documentId}
+                                analysisId={analysisId}
+                                analysisType={analysisType}
+                                step={analysisSteps?.find(step => step.step_code === selectedStep) as AnalysisStep}
+                                stepResult={currentAnalysis?.step_results.find(step => step.step_code === selectedStep) as StepResultResponse}
+                            />
+                        </>
                     )}
                 </TabsContent>
 
                 <TabsContent value="steps" className="space-y-6">
+                    <Card className="shadow-sm border-gray-200 overflow-hidden">
+                        <CardHeader className="pb-3 bg-gray-50/50 border-b">
+                            <CardTitle className="text-lg flex items-center">
+                                <Pencil className="h-5 w-5 mr-2 text-primary" />
+                                Edit Analysis Results
+                            </CardTitle>
+                            <CardDescription>
+                                Make corrections to the analysis results for the selected step
+                            </CardDescription>
+                            <div className="absolute top-3 right-3">
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setActiveTab('results')}
+                                    className="gap-1 text-xs h-7 px-2"
+                                >
+                                    <BarChart4 className="h-3.5 w-3.5 mr-1" />
+                                    Back to Results
+                                </Button>
+                            </div>
+                        </CardHeader>
+                    </Card>
+
                     {StepEditorComponent && (
                         <StepEditorComponent
                             documentId={documentId}

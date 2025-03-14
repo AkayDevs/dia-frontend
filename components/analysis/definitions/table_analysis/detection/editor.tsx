@@ -1,32 +1,93 @@
-import { BaseStepComponentProps } from "@/components/analysis/definitions/base";
-import { TableDetectionOutput, PageTableDetectionResult, TableLocation } from "@/types/analysis/definitions/table_analysis/table_detection";
-import { useState, useEffect, useCallback } from "react";
-import { useDocumentStore } from "@/store/useDocumentStore";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Skeleton } from "@/components/ui/skeleton";
-import { useToast } from "@/hooks/use-toast";
-import { cn } from "@/lib/utils";
-import { Table, FileText, Plus, Trash2, Edit2, Save, AlertCircle, InfoIcon, Move, ZoomIn, ZoomOut, List, Grid, Eye } from "lucide-react";
+import React, { useState, useRef, useEffect } from 'react';
+import { Stage, Layer, Rect, Transformer, Image as KonvaImage } from 'react-konva';
+import { BaseStepComponentProps } from '@/components/analysis/definitions/base';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
+import { Badge } from '@/components/ui/badge';
+import { Table, AlertCircle, Save, ZoomIn, ZoomOut, Trash2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { useDocumentStore } from '@/store/useDocumentStore';
+import { useToast } from '@/hooks/use-toast';
+import { isTableDetectionResult } from "@/types/analysis/registry";
+import { TableDetectionOutput, PageTableDetectionResult } from "@/types/analysis/definitions/table_analysis/table_detection";
 
-const TableDetectionEditor: React.FC<BaseStepComponentProps> = ({ stepResult, analysisId, analysisType, step, documentId }) => {
-    const [activeTab, setActiveTab] = useState<string>("1");
-    const [selectedTableIndex, setSelectedTableIndex] = useState<number | null>(null);
-    const [isDrawingMode, setIsDrawingMode] = useState(false);
-    const [drawingBox, setDrawingBox] = useState<{ startX: number; startY: number; endX: number; endY: number } | null>(null);
-    const [zoomLevel, setZoomLevel] = useState(1);
-    const [isDragging, setIsDragging] = useState(false);
-    const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-    const [viewPosition, setViewPosition] = useState({ x: 0, y: 0 });
-    const [viewMode, setViewMode] = useState<"visual" | "list">("visual");
+// Custom hook to load images
+function useImage(url: string | undefined | null): [HTMLImageElement | null] {
+    const [image, setImage] = useState<HTMLImageElement | null>(null);
+
+    useEffect(() => {
+        if (!url) {
+            setImage(null);
+            return;
+        }
+
+        const img = new window.Image();
+        img.src = url;
+        img.crossOrigin = 'Anonymous';
+
+        const onLoad = () => {
+            setImage(img);
+        };
+
+        img.addEventListener('load', onLoad);
+
+        return () => {
+            img.removeEventListener('load', onLoad);
+        };
+    }, [url]);
+
+    return [image];
+}
+
+// Interface to match the table bbox structure from the API
+interface TableBox {
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+}
+
+// Interface for our Konva rectangles
+interface KonvaBox {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    id?: string;
+}
+
+const TableDetectionEditor: React.FC<BaseStepComponentProps> = ({ analysisId, documentId, analysisType, step, stepResult }) => {
+    const { currentPages, fetchDocumentPages, isPagesLoading, pagesError } = useDocumentStore();
     const { toast } = useToast();
-    const { fetchDocumentPages, currentPages, isPagesLoading } = useDocumentStore();
+    const [zoom, setZoom] = useState(1);
+    const [isDirty, setIsDirty] = useState(false);
+    const [activePageIndex, setActivePageIndex] = useState(0);
+    const [selectedBox, setSelectedBox] = useState<number | null>(null);
+    const [boxes, setBoxes] = useState<KonvaBox[]>([]);
+    const transformerRef = useRef<any>(null);
 
-    // Track detected tables separately
-    const [detectedTables, setDetectedTables] = useState<{ [pageNumber: string]: TableLocation[] }>({});
+    // Get the image URL safely
+    const getImageUrl = () => {
+        if (!stepResult || !isTableDetectionResult(stepResult)) return null;
+
+        const detectionResult = stepResult.result as TableDetectionOutput;
+        const pages = detectionResult.results || [];
+
+        if (pages.length === 0 || activePageIndex >= pages.length) return null;
+
+        const activePage = pages[activePageIndex];
+        const pageDataMap = new Map(
+            (currentPages?.pages || []).map((page: any) => [page.page_number, page])
+        );
+        const activePageData = pageDataMap.get(activePage?.page_info?.page_number);
+
+        return activePageData?.image_url || null;
+    };
+
+    // Use the image hook at the top level
+    const [backgroundImage] = useImage(getImageUrl());
 
     useEffect(() => {
         if (documentId) {
@@ -34,493 +95,375 @@ const TableDetectionEditor: React.FC<BaseStepComponentProps> = ({ stepResult, an
         }
     }, [documentId, fetchDocumentPages]);
 
+    // Initialize boxes when step result or active page changes
     useEffect(() => {
-        // Initialize detected tables from stepResult
-        if (stepResult?.result) {
-            const detectionResult = stepResult.result as TableDetectionOutput;
-            if (detectionResult.results && detectionResult.results.length > 0) {
-                const tables: { [pageNumber: string]: TableLocation[] } = {};
-                detectionResult.results.forEach(result => {
-                    tables[result.page_info.page_number.toString()] = result.tables;
-                });
-                setDetectedTables(tables);
-                setActiveTab(detectionResult.results[0].page_info.page_number.toString());
-            }
+        if (!stepResult || !isTableDetectionResult(stepResult)) {
+            return;
         }
-    }, [stepResult]);
 
-    if (!stepResult || !stepResult.result) {
+        const detectionResult = stepResult.result as TableDetectionOutput;
+        const pages = detectionResult.results || [];
+
+        if (pages.length === 0 || activePageIndex >= pages.length) {
+            return;
+        }
+
+        const activePage = pages[activePageIndex];
+        const newBoxes = activePage.tables
+            ? activePage.tables.map(tableToKonvaBox)
+            : [];
+
+        setBoxes(newBoxes);
+        setSelectedBox(null);
+        setIsDirty(false);
+    }, [stepResult, activePageIndex]);
+
+    // Update transformer when selectedBox changes
+    useEffect(() => {
+        const transformer = transformerRef.current;
+        if (selectedBox !== null && transformer) {
+            const stage = transformer.getStage();
+            const selectedNode = stage.findOne(`#rect-${selectedBox}`);
+            if (selectedNode) {
+                transformer.nodes([selectedNode]);
+                transformer.getLayer().batchDraw();
+            }
+        } else if (transformer) {
+            transformer.nodes([]);
+            transformer.getLayer().batchDraw();
+        }
+    }, [selectedBox, boxes]);
+
+    // Convert API table boxes to Konva boxes for the canvas
+    const tableToKonvaBox = (table: any): KonvaBox => {
+        const bbox = table.bbox as TableBox;
+        return {
+            x: bbox.x1,
+            y: bbox.y1,
+            width: bbox.x2 - bbox.x1,
+            height: bbox.y2 - bbox.y1,
+            id: table.id
+        };
+    };
+
+    // Convert Konva box back to API table box format
+    const konvaToTableBox = (box: KonvaBox): TableBox => {
+        return {
+            x1: box.x,
+            y1: box.y,
+            x2: box.x + box.width,
+            y2: box.y + box.height
+        };
+    };
+
+    // Loading state
+    if (isPagesLoading) {
+        return (
+            <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Loading</AlertTitle>
+                <AlertDescription>
+                    Loading document pages...
+                </AlertDescription>
+            </Alert>
+        );
+    }
+
+    // Error state
+    if (pagesError) {
         return (
             <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle>Error</AlertTitle>
-                <AlertDescription>No table detection result available.</AlertDescription>
+                <AlertDescription>
+                    Error loading document pages: {pagesError}
+                </AlertDescription>
+            </Alert>
+        );
+    }
+
+    // Validate step result
+    if (!stepResult || !isTableDetectionResult(stepResult)) {
+        return (
+            <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Invalid Data</AlertTitle>
+                <AlertDescription>
+                    No valid table detection result available for editing.
+                </AlertDescription>
             </Alert>
         );
     }
 
     const detectionResult = stepResult.result as TableDetectionOutput;
-    const pageResults = detectionResult.results || [];
+    const pages = detectionResult.results || [];
 
-    const handleStartDrawing = (e: React.MouseEvent<HTMLDivElement>) => {
-        if (!isDrawingMode) return;
+    if (pages.length === 0) {
+        return (
+            <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>No Data</AlertTitle>
+                <AlertDescription>
+                    No page results available for editing.
+                </AlertDescription>
+            </Alert>
+        );
+    }
 
-        const rect = e.currentTarget.getBoundingClientRect();
-        const x = (e.clientX - rect.left - viewPosition.x) / zoomLevel;
-        const y = (e.clientY - rect.top - viewPosition.y) / zoomLevel;
+    const activePage = pages[activePageIndex];
 
-        setDrawingBox({ startX: x, startY: y, endX: x, endY: y });
+    // Create a map of document pages by page number
+    const pageDataMap = new Map(
+        (currentPages?.pages || []).map((page: any) => [page.page_number, page])
+    );
+    const activePageData = pageDataMap.get(activePage.page_info.page_number);
+
+    // Scaling: scale the stage to a maximum width of 800px while preserving aspect ratio
+    const maxWidth = 800;
+    const stageScale = activePageData && activePageData.width
+        ? Math.min(maxWidth / activePageData.width, 1) * zoom
+        : zoom;
+
+    const stageWidth = activePageData
+        ? Math.min(activePageData.width, maxWidth)
+        : 800;
+
+    const stageHeight = activePageData
+        ? activePageData.height * (stageWidth / activePageData.width)
+        : 600;
+
+    const handleDragEnd = (index: number, e: any) => {
+        const newBoxes = [...boxes];
+        newBoxes[index] = {
+            ...newBoxes[index],
+            x: e.target.x(),
+            y: e.target.y()
+        };
+        setBoxes(newBoxes);
+        setIsDirty(true);
     };
 
-    const handleDrawing = (e: React.MouseEvent<HTMLDivElement>) => {
-        if (!isDrawingMode || !drawingBox) return;
+    const handleTransformEnd = (index: number, e: any) => {
+        const node = e.target;
+        const scaleX = node.scaleX();
+        const scaleY = node.scaleY();
 
-        const rect = e.currentTarget.getBoundingClientRect();
-        const x = (e.clientX - rect.left - viewPosition.x) / zoomLevel;
-        const y = (e.clientY - rect.top - viewPosition.y) / zoomLevel;
+        // Reset scale to avoid accumulation
+        node.scaleX(1);
+        node.scaleY(1);
 
-        setDrawingBox(prev => prev ? { ...prev, endX: x, endY: y } : null);
-    };
-
-    const handleEndDrawing = () => {
-        if (!isDrawingMode || !drawingBox) return;
-
-        const imageContainer = document.querySelector('.image-container');
-        if (!imageContainer) return;
-
-        const { width, height } = imageContainer.getBoundingClientRect();
-        const normalizedBox = {
-            x1: Math.min(drawingBox.startX, drawingBox.endX) / (width / zoomLevel),
-            y1: Math.min(drawingBox.startY, drawingBox.endY) / (height / zoomLevel),
-            x2: Math.max(drawingBox.startX, drawingBox.endX) / (width / zoomLevel),
-            y2: Math.max(drawingBox.startY, drawingBox.endY) / (height / zoomLevel),
+        const newBoxes = [...boxes];
+        newBoxes[index] = {
+            ...newBoxes[index],
+            x: node.x(),
+            y: node.y(),
+            width: Math.max(5, node.width() * scaleX),
+            height: Math.max(5, node.height() * scaleY)
         };
 
-        // Add new table to the current page
-        const newTable: TableLocation = {
-            bbox: normalizedBox,
-            confidence: { score: 1.0, method: 'manual' }
+        setBoxes(newBoxes);
+        setIsDirty(true);
+    };
+
+    const addNewBox = () => {
+        // Add a new box in the center of the visible area
+        const centerX = stageWidth / (2 * stageScale);
+        const centerY = stageHeight / (2 * stageScale);
+
+        const newBox: KonvaBox = {
+            x: centerX - 50,
+            y: centerY - 25,
+            width: 100,
+            height: 50
         };
 
-        setDetectedTables(prev => ({
-            ...prev,
-            [activeTab]: [...(prev[activeTab] || []), newTable]
-        }));
+        setBoxes([...boxes, newBox]);
+        setSelectedBox(boxes.length);
+        setIsDirty(true);
+    };
 
+    const deleteSelectedBox = () => {
+        if (selectedBox === null) return;
+
+        const newBoxes = boxes.filter((_, idx) => idx !== selectedBox);
+        setBoxes(newBoxes);
+        setSelectedBox(null);
+        setIsDirty(true);
+    };
+
+    const saveChanges = () => {
+        // Here you would implement the API call to save the changes
+        // For now, we'll just show a toast notification
         toast({
-            title: "Table Added",
-            description: "New table bounding box has been added successfully.",
-            variant: "default"
+            title: "Changes Saved",
+            description: `Updated ${boxes.length} tables on page ${activePage.page_info.page_number}`,
         });
-
-        setDrawingBox(null);
-        setIsDrawingMode(false);
+        setIsDirty(false);
     };
 
-    const handleDeleteTable = (pageIndex: number, tableIndex: number) => {
-        const pageNumber = pageResults[pageIndex].page_info.page_number.toString();
-        setDetectedTables(prev => ({
-            ...prev,
-            [pageNumber]: prev[pageNumber].filter((_, index) => index !== tableIndex)
-        }));
-        setSelectedTableIndex(null);
-        toast({
-            title: "Table Deleted",
-            description: "Table bounding box has been removed successfully.",
-            variant: "default"
-        });
-    };
-
-    const handleStartDrag = (e: React.MouseEvent<HTMLDivElement>) => {
-        if (isDrawingMode) return;
-
-        setIsDragging(true);
-        setDragStart({ x: e.clientX, y: e.clientY });
-    };
-
-    const handleDrag = (e: React.MouseEvent<HTMLDivElement>) => {
-        if (!isDragging) return;
-
-        const dx = e.clientX - dragStart.x;
-        const dy = e.clientY - dragStart.y;
-
-        setViewPosition(prev => ({ x: prev.x + dx, y: prev.y + dy }));
-        setDragStart({ x: e.clientX, y: e.clientY });
-    };
-
-    const handleEndDrag = () => {
-        setIsDragging(false);
-    };
-
-    const handleZoomIn = () => {
-        setZoomLevel(prev => Math.min(prev + 0.1, 3));
-    };
-
-    const handleZoomOut = () => {
-        setZoomLevel(prev => Math.max(prev - 0.1, 0.5));
-    };
-
-    const handleResetView = () => {
-        setZoomLevel(1);
-        setViewPosition({ x: 0, y: 0 });
-    };
-
-    const handleSelectTable = (index: number) => {
-        setSelectedTableIndex(index === selectedTableIndex ? null : index);
-    };
+    const zoomIn = () => setZoom(prev => Math.min(prev + 0.1, 3));
+    const zoomOut = () => setZoom(prev => Math.max(prev - 0.1, 0.5));
+    const resetZoom = () => setZoom(1);
 
     return (
-        <div className="space-y-6 w-full max-w-full">
-            <Card className="shadow-sm border-gray-200">
-                <CardHeader className="pb-3 bg-gray-50/50 border-b">
-                    <CardTitle className="flex items-center justify-between">
-                        <div className="flex items-center">
-                            <Table className="mr-2 h-5 w-5 text-primary" />
-                            <span>Table Detection Editor</span>
-                        </div>
-                        <Badge variant="secondary" className="ml-2">
-                            {detectionResult.total_tables_found} tables detected
+        <Card className="shadow-sm">
+            <CardHeader>
+                <CardTitle className="flex items-center">
+                    <Table className="mr-2 h-5 w-5 text-primary" />
+                    Edit Table Detection Results
+                </CardTitle>
+                <CardDescription>
+                    Add, modify, or delete table bounding boxes for page {activePage.page_info.page_number}
+                </CardDescription>
+                <Separator className="my-2" />
+            </CardHeader>
+            <CardContent>
+                {/* Controls */}
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
+                    <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-xs">
+                            Page {activePage.page_info.page_number} of {pages.length}
                         </Badge>
-                    </CardTitle>
-                    <CardDescription>
-                        Edit, add, or remove detected tables on document pages
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="p-4 pt-6">
-                    {isPagesLoading ? (
-                        <div className="space-y-4">
-                            <Skeleton className="h-[400px] w-full" />
-                            <Skeleton className="h-8 w-[200px]" />
-                        </div>
-                    ) : !currentPages ? (
-                        <Alert>
-                            <AlertCircle className="h-4 w-4" />
-                            <AlertTitle>Error</AlertTitle>
-                            <AlertDescription>Failed to load document pages.</AlertDescription>
-                        </Alert>
-                    ) : (
-                        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-                            <div className="flex flex-col space-y-4">
-                                <TabsList className="flex-wrap h-auto p-1 bg-muted/30">
-                                    {pageResults.map((page) => (
-                                        <TabsTrigger
-                                            key={page.page_info.page_number}
-                                            value={page.page_info.page_number.toString()}
-                                            className="min-w-[100px] data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-                                        >
-                                            <FileText className="mr-2 h-4 w-4" />
-                                            Page {page.page_info.page_number}
-                                            <Badge variant="outline" className="ml-2 bg-primary/10 text-xs">
-                                                {page.tables.length}
-                                            </Badge>
-                                        </TabsTrigger>
-                                    ))}
-                                </TabsList>
+                        <Badge variant="secondary" className="text-xs">
+                            {boxes.length} tables
+                        </Badge>
+                    </div>
 
-                                <div className="flex items-center justify-between bg-gray-50 p-2 rounded-md border">
-                                    <div className="flex items-center space-x-2">
-                                        <Button
-                                            variant={isDrawingMode ? "default" : "outline"}
-                                            size="sm"
-                                            onClick={() => setIsDrawingMode(!isDrawingMode)}
-                                            className="h-8"
-                                        >
-                                            <Plus className="mr-1 h-4 w-4" />
-                                            {isDrawingMode ? "Cancel Drawing" : "Add Table"}
-                                        </Button>
-
-                                        <div className="h-6 border-l border-gray-300 mx-1"></div>
-
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={handleZoomIn}
-                                            className="h-8 px-2"
-                                            disabled={zoomLevel >= 3}
-                                        >
-                                            <ZoomIn className="h-4 w-4" />
-                                        </Button>
-
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={handleZoomOut}
-                                            className="h-8 px-2"
-                                            disabled={zoomLevel <= 0.5}
-                                        >
-                                            <ZoomOut className="h-4 w-4" />
-                                        </Button>
-
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={handleResetView}
-                                            className="h-8"
-                                        >
-                                            Reset View
-                                        </Button>
-                                    </div>
-
-                                    <div className="text-sm text-muted-foreground">
-                                        {isDrawingMode ? (
-                                            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                                                Drawing Mode: Click and drag to create a table
-                                            </Badge>
-                                        ) : (
-                                            <Badge variant="outline" className="bg-gray-50">
-                                                Zoom: {Math.round(zoomLevel * 100)}%
-                                            </Badge>
-                                        )}
-                                    </div>
-                                </div>
+                    <div className="flex flex-wrap gap-2">
+                        <div className="flex items-center border rounded-md">
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 rounded-r-none"
+                                onClick={zoomOut}
+                                disabled={zoom <= 0.5}
+                                title="Zoom out"
+                            >
+                                <ZoomOut className="h-4 w-4" />
+                            </Button>
+                            <div className="px-2 text-xs font-medium border-l border-r h-8 flex items-center">
+                                {Math.round(zoom * 100)}%
                             </div>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 rounded-l-none"
+                                onClick={zoomIn}
+                                disabled={zoom >= 3}
+                                title="Zoom in"
+                            >
+                                <ZoomIn className="h-4 w-4" />
+                            </Button>
+                        </div>
 
-                            {pageResults.map((pageResult) => {
-                                const pageInfo = currentPages.pages.find(
-                                    p => p.page_number === pageResult.page_info.page_number
-                                );
-                                const pageTables = detectedTables[pageResult.page_info.page_number.toString()] || [];
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setActivePageIndex(Math.max(activePageIndex - 1, 0))}
+                            disabled={activePageIndex === 0}
+                        >
+                            Previous Page
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setActivePageIndex(Math.min(activePageIndex + 1, pages.length - 1))}
+                            disabled={activePageIndex === pages.length - 1}
+                        >
+                            Next Page
+                        </Button>
+                    </div>
+                </div>
 
-                                return (
-                                    <TabsContent
-                                        key={`content-${pageResult.page_info.page_number}`}
-                                        value={pageResult.page_info.page_number.toString()}
-                                        className="mt-4"
-                                    >
-                                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                                            {/* Visual Editor - Takes up 8 columns */}
-                                            <div className="lg:col-span-8">
-                                                <Card className="shadow-sm border-gray-200">
-                                                    <CardHeader className="pb-3 bg-gray-50/50 border-b">
-                                                        <div className="flex items-center justify-between">
-                                                            <CardTitle className="text-base flex items-center">
-                                                                <FileText className="mr-2 h-5 w-5 text-primary" />
-                                                                Page {pageResult.page_info.page_number}
-                                                            </CardTitle>
-                                                            <div className="text-sm text-muted-foreground">
-                                                                {pageTables.length} {pageTables.length === 1 ? 'table' : 'tables'} on this page
-                                                            </div>
-                                                        </div>
-                                                    </CardHeader>
-                                                    <CardContent className="p-0 overflow-hidden">
-                                                        <div
-                                                            className="relative image-container bg-gray-100"
-                                                            style={{
-                                                                width: '100%',
-                                                                height: '70vh',
-                                                                overflow: 'hidden',
-                                                                cursor: isDrawingMode ? 'crosshair' : isDragging ? 'grabbing' : 'grab'
-                                                            }}
-                                                            onMouseDown={handleStartDrawing}
-                                                            onMouseMove={handleDrawing}
-                                                            onMouseUp={handleEndDrawing}
-                                                            onMouseLeave={() => {
-                                                                setDrawingBox(null);
-                                                                setIsDragging(false);
-                                                            }}
-                                                        >
-                                                            <div
-                                                                style={{
-                                                                    transform: `translate(${viewPosition.x}px, ${viewPosition.y}px) scale(${zoomLevel})`,
-                                                                    transformOrigin: '0 0',
-                                                                    width: '100%',
-                                                                    height: '100%',
-                                                                    transition: isDragging ? 'none' : 'transform 0.1s ease-out'
-                                                                }}
-                                                            >
-                                                                {pageInfo && (
-                                                                    <>
-                                                                        <img
-                                                                            src={pageInfo.image_url}
-                                                                            alt={`Page ${pageResult.page_info.page_number}`}
-                                                                            className="w-full h-full object-contain"
-                                                                        />
-                                                                        {pageTables.map((table, index) => {
-                                                                            const isSelected = selectedTableIndex === index;
-                                                                            return (
-                                                                                <div
-                                                                                    key={`table-${index}`}
-                                                                                    className={cn(
-                                                                                        "absolute border-2 transition-all duration-200",
-                                                                                        isSelected
-                                                                                            ? "border-blue-500 bg-blue-500/20 ring-2 ring-blue-300 ring-opacity-50"
-                                                                                            : "border-green-500 bg-green-500/10 hover:bg-green-500/20"
-                                                                                    )}
-                                                                                    style={{
-                                                                                        left: `${table.bbox.x1 * 100}%`,
-                                                                                        top: `${table.bbox.y1 * 100}%`,
-                                                                                        width: `${(table.bbox.x2 - table.bbox.x1) * 100}%`,
-                                                                                        height: `${(table.bbox.y2 - table.bbox.y1) * 100}%`,
-                                                                                        cursor: 'pointer'
-                                                                                    }}
-                                                                                    onClick={(e) => {
-                                                                                        e.stopPropagation();
-                                                                                        setSelectedTableIndex(isSelected ? null : index);
-                                                                                    }}
-                                                                                >
-                                                                                    <div className="absolute top-0 left-0 bg-green-500 text-white text-xs px-1 rounded-br">
-                                                                                        {index + 1}
-                                                                                    </div>
-                                                                                </div>
-                                                                            );
-                                                                        })}
-                                                                        {drawingBox && (
-                                                                            <div
-                                                                                className="absolute border-2 border-blue-500 bg-blue-500/20"
-                                                                                style={{
-                                                                                    left: Math.min(drawingBox.startX, drawingBox.endX),
-                                                                                    top: Math.min(drawingBox.startY, drawingBox.endY),
-                                                                                    width: Math.abs(drawingBox.endX - drawingBox.startX),
-                                                                                    height: Math.abs(drawingBox.endY - drawingBox.startY)
-                                                                                }}
-                                                                            />
-                                                                        )}
-                                                                    </>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    </CardContent>
-                                                    <CardFooter className="py-2 px-4 bg-gray-50/50 border-t text-xs text-muted-foreground">
-                                                        {isDrawingMode ?
-                                                            "Click and drag to draw a table bounding box" :
-                                                            "Click on a table to select it, or drag to pan the view"}
-                                                    </CardFooter>
-                                                </Card>
-                                            </div>
+                {/* Editing tools */}
+                <div className="flex flex-wrap gap-2 mb-4">
+                    <Button variant="secondary" size="sm" onClick={addNewBox}>
+                        Add Table
+                    </Button>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={deleteSelectedBox}
+                        disabled={selectedBox === null}
+                        className="gap-1"
+                    >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Delete Selected
+                    </Button>
+                    <Button
+                        variant="default"
+                        size="sm"
+                        onClick={saveChanges}
+                        disabled={!isDirty}
+                        className="gap-1 ml-auto"
+                    >
+                        <Save className="h-3.5 w-3.5" />
+                        Save Changes
+                    </Button>
+                </div>
 
-                                            {/* Results Panel - Takes up 4 columns */}
-                                            <div className="lg:col-span-4 space-y-4">
-                                                {/* Table Information Card */}
-                                                <Card className="shadow-sm border-gray-200">
-                                                    <CardHeader className="pb-3 bg-gray-50/50 border-b">
-                                                        <CardTitle className="text-base flex items-center">
-                                                            <Table className="h-4 w-4 mr-2" />
-                                                            Table Information
-                                                        </CardTitle>
-                                                    </CardHeader>
-                                                    <CardContent className="p-4">
-                                                        {selectedTableIndex !== null && pageTables[selectedTableIndex] ? (
-                                                            <div className="space-y-4">
-                                                                <div>
-                                                                    <h3 className="font-medium mb-2 flex items-center">
-                                                                        <Badge variant="outline" className="mr-2 bg-green-50 text-green-700 border-green-200">
-                                                                            Table {selectedTableIndex + 1}
-                                                                        </Badge>
-                                                                    </h3>
-                                                                    <div className="grid grid-cols-2 gap-2 text-sm">
-                                                                        <div className="font-medium text-muted-foreground">Confidence:</div>
-                                                                        <div>
-                                                                            <Badge variant="secondary" className="font-mono">
-                                                                                {(pageTables[selectedTableIndex].confidence.score * 100).toFixed(2)}%
-                                                                            </Badge>
-                                                                        </div>
-                                                                        <div className="font-medium text-muted-foreground">Method:</div>
-                                                                        <div className="capitalize">{pageTables[selectedTableIndex].confidence.method}</div>
-                                                                        <div className="font-medium text-muted-foreground">Position:</div>
-                                                                        <div className="font-mono text-xs">
-                                                                            x: {(pageTables[selectedTableIndex].bbox.x1 * 100).toFixed(1)}% - {(pageTables[selectedTableIndex].bbox.x2 * 100).toFixed(1)}%<br />
-                                                                            y: {(pageTables[selectedTableIndex].bbox.y1 * 100).toFixed(1)}% - {(pageTables[selectedTableIndex].bbox.y2 * 100).toFixed(1)}%
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                                <div className="pt-2 border-t">
-                                                                    <Button
-                                                                        variant="destructive"
-                                                                        size="sm"
-                                                                        className="w-full"
-                                                                        onClick={() => handleDeleteTable(
-                                                                            pageResults.findIndex(p => p.page_info.page_number.toString() === activeTab),
-                                                                            selectedTableIndex
-                                                                        )}
-                                                                    >
-                                                                        <Trash2 className="mr-1 h-4 w-4" />
-                                                                        Delete Table
-                                                                    </Button>
-                                                                </div>
-                                                            </div>
-                                                        ) : (
-                                                            <div className="text-center py-6 text-muted-foreground">
-                                                                <Table className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                                                                <p>Select a table to view details</p>
-                                                                <p className="text-xs mt-2">Or use the "Add Table" button to create a new one</p>
-                                                            </div>
-                                                        )}
-                                                    </CardContent>
-                                                </Card>
+                {/* Canvas */}
+                <div className="border rounded-md overflow-hidden bg-gray-50">
+                    <div className="overflow-auto" style={{ maxHeight: '60vh' }}>
+                        <Stage
+                            width={stageWidth}
+                            height={stageHeight}
+                            scale={{ x: stageScale, y: stageScale }}
+                        >
+                            <Layer>
+                                {backgroundImage && (
+                                    <KonvaImage
+                                        image={backgroundImage}
+                                        width={activePageData?.width || stageWidth}
+                                        height={activePageData?.height || stageHeight}
+                                    />
+                                )}
+                                {boxes.map((box, index) => (
+                                    <Rect
+                                        key={index}
+                                        id={`rect-${index}`}
+                                        x={box.x}
+                                        y={box.y}
+                                        width={box.width}
+                                        height={box.height}
+                                        stroke={selectedBox === index ? '#2563eb' : '#10b981'}
+                                        strokeWidth={2}
+                                        fill={selectedBox === index ? 'rgba(37, 99, 235, 0.1)' : 'rgba(16, 185, 129, 0.05)'}
+                                        draggable
+                                        onDragEnd={(e) => handleDragEnd(index, e)}
+                                        onTransformEnd={(e) => handleTransformEnd(index, e)}
+                                        onClick={() => setSelectedBox(index)}
+                                        onTap={() => setSelectedBox(index)}
+                                    />
+                                ))}
+                                <Transformer
+                                    ref={transformerRef}
+                                    boundBoxFunc={(oldBox, newBox) => {
+                                        // Limit minimum size
+                                        if (newBox.width < 10 || newBox.height < 10) {
+                                            return oldBox;
+                                        }
+                                        return newBox;
+                                    }}
+                                    rotateEnabled={false}
+                                    borderStroke="#2563eb"
+                                    anchorStroke="#2563eb"
+                                    anchorFill="#ffffff"
+                                />
+                            </Layer>
+                        </Stage>
+                    </div>
+                </div>
 
-                                                {/* Detected Tables List */}
-                                                <Card className="shadow-sm border-gray-200">
-                                                    <CardHeader className="pb-3 bg-gray-50/50 border-b">
-                                                        <div className="flex items-center justify-between">
-                                                            <CardTitle className="text-base flex items-center">
-                                                                <Table className="mr-2 h-5 w-5 text-primary" />
-                                                                Detected Tables
-                                                            </CardTitle>
-                                                            <Badge variant="outline" className="bg-primary/10">
-                                                                {pageTables.length} tables
-                                                            </Badge>
-                                                        </div>
-                                                    </CardHeader>
-                                                    <CardContent className="p-0">
-                                                        {pageTables.length === 0 ? (
-                                                            <div className="p-6 text-center text-muted-foreground">
-                                                                <Table className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                                                                <p>No tables detected on this page</p>
-                                                                <p className="text-xs mt-2">Use the "Add Table" button to create one</p>
-                                                            </div>
-                                                        ) : (
-                                                            <div className="divide-y max-h-[400px] overflow-y-auto">
-                                                                {pageTables.map((table, index) => (
-                                                                    <div
-                                                                        key={`table-list-${index}`}
-                                                                        className={cn(
-                                                                            "p-4 flex items-center justify-between hover:bg-muted/20 cursor-pointer transition-colors",
-                                                                            selectedTableIndex === index && "bg-primary/5"
-                                                                        )}
-                                                                        onClick={() => handleSelectTable(index)}
-                                                                    >
-                                                                        <div className="flex items-center space-x-3">
-                                                                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 h-8 w-8 flex items-center justify-center p-0 rounded-full">
-                                                                                {index + 1}
-                                                                            </Badge>
-                                                                            <div>
-                                                                                <div className="font-medium">Table {index + 1}</div>
-                                                                                <div className="text-xs text-muted-foreground">
-                                                                                    Method: <span className="capitalize">{table.confidence.method}</span> •
-                                                                                    Confidence: <span className="font-mono">{(table.confidence.score * 100).toFixed(1)}%</span>
-                                                                                </div>
-                                                                            </div>
-                                                                        </div>
-                                                                        <Button
-                                                                            variant="ghost"
-                                                                            size="sm"
-                                                                            className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation();
-                                                                                handleDeleteTable(
-                                                                                    pageResults.findIndex(p => p.page_info.page_number.toString() === activeTab),
-                                                                                    index
-                                                                                );
-                                                                            }}
-                                                                        >
-                                                                            <Trash2 className="h-4 w-4" />
-                                                                        </Button>
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        )}
-                                                    </CardContent>
-                                                </Card>
-                                            </div>
-                                        </div>
-                                    </TabsContent>
-                                );
-                            })}
-                        </Tabs>
+                {/* Instructions */}
+                <div className="mt-4 text-xs text-muted-foreground">
+                    <p>Click on a table to select it. Drag to move, or use the handles to resize.</p>
+                    {isDirty && (
+                        <p className="text-amber-600 mt-1">You have unsaved changes. Click "Save Changes" to apply them.</p>
                     )}
-                </CardContent>
-            </Card>
-        </div>
+                </div>
+            </CardContent>
+        </Card>
     );
 };
 
