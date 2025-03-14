@@ -122,8 +122,6 @@ class AnalysisService {
         config?: AnalysisRunConfig
     ): Promise<AnalysisRunInfo> {
 
-        console.log('config', config);
-
         const response = await fetch(`${this.baseUrl}/document/${documentId}?analysis_code=${analysisCode}&mode=${mode}`, {
             method: 'POST',
             headers: this.getHeaders(),

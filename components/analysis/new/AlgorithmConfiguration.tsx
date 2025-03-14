@@ -11,7 +11,8 @@ import { InformationCircleIcon, ChevronDownIcon, ChevronUpIcon } from '@heroicon
 import { useToast } from '@/hooks/use-toast';
 import { useAnalysisStore } from '@/store/useAnalysisStore';
 import { AnalysisDefinition, AnalysisParameter } from '@/types/analysis/configs';
-import { AnalysisRunConfig, AnalysisStepConfig } from '@/types/analysis/base';
+import { AnalysisRunConfig, AnalysisStepConfig, AlgorithmParameterValue } from '@/types/analysis/base';
+import { List } from 'postcss/lib/list';
 
 interface AlgorithmConfigurationProps {
     currentDefinition: AnalysisDefinition | null;
@@ -37,9 +38,6 @@ export function AlgorithmConfiguration({
     const [showHelpTips, setShowHelpTips] = useState(true);
     const { fetchStepAlgorithms, availableAlgorithms } = useAnalysisStore();
     const [expandedSteps, setExpandedSteps] = useState<Record<string, boolean>>({});
-
-    // Use refs to track initialization state and prevent infinite loops
-    const initializedStepsRef = useRef<Record<string, boolean>>({});
 
     // Helper function to get the full step code
     const getFullStepCode = (stepCode: string): string => {
@@ -99,7 +97,7 @@ export function AlgorithmConfiguration({
                     algorithm: {
                         code: algorithmCode,
                         version: algorithmVersion,
-                        parameters: {} // Empty parameters by default
+                        parameters: [] // Initialize as empty array instead of empty object
                     }
                 }
             }
@@ -107,6 +105,32 @@ export function AlgorithmConfiguration({
     };
 
     const handleParameterChange = (stepCode: string, paramName: string, value: any) => {
+        // Get current parameters array or initialize a new one
+        const currentParams = analysisConfig.steps[stepCode].algorithm?.parameters || [];
+
+        // Find if parameter already exists in the array
+        const paramIndex = currentParams.findIndex(p =>
+            p[paramName] && p[paramName].name === paramName
+        );
+
+        // Create new parameters array
+        const newParams = [...currentParams];
+
+        // Create parameter value object
+        const paramValue = {
+            [paramName]: {
+                name: paramName,
+                value
+            }
+        };
+
+        // Update or add parameter
+        if (paramIndex >= 0) {
+            newParams[paramIndex] = paramValue;
+        } else {
+            newParams.push(paramValue);
+        }
+
         onConfigChange({
             ...analysisConfig,
             steps: {
@@ -115,13 +139,7 @@ export function AlgorithmConfiguration({
                     ...analysisConfig.steps[stepCode],
                     algorithm: {
                         ...analysisConfig.steps[stepCode].algorithm!,
-                        parameters: {
-                            ...analysisConfig.steps[stepCode].algorithm!.parameters,
-                            [paramName]: {
-                                name: paramName,
-                                value
-                            }
-                        }
+                        parameters: newParams
                     }
                 }
             }
@@ -151,21 +169,23 @@ export function AlgorithmConfiguration({
 
         // Only initialize parameters if they don't exist yet
         if (analysisConfig.steps[stepCode]?.algorithm?.parameters &&
-            Object.keys(analysisConfig.steps[stepCode]?.algorithm?.parameters || {}).length > 0) {
+            analysisConfig.steps[stepCode]?.algorithm?.parameters.length > 0) {
             // Parameters already exist, just expand the section
             toggleStepExpansion(stepCode);
             return;
         }
 
         // Create default parameters
-        const defaultParameters: Record<string, any> = {};
+        const defaultParameters: Record<string, AlgorithmParameterValue>[] = [];
 
         // Set default values for parameters
         getParametersFromAlgorithm(algorithm).forEach(param => {
-            defaultParameters[param.name] = {
+            const paramObj: Record<string, AlgorithmParameterValue> = {};
+            paramObj[param.name] = {
                 name: param.name,
                 value: param.default
             };
+            defaultParameters.push(paramObj);
         });
 
         // Update config with default parameters
@@ -198,14 +218,14 @@ export function AlgorithmConfiguration({
         if (!algorithm) return;
 
         // Create default parameters
-        const defaultParameters: Record<string, any> = {};
+        const defaultParameters: Record<string, any>[] = [];
 
         // Set default values for parameters
         getParametersFromAlgorithm(algorithm).forEach(param => {
-            defaultParameters[param.name] = {
+            defaultParameters.push({
                 name: param.name,
                 value: param.default
-            };
+            });
         });
 
         // Update config
@@ -236,8 +256,10 @@ export function AlgorithmConfiguration({
     };
 
     const renderParameterInput = (stepCode: string, param: AnalysisParameter, stepConfig: AnalysisStepConfig) => {
+        // Find parameter in the array
+        const paramObj = stepConfig.algorithm?.parameters?.find(p => p[param.name]) || {};
         // Get the value or use default, ensuring it's never null (use empty string or appropriate default)
-        const rawValue = stepConfig.algorithm?.parameters?.[param.name]?.value ?? param.default;
+        const rawValue = paramObj[param.name]?.value ?? param.default;
 
         // Convert null/undefined to appropriate defaults based on type
         const value = rawValue === null || rawValue === undefined

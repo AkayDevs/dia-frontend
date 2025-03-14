@@ -60,6 +60,7 @@ export default function AnalysisSetupPage() {
         availableAlgorithms,
         fetchAnalysisDefinition,
         startAnalysis,
+        analysisId,
         isLoading,
         currentAnalysis,
     } = useAnalysisStore();
@@ -129,7 +130,12 @@ export default function AnalysisSetupPage() {
                 if ('parameters' in algorithmWithParams) {
                     return (algorithmWithParams.parameters as any[])?.every(param => {
                         if (!param.required) return true;
-                        const paramValue = stepConfig.algorithm?.parameters?.[param.name]?.value;
+
+                        // Find parameter in the array
+                        const paramObj = stepConfig.algorithm?.parameters?.find(p => p[param.name]) || {};
+                        const paramValue = paramObj[param.name]?.value;
+
+                        // Check if value is set
                         return paramValue !== undefined && paramValue !== null && paramValue !== '';
                     }) ?? true;
                 }
@@ -172,7 +178,11 @@ export default function AnalysisSetupPage() {
             });
 
             // Navigate to the document analysis page
-            router.push(`/dashboard/analysis/${currentAnalysis?.id}`);
+            if (analysisId) {
+                router.push(`/dashboard/analysis/${analysisId}`);
+            } else {
+                router.push('/dashboard/analysis');
+            }
         } catch (error) {
             toast({
                 title: "Error",
@@ -216,7 +226,7 @@ export default function AnalysisSetupPage() {
                 algorithm: {
                     code: defaultAlgorithm.code,
                     version: defaultAlgorithm.version,
-                    parameters: {}
+                    parameters: []
                 }
             };
 

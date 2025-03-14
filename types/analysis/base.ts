@@ -23,7 +23,7 @@ export interface AnalysisStepConfig {
 export interface AnalysisAlgorithmConfig {
   code: string;
   version: string;
-  parameters?: Record<string, AlgorithmParameterValue>;
+  parameters?: Record<string, AlgorithmParameterValue>[];
 }
 
 export interface AlgorithmParameterValue {
