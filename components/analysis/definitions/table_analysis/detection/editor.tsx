@@ -6,40 +6,12 @@ import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
-import { Table, AlertCircle, Save, ZoomIn, ZoomOut, Trash2 } from 'lucide-react';
+import { Table, AlertCircle, Save, ZoomIn, ZoomOut, Trash2, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDocumentStore } from '@/store/useDocumentStore';
 import { useToast } from '@/hooks/use-toast';
 import { isTableDetectionResult } from "@/types/analysis/registry";
 import { TableDetectionOutput, PageTableDetectionResult } from "@/types/analysis/definitions/table_analysis/table_detection";
-
-// Custom hook to load images
-function useImage(url: string | undefined | null): [HTMLImageElement | null] {
-    const [image, setImage] = useState<HTMLImageElement | null>(null);
-
-    useEffect(() => {
-        if (!url) {
-            setImage(null);
-            return;
-        }
-
-        const img = new window.Image();
-        img.src = url;
-        img.crossOrigin = 'Anonymous';
-
-        const onLoad = () => {
-            setImage(img);
-        };
-
-        img.addEventListener('load', onLoad);
-
-        return () => {
-            img.removeEventListener('load', onLoad);
-        };
-    }, [url]);
-
-    return [image];
-}
 
 // Interface to match the table bbox structure from the API
 interface TableBox {
@@ -67,27 +39,10 @@ const TableDetectionEditor: React.FC<BaseStepComponentProps> = ({ analysisId, do
     const [selectedBox, setSelectedBox] = useState<number | null>(null);
     const [boxes, setBoxes] = useState<KonvaBox[]>([]);
     const transformerRef = useRef<any>(null);
-
-    // Get the image URL safely
-    const getImageUrl = () => {
-        if (!stepResult || !isTableDetectionResult(stepResult)) return null;
-
-        const detectionResult = stepResult.result as TableDetectionOutput;
-        const pages = detectionResult.results || [];
-
-        if (pages.length === 0 || activePageIndex >= pages.length) return null;
-
-        const activePage = pages[activePageIndex];
-        const pageDataMap = new Map(
-            (currentPages?.pages || []).map((page: any) => [page.page_number, page])
-        );
-        const activePageData = pageDataMap.get(activePage?.page_info?.page_number);
-
-        return activePageData?.image_url || null;
-    };
-
-    // Use the image hook at the top level
-    const [backgroundImage] = useImage(getImageUrl());
+    const containerRef = useRef<HTMLDivElement>(null);
+    const imageRef = useRef<HTMLImageElement>(null);
+    const [imageLoaded, setImageLoaded] = useState(false);
+    const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
 
     useEffect(() => {
         if (documentId) {
@@ -117,6 +72,64 @@ const TableDetectionEditor: React.FC<BaseStepComponentProps> = ({ analysisId, do
         setSelectedBox(null);
         setIsDirty(false);
     }, [stepResult, activePageIndex]);
+
+    // Update container size based on available space
+    const updateContainerSize = () => {
+        if (!containerRef.current || !imageRef.current) return;
+
+        const imageWidth = imageRef.current.naturalWidth || 800;
+        const imageHeight = imageRef.current.naturalHeight || 600;
+        const aspectRatio = imageWidth / imageHeight;
+
+        // Get parent width (accounting for padding/margins)
+        const parentElement = containerRef.current.parentElement;
+        const availableWidth = parentElement ? parentElement.clientWidth - 32 : window.innerWidth - 64;
+
+        // Calculate responsive dimensions
+        let containerWidth = availableWidth;
+        if (window.innerWidth >= 1280) { // xl breakpoint
+            containerWidth = Math.min(800, availableWidth);
+        } else if (window.innerWidth >= 1024) { // lg breakpoint
+            containerWidth = Math.min(700, availableWidth);
+        } else if (window.innerWidth >= 768) { // md breakpoint
+            containerWidth = Math.min(650, availableWidth);
+        }
+
+        const containerHeight = containerWidth / aspectRatio;
+
+        setContainerSize({
+            width: containerWidth,
+            height: containerHeight
+        });
+    };
+
+    // Handle window resize
+    useEffect(() => {
+        const handleResize = () => {
+            if (containerRef.current) {
+                updateContainerSize();
+            }
+        };
+
+        // Initial size calculation
+        updateContainerSize();
+
+        // Add resize listener
+        window.addEventListener('resize', handleResize);
+
+        // Cleanup
+        return () => {
+            window.removeEventListener('resize', handleResize);
+        };
+    }, []);
+
+    // Handle image load
+    const handleImageLoad = () => {
+        if (imageRef.current) {
+            setImageLoaded(true);
+            updateContainerSize();
+        }
+    };
 
     // Update transformer when selectedBox changes
     useEffect(() => {
@@ -217,27 +230,25 @@ const TableDetectionEditor: React.FC<BaseStepComponentProps> = ({ analysisId, do
         (currentPages?.pages || []).map((page: any) => [page.page_number, page])
     );
     const activePageData = pageDataMap.get(activePage.page_info.page_number);
+    const imageUrl = activePageData?.image_url || '';
 
-    // Scaling: scale the stage to a maximum width of 800px while preserving aspect ratio
-    const maxWidth = 800;
-    const stageScale = activePageData && activePageData.width
-        ? Math.min(maxWidth / activePageData.width, 1) * zoom
-        : zoom;
+    // Calculate display dimensions
+    const displayWidth = containerSize.width * zoom;
+    const displayHeight = containerSize.height * zoom;
 
-    const stageWidth = activePageData
-        ? Math.min(activePageData.width, maxWidth)
-        : 800;
-
-    const stageHeight = activePageData
-        ? activePageData.height * (stageWidth / activePageData.width)
-        : 600;
+    // Calculate scale factors for bounding boxes
+    const actualWidth = activePageData?.width || 800;
+    const actualHeight = activePageData?.height || 600;
+    const scaleX = displayWidth / actualWidth;
+    const scaleY = displayHeight / actualHeight;
 
     const handleDragEnd = (index: number, e: any) => {
         const newBoxes = [...boxes];
+        // Convert from scaled coordinates back to original image coordinates
         newBoxes[index] = {
             ...newBoxes[index],
-            x: e.target.x(),
-            y: e.target.y()
+            x: e.target.x() / scaleX,
+            y: e.target.y() / scaleY
         };
         setBoxes(newBoxes);
         setIsDirty(true);
@@ -245,20 +256,35 @@ const TableDetectionEditor: React.FC<BaseStepComponentProps> = ({ analysisId, do
 
     const handleTransformEnd = (index: number, e: any) => {
         const node = e.target;
-        const scaleX = node.scaleX();
-        const scaleY = node.scaleY();
 
-        // Reset scale to avoid accumulation
+        // Get the node's current scale
+        const nodeScaleX = node.scaleX();
+        const nodeScaleY = node.scaleY();
+
+        // Reset the node's scale to avoid accumulation
         node.scaleX(1);
         node.scaleY(1);
 
+        // Get the node's position and size in stage coordinates
+        const nodeX = node.x();
+        const nodeY = node.y();
+        const nodeWidth = node.width() * nodeScaleX;
+        const nodeHeight = node.height() * nodeScaleY;
+
+        // Convert from stage coordinates to original image coordinates
+        const originalX = nodeX / scaleX;
+        const originalY = nodeY / scaleY;
+        const originalWidth = nodeWidth / scaleX;
+        const originalHeight = nodeHeight / scaleY;
+
+        // Update the box with the original image coordinates
         const newBoxes = [...boxes];
         newBoxes[index] = {
             ...newBoxes[index],
-            x: node.x(),
-            y: node.y(),
-            width: Math.max(5, node.width() * scaleX),
-            height: Math.max(5, node.height() * scaleY)
+            x: originalX,
+            y: originalY,
+            width: Math.max(10 / scaleX, originalWidth),  // Ensure minimum size in original coordinates
+            height: Math.max(10 / scaleY, originalHeight)
         };
 
         setBoxes(newBoxes);
@@ -267,8 +293,8 @@ const TableDetectionEditor: React.FC<BaseStepComponentProps> = ({ analysisId, do
 
     const addNewBox = () => {
         // Add a new box in the center of the visible area
-        const centerX = stageWidth / (2 * stageScale);
-        const centerY = stageHeight / (2 * stageScale);
+        const centerX = actualWidth / 2;
+        const centerY = actualHeight / 2;
 
         const newBox: KonvaBox = {
             x: centerX - 50,
@@ -404,54 +430,113 @@ const TableDetectionEditor: React.FC<BaseStepComponentProps> = ({ analysisId, do
 
                 {/* Canvas */}
                 <div className="border rounded-md overflow-hidden bg-gray-50">
-                    <div className="overflow-auto" style={{ maxHeight: '60vh' }}>
-                        <Stage
-                            width={stageWidth}
-                            height={stageHeight}
-                            scale={{ x: stageScale, y: stageScale }}
+                    <div className="flex flex-col space-y-2 w-full">
+                        <div className="text-sm font-medium px-4 pt-2">
+                            {activePageData ? `${activePageData.width}×${activePageData.height}px` : ''}
+                        </div>
+
+                        <div
+                            ref={containerRef}
+                            className="relative overflow-auto"
+                            style={{ maxHeight: '60vh' }}
                         >
-                            <Layer>
-                                {backgroundImage && (
-                                    <KonvaImage
-                                        image={backgroundImage}
-                                        width={activePageData?.width || stageWidth}
-                                        height={activePageData?.height || stageHeight}
-                                    />
-                                )}
-                                {boxes.map((box, index) => (
-                                    <Rect
-                                        key={index}
-                                        id={`rect-${index}`}
-                                        x={box.x}
-                                        y={box.y}
-                                        width={box.width}
-                                        height={box.height}
-                                        stroke={selectedBox === index ? '#2563eb' : '#10b981'}
-                                        strokeWidth={2}
-                                        fill={selectedBox === index ? 'rgba(37, 99, 235, 0.1)' : 'rgba(16, 185, 129, 0.05)'}
-                                        draggable
-                                        onDragEnd={(e) => handleDragEnd(index, e)}
-                                        onTransformEnd={(e) => handleTransformEnd(index, e)}
-                                        onClick={() => setSelectedBox(index)}
-                                        onTap={() => setSelectedBox(index)}
-                                    />
-                                ))}
-                                <Transformer
-                                    ref={transformerRef}
-                                    boundBoxFunc={(oldBox, newBox) => {
-                                        // Limit minimum size
-                                        if (newBox.width < 10 || newBox.height < 10) {
-                                            return oldBox;
-                                        }
-                                        return newBox;
+                            {!imageUrl ? (
+                                <div className="flex items-center justify-center h-[400px] bg-gray-100">
+                                    <div className="text-center text-gray-500">
+                                        <FileText className="h-8 w-8 mx-auto mb-2" />
+                                        <p>No image available for this page</p>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div
+                                    style={{
+                                        width: displayWidth,
+                                        height: displayHeight,
+                                        position: 'relative'
                                     }}
-                                    rotateEnabled={false}
-                                    borderStroke="#2563eb"
-                                    anchorStroke="#2563eb"
-                                    anchorFill="#ffffff"
-                                />
-                            </Layer>
-                        </Stage>
+                                >
+                                    <img
+                                        ref={imageRef}
+                                        src={imageUrl}
+                                        alt={`Page ${activePage.page_info.page_number}`}
+                                        className="w-full h-full"
+                                        style={{ objectFit: 'contain' }}
+                                        onLoad={handleImageLoad}
+                                    />
+
+                                    {imageLoaded && (
+                                        <Stage
+                                            width={displayWidth}
+                                            height={displayHeight}
+                                            style={{ position: 'absolute', top: 0, left: 0 }}
+                                        >
+                                            <Layer>
+                                                {boxes.map((box, index) => {
+                                                    // Apply scaling to the box coordinates for display
+                                                    const scaledBox = {
+                                                        x: box.x * scaleX,
+                                                        y: box.y * scaleY,
+                                                        width: box.width * scaleX,
+                                                        height: box.height * scaleY
+                                                    };
+
+                                                    return (
+                                                        <Rect
+                                                            key={index}
+                                                            id={`rect-${index}`}
+                                                            x={scaledBox.x}
+                                                            y={scaledBox.y}
+                                                            width={scaledBox.width}
+                                                            height={scaledBox.height}
+                                                            stroke={selectedBox === index ? '#2563eb' : '#10b981'}
+                                                            strokeWidth={2}
+                                                            fill={selectedBox === index ? 'rgba(37, 99, 235, 0.1)' : 'rgba(16, 185, 129, 0.05)'}
+                                                            draggable
+                                                            onDragEnd={(e) => handleDragEnd(index, e)}
+                                                            onTransformEnd={(e) => handleTransformEnd(index, e)}
+                                                            onClick={() => setSelectedBox(index)}
+                                                            onTap={() => setSelectedBox(index)}
+                                                        />
+                                                    );
+                                                })}
+                                                <Transformer
+                                                    ref={transformerRef}
+                                                    boundBoxFunc={(oldBox, newBox) => {
+                                                        // Limit minimum size in display coordinates
+                                                        if (newBox.width < 10 || newBox.height < 10) {
+                                                            return oldBox;
+                                                        }
+
+                                                        // Ensure the box stays within the image boundaries
+                                                        const maxX = displayWidth;
+                                                        const maxY = displayHeight;
+
+                                                        // Check if the box is going outside the image
+                                                        if (newBox.x < 0) newBox.x = 0;
+                                                        if (newBox.y < 0) newBox.y = 0;
+                                                        if (newBox.x + newBox.width > maxX) {
+                                                            newBox.width = maxX - newBox.x;
+                                                        }
+                                                        if (newBox.y + newBox.height > maxY) {
+                                                            newBox.height = maxY - newBox.y;
+                                                        }
+
+                                                        return newBox;
+                                                    }}
+                                                    rotateEnabled={false}
+                                                    borderStroke="#2563eb"
+                                                    anchorStroke="#2563eb"
+                                                    anchorFill="#ffffff"
+                                                    anchorSize={8}
+                                                    anchorCornerRadius={4}
+                                                    padding={1}
+                                                />
+                                            </Layer>
+                                        </Stage>
+                                    )}
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
 
