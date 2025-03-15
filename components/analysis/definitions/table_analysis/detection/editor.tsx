@@ -159,16 +159,6 @@ const TableDetectionEditor: React.FC<BaseStepComponentProps> = ({ analysisId, do
         };
     };
 
-    // Convert Konva box back to API table box format
-    const konvaToTableBox = (box: KonvaBox): TableBox => {
-        return {
-            x1: box.x,
-            y1: box.y,
-            x2: box.x + box.width,
-            y2: box.y + box.height
-        };
-    };
-
     // Loading state
     if (isPagesLoading) {
         return (
