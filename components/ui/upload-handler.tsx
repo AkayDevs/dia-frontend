@@ -3,7 +3,6 @@
 import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Document, DocumentType } from '@/types/document';
 import { ArrowUpTrayIcon, DocumentDuplicateIcon, XCircleIcon } from '@heroicons/react/24/outline';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
@@ -35,7 +34,7 @@ const DEFAULT_ACCEPT = {
     'image/png': ['.png']
 };
 
-const DEFAULT_MAX_SIZE = 10 * 1024 * 1024; // 10MB
+const DEFAULT_MAX_SIZE = 20 * 1024 * 1024; // 20MB
 const DEFAULT_MAX_FILES = 10;
 
 export function UploadHandler({

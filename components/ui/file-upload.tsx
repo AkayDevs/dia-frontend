@@ -17,7 +17,7 @@ interface FileUploadProps {
     allowedFileTypes?: Record<string, string[]>;
 }
 
-const DEFAULT_MAX_SIZE = 10 * 1024 * 1024; // 10MB
+const DEFAULT_MAX_SIZE = 20 * 1024 * 1024; // 20MB
 const DEFAULT_ALLOWED_TYPES: Record<string, string[]> = {
     'application/pdf': ['.pdf'],
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
@@ -25,7 +25,7 @@ const DEFAULT_ALLOWED_TYPES: Record<string, string[]> = {
     'image/*': ['.png', '.jpg', '.jpeg']
 };
 
-export function  FileUpload({
+export function FileUpload({
     onUploadSuccess,
     onUploadError,
     className = '',
