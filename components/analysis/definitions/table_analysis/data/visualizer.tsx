@@ -49,6 +49,14 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Separator } from '@/components/ui/separator';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
+// Import type for xlsx
+import type * as XLSX from 'xlsx';
 
 const TableDataVisualizer: React.FC<BaseStepComponentProps> = ({ stepResult, analysisId, analysisType, step, documentId }) => {
     const [activeTab, setActiveTab] = useState<string>("1");
@@ -437,6 +445,73 @@ const PageTableDataVisualizer: React.FC<PageTableDataVisualizerProps> = ({
     const scaleX = displayWidth / actualWidth;
     const scaleY = displayHeight / actualHeight;
 
+    // Function to convert table data to CSV
+    const exportTableAsCSV = (tableIndex: number) => {
+        const table = pageResult.tables[tableIndex];
+        if (!table || !table.cells.length) return;
+
+        // Convert table cells to CSV format
+        let csvContent = '';
+
+        // Add header row (using Column 1, Column 2, etc.)
+        const headerRow = table.cells[0].map((_, colIndex) => `Column ${colIndex + 1}`);
+        csvContent += headerRow.join(',') + '\n';
+
+        // Add data rows
+        table.cells.forEach(row => {
+            const rowData = row.map(cell => {
+                // Escape quotes and wrap text in quotes if it contains commas or quotes
+                const text = cell.text || '';
+                const escaped = text.replace(/"/g, '""');
+                return text.includes(',') || text.includes('"') || text.includes('\n')
+                    ? `"${escaped}"`
+                    : escaped;
+            });
+            csvContent += rowData.join(',') + '\n';
+        });
+
+        // Create a blob and download
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', `table_${pageResult.page_info.page_number}_${tableIndex + 1}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    // Function to convert table data to XLSX
+    const exportTableAsXLSX = async (tableIndex: number) => {
+        const table = pageResult.tables[tableIndex];
+        if (!table || !table.cells.length) return;
+
+        try {
+            // Dynamically import xlsx library
+            const XLSX = await import('xlsx');
+
+            // Prepare worksheet data
+            const wsData = table.cells.map(row =>
+                row.map(cell => cell.text || '')
+            );
+
+            // Create worksheet
+            const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+            // Create workbook
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, `Table ${tableIndex + 1}`);
+
+            // Generate and download file
+            XLSX.writeFile(wb, `table_${pageResult.page_info.page_number}_${tableIndex + 1}.xlsx`);
+        } catch (error) {
+            console.error('Error exporting to XLSX:', error);
+            alert('Failed to export as XLSX. Falling back to CSV export.');
+            exportTableAsCSV(tableIndex);
+        }
+    };
+
     return (
         <div className="bg-card rounded-lg border p-4">
             <div className="flex flex-col xl:flex-row gap-6">
@@ -546,10 +621,22 @@ const PageTableDataVisualizer: React.FC<PageTableDataVisualizerProps> = ({
                                     <Database className="h-5 w-5 text-primary" />
                                     <h3 className="text-lg font-medium">Table {selectedTableIndex + 1} Data</h3>
                                 </div>
-                                <Button variant="outline" size="sm">
-                                    <ArrowDownToLine className="h-4 w-4 mr-2" />
-                                    Export CSV
-                                </Button>
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button variant="outline" size="sm">
+                                            <ArrowDownToLine className="h-4 w-4 mr-2" />
+                                            Export
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                        <DropdownMenuItem onClick={() => exportTableAsCSV(selectedTableIndex)}>
+                                            Export as CSV
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => exportTableAsXLSX(selectedTableIndex)}>
+                                            Export as Excel (XLSX)
+                                        </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
                             </div>
 
                             <div className="border rounded-lg overflow-hidden">
