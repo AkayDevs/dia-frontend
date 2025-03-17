@@ -2,19 +2,17 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { AnimatePresence } from 'framer-motion';
+import { v4 as uuidv4 } from 'uuid';
+import {
+    Upload,
+    FileText,
+    Trash2,
+    Play,
+    RotateCw,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
-import { Separator } from '@/components/ui/separator';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -26,66 +24,38 @@ import {
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { motion, AnimatePresence } from 'framer-motion';
-import {
-    Upload,
-    FileText,
-    AlertCircle,
-    CheckCircle,
-    XCircle,
-    Trash2,
-    Play,
-    Settings,
-    RotateCw,
-    Clock
-} from 'lucide-react';
 import { useAnalysisStore } from '@/store/useAnalysisStore';
-import { useDocumentStore } from '@/store/useDocumentStore';
 import { useAuthStore } from '@/store/useAuthStore';
-import {
-    Analysis,
-    AnalysisStatus,
-    AnalysisTypeEnum,
-    AnalysisType,
-    AnalysisRequest
-} from '@/types/analysis';
-import { Document, DocumentType } from '@/types/document';
-import { cn } from '@/lib/utils';
+import { AnalysisMode } from '@/enums/analysis';
+import { BatchItem } from '@/components/batch/batch-item';
+import { BatchUploadZone } from '@/components/batch/batch-upload-zone';
+import { BatchConfig } from '@/components/batch/batch-config';
 import { BatchResultPreview } from '@/components/batch/batch-result-preview';
-
-interface BatchItem {
-    id: string;
-    file: File;
-    document?: Document;
-    analysis?: Analysis;
-    status: 'pending' | 'uploading' | 'uploaded' | 'analyzing' | 'completed' | 'failed';
-    error?: string;
-    progress: number;
-}
+import { batchService, BatchProcessItem, BatchProcessOptions } from '@/services/batch.service';
+import { analysisService } from '@/services/analysis.service';
+import { useDocumentStore } from '@/store/useDocumentStore';
+import { Document } from '@/types/document';
 
 export default function BatchPage() {
     const router = useRouter();
     const { toast } = useToast();
     const { logout } = useAuthStore();
-    const { uploadDocument } = useDocumentStore();
-    const {
-        analysisTypes,
-        currentAnalysisType,
-        fetchAnalysisTypes,
-        fetchAnalysisType,
-        startAnalysis
-    } = useAnalysisStore();
+    const { analysisDefinitions, fetchAnalysisDefinitions, isLoading: isAnalysisLoading } = useAnalysisStore();
 
+    // State
     const [batchItems, setBatchItems] = useState<BatchItem[]>([]);
-    const [selectedAnalysisType, setSelectedAnalysisType] = useState<string>('');
+    const [selectedAnalysisId, setSelectedAnalysisId] = useState<string>('');
     const [isProcessing, setIsProcessing] = useState(false);
     const [showClearDialog, setShowClearDialog] = useState(false);
     const [selectedItem, setSelectedItem] = useState<BatchItem | null>(null);
+    const [analysisMode, setAnalysisMode] = useState<AnalysisMode>(AnalysisMode.AUTOMATIC);
+    const [notifyOnCompletion, setNotifyOnCompletion] = useState<boolean>(true);
+    const [selectedDocuments, setSelectedDocuments] = useState<Document[]>([]);
 
-    // Fetch analysis types on mount
+    // Fetch analysis definitions on mount
     useEffect(() => {
-        fetchAnalysisTypes().catch(error => {
-            const message = error instanceof Error ? error.message : 'Failed to fetch analysis types';
+        fetchAnalysisDefinitions().catch(error => {
+            const message = error instanceof Error ? error.message : 'Failed to fetch analysis definitions';
             if (message.includes('Could not validate credentials')) {
                 logout();
                 router.push('/login');
@@ -96,73 +66,126 @@ export default function BatchPage() {
                 variant: "destructive",
             });
         });
-    }, []);
+    }, [fetchAnalysisDefinitions, logout, router, toast]);
 
     // Handle file selection
-    const handleFileSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-        const files = Array.from(event.target.files || []);
+    const handleFilesSelected = useCallback((files: File[]) => {
         const newItems: BatchItem[] = files.map(file => ({
-            id: Math.random().toString(36).substring(7),
+            id: uuidv4(),
             file,
             status: 'pending',
             progress: 0
         }));
         setBatchItems(prev => [...prev, ...newItems]);
-        event.target.value = ''; // Reset input
     }, []);
 
-    // Handle file drop
-    const handleDrop = useCallback((event: React.DragEvent<HTMLDivElement>) => {
-        event.preventDefault();
-        const files = Array.from(event.dataTransfer.files);
-        const newItems: BatchItem[] = files.map(file => ({
-            id: Math.random().toString(36).substring(7),
-            file,
+    // Handle document selection
+    const handleDocumentsSelected = useCallback((documents: Document[]) => {
+        setSelectedDocuments(documents);
+    }, []);
+
+    // Add selected documents to batch items
+    const addSelectedDocumentsToBatch = useCallback(() => {
+        if (selectedDocuments.length === 0) return;
+
+        // Create batch items from selected documents
+        const newItems: BatchItem[] = selectedDocuments.map(doc => ({
+            id: uuidv4(),
+            file: new File([], doc.name), // Placeholder file object
+            document: doc, // Use the existing document
             status: 'pending',
             progress: 0
         }));
+
         setBatchItems(prev => [...prev, ...newItems]);
+        toast({
+            title: "Documents Added",
+            description: `Added ${selectedDocuments.length} documents to the batch queue`,
+        });
+
+        // Clear selected documents
+        setSelectedDocuments([]);
+    }, [selectedDocuments, toast]);
+
+    // Update a single batch item
+    const updateBatchItem = useCallback((id: string, updates: Partial<BatchItem>) => {
+        setBatchItems(prev => prev.map(item =>
+            item.id === id ? { ...item, ...updates } : item
+        ));
     }, []);
 
     // Process a single item
-    const processItem = async (item: BatchItem): Promise<BatchItem> => {
+    const processItem = useCallback(async (item: BatchItem): Promise<BatchItem> => {
         try {
-            // Upload document
-            setBatchItems(prev => prev.map(i =>
-                i.id === item.id ? { ...i, status: 'uploading', progress: 33 } : i
-            ));
-            const document = await uploadDocument(item.file);
+            // If item already has a document, skip upload
+            if (item.document) {
+                // Create options
+                const options: BatchProcessOptions = {
+                    analysisCode: selectedAnalysisId,
+                    mode: analysisMode,
+                    notifyOnCompletion
+                };
 
-            // Start analysis
-            setBatchItems(prev => prev.map(i =>
-                i.id === item.id ? { ...i, document, status: 'analyzing', progress: 66 } : i
-            ));
+                // Update progress to analyzing (66%)
+                updateBatchItem(item.id, {
+                    progress: 66,
+                    status: 'analyzing'
+                });
 
-            const analysisRequest: AnalysisRequest = {
-                analysis_type_id: selectedAnalysisType,
-                mode: 'automatic',
-                algorithm_configs: {} // Use default configurations
+                // Start analysis directly
+                const analysisId = await analysisService.startAnalysis(
+                    item.document.id,
+                    options.analysisCode,
+                    options.mode
+                );
+
+                // Fetch analysis details
+                const analysis = await analysisService.getAnalysis(analysisId.id || '');
+
+                // Update progress to completed (100%)
+                return {
+                    ...item,
+                    analysis,
+                    status: 'completed',
+                    progress: 100
+                };
+            }
+
+            // Otherwise, process as normal with file upload
+            const processItem: BatchProcessItem = {
+                file: item.file,
+                status: item.status,
+                progress: item.progress,
+                error: item.error
             };
 
-            await useAnalysisStore.getState().startAnalysis(document.id, analysisRequest);
-
-            // Since startAnalysis is void, we'll create a simple analysis object
-            const analysis: Analysis = {
-                id: Math.random().toString(36).substring(7), // Temporary ID
-                document_id: document.id,
-                analysis_type_id: selectedAnalysisType,
-                mode: 'automatic',
-                status: AnalysisStatus.PROCESSING,
-                created_at: new Date().toISOString(),
-                step_results: []
+            // Create options
+            const options: BatchProcessOptions = {
+                analysisCode: selectedAnalysisId,
+                mode: analysisMode,
+                notifyOnCompletion
             };
 
+            // Process the item
+            const result = await batchService.processItem(
+                processItem,
+                options,
+                (progress) => {
+                    updateBatchItem(item.id, {
+                        progress,
+                        status: progress < 50 ? 'uploading' : 'analyzing'
+                    });
+                }
+            );
+
+            // Return the updated item
             return {
                 ...item,
-                document,
-                analysis,
-                status: 'completed',
-                progress: 100
+                document: result.document,
+                analysis: result.analysis,
+                status: result.status,
+                progress: result.progress,
+                error: result.error
             };
         } catch (error) {
             return {
@@ -172,11 +195,11 @@ export default function BatchPage() {
                 progress: 0
             };
         }
-    };
+    }, [selectedAnalysisId, analysisMode, notifyOnCompletion, updateBatchItem]);
 
     // Start batch processing
     const startProcessing = async () => {
-        if (!selectedAnalysisType) {
+        if (!selectedAnalysisId) {
             toast({
                 title: "Error",
                 description: "Please select an analysis type",
@@ -185,16 +208,23 @@ export default function BatchPage() {
             return;
         }
 
+        // Add any selected documents to the batch first
+        if (selectedDocuments.length > 0) {
+            addSelectedDocumentsToBatch();
+        }
+
         setIsProcessing(true);
         const pendingItems = batchItems.filter(item => item.status === 'pending');
 
         try {
-            const results = await Promise.all(pendingItems.map(processItem));
-            setBatchItems(prev => prev.map(item => {
-                const result = results.find(r => r.id === item.id);
-                return result || item;
-            }));
+            // Process items sequentially
+            for (const item of pendingItems) {
+                const result = await processItem(item);
+                updateBatchItem(item.id, result);
+            }
+
             toast({
+                title: "Success",
                 description: "Batch processing completed",
             });
         } catch (error) {
@@ -214,37 +244,14 @@ export default function BatchPage() {
             item.status !== 'completed' && item.status !== 'failed'
         ));
         setShowClearDialog(false);
+        setSelectedItem(null);
     };
 
     // Remove single item
     const removeItem = (id: string) => {
         setBatchItems(prev => prev.filter(item => item.id !== id));
-    };
-
-    // Get status badge styling
-    const getStatusBadge = (status: BatchItem['status']) => {
-        switch (status) {
-            case 'completed':
-                return {
-                    icon: <CheckCircle className="h-4 w-4" />,
-                    className: 'bg-green-500/10 text-green-500 hover:bg-green-500/20'
-                };
-            case 'failed':
-                return {
-                    icon: <XCircle className="h-4 w-4" />,
-                    className: 'bg-red-500/10 text-red-500 hover:bg-red-500/20'
-                };
-            case 'analyzing':
-            case 'uploading':
-                return {
-                    icon: <Clock className="h-4 w-4" />,
-                    className: 'bg-blue-500/10 text-blue-500 hover:bg-blue-500/20'
-                };
-            default:
-                return {
-                    icon: <Clock className="h-4 w-4" />,
-                    className: 'bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/20'
-                };
+        if (selectedItem?.id === id) {
+            setSelectedItem(null);
         }
     };
 
@@ -268,7 +275,7 @@ export default function BatchPage() {
                     </Button>
                     <Button
                         onClick={startProcessing}
-                        disabled={isProcessing || batchItems.length === 0 || !selectedAnalysisType}
+                        disabled={isProcessing || (batchItems.length === 0 && selectedDocuments.length === 0) || !selectedAnalysisId}
                     >
                         {isProcessing ? (
                             <RotateCw className="h-4 w-4 mr-2 animate-spin" />
@@ -280,154 +287,67 @@ export default function BatchPage() {
                 </div>
             </div>
 
-            <Card>
-                <CardHeader>
-                    <CardTitle>Analysis Configuration</CardTitle>
-                    <CardDescription>
-                        Select the type of analysis to perform on all documents
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <Select
-                        value={selectedAnalysisType}
-                        onValueChange={setSelectedAnalysisType}
-                    >
-                        <SelectTrigger className="w-full md:w-[300px]">
-                            <SelectValue placeholder="Select analysis type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {analysisTypes.map((type) => (
-                                <SelectItem key={type.id} value={type.id}>
-                                    {type.name.replace(/_/g, ' ')}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </CardContent>
-            </Card>
+            <BatchConfig
+                analysisDefinitions={analysisDefinitions}
+                selectedAnalysisId={selectedAnalysisId}
+                isLoading={isAnalysisLoading || isProcessing}
+                onAnalysisChange={setSelectedAnalysisId}
+                onStartProcessing={startProcessing}
+                onDocumentsSelected={handleDocumentsSelected}
+                selectedDocuments={selectedDocuments}
+                disabled={isProcessing}
+            />
 
             <div className="grid gap-6 lg:grid-cols-2">
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Document Queue</CardTitle>
-                        <CardDescription>
-                            Upload documents or drag and drop them here
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <div
-                            onDrop={handleDrop}
-                            onDragOver={(e) => e.preventDefault()}
-                            className="border-2 border-dashed rounded-lg p-8 text-center mb-6"
-                        >
-                            <input
-                                type="file"
-                                id="file-upload"
-                                multiple
-                                className="hidden"
-                                onChange={handleFileSelect}
-                                accept=".pdf,.docx,.xlsx,.png,.jpg,.jpeg"
-                            />
-                            <label
-                                htmlFor="file-upload"
-                                className="cursor-pointer flex flex-col items-center gap-2"
-                            >
-                                <Upload className="h-8 w-8 text-muted-foreground" />
-                                <p className="text-muted-foreground">
-                                    Click to upload or drag and drop files here
-                                </p>
-                            </label>
-                        </div>
+                <div className="space-y-6">
+                    <BatchUploadZone
+                        onFilesSelected={handleFilesSelected}
+                        disabled={isProcessing}
+                    />
 
-                        <ScrollArea className="h-[400px]">
-                            <div className="space-y-4">
-                                <AnimatePresence>
-                                    {batchItems.map((item) => (
-                                        <motion.div
+                    <ScrollArea className="h-[500px] border rounded-lg p-4">
+                        <div className="space-y-4">
+                            <AnimatePresence>
+                                {batchItems.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground">
+                                        <Upload className="h-12 w-12 mb-4 opacity-20" />
+                                        <p>No documents in the queue</p>
+                                        <p className="text-sm mt-2">
+                                            Upload documents or select existing ones to start batch processing
+                                        </p>
+                                    </div>
+                                ) : (
+                                    batchItems.map((item) => (
+                                        <BatchItem
                                             key={item.id}
-                                            initial={{ opacity: 0, y: 20 }}
-                                            animate={{ opacity: 1, y: 0 }}
-                                            exit={{ opacity: 0, x: -20 }}
-                                            className={cn(
-                                                "p-4 rounded-lg border bg-card cursor-pointer hover:bg-accent/50 transition-colors",
-                                                selectedItem?.id === item.id && "bg-accent"
-                                            )}
-                                            onClick={() => setSelectedItem(item)}
-                                        >
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-3">
-                                                    <FileText className="h-5 w-5 text-primary" />
-                                                    <div>
-                                                        <p className="font-medium">{item.file.name}</p>
-                                                        <p className="text-sm text-muted-foreground">
-                                                            {(item.file.size / 1024 / 1024).toFixed(2)} MB
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center gap-4">
-                                                    <Badge
-                                                        variant="secondary"
-                                                        className={cn(
-                                                            'gap-1 capitalize',
-                                                            getStatusBadge(item.status).className
-                                                        )}
-                                                    >
-                                                        {getStatusBadge(item.status).icon}
-                                                        {item.status}
-                                                    </Badge>
-                                                    {!isProcessing && (
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                removeItem(item.id);
-                                                            }}
-                                                        >
-                                                            <Trash2 className="h-4 w-4" />
-                                                        </Button>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            {item.progress > 0 && item.progress < 100 && (
-                                                <Progress value={item.progress} className="mt-2" />
-                                            )}
-                                            {item.error && (
-                                                <p className="text-sm text-red-500 mt-2">
-                                                    {item.error}
-                                                </p>
-                                            )}
-                                        </motion.div>
-                                    ))}
-                                </AnimatePresence>
-                            </div>
-                        </ScrollArea>
-                    </CardContent>
-                </Card>
+                                            item={item}
+                                            isSelected={selectedItem?.id === item.id}
+                                            isProcessing={isProcessing}
+                                            onSelect={setSelectedItem}
+                                            onRemove={removeItem}
+                                        />
+                                    ))
+                                )}
+                            </AnimatePresence>
+                        </div>
+                    </ScrollArea>
+                </div>
 
                 {/* Preview Section */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Results Preview</CardTitle>
-                        <CardDescription>
-                            View analysis results for the selected document
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        {selectedItem?.document && selectedItem?.analysis ? (
-                            <BatchResultPreview
-                                document={selectedItem.document}
-                                analysis={selectedItem.analysis}
-                                onClose={() => setSelectedItem(null)}
-                            />
-                        ) : (
-                            <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground">
-                                <FileText className="h-12 w-12 mb-4" />
-                                <p>Select a completed item to view results</p>
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
+                <div>
+                    {selectedItem?.document && selectedItem?.analysis ? (
+                        <BatchResultPreview
+                            document={selectedItem.document}
+                            analysis={selectedItem.analysis}
+                            onClose={() => setSelectedItem(null)}
+                        />
+                    ) : (
+                        <div className="flex flex-col items-center justify-center h-[600px] border rounded-lg text-muted-foreground">
+                            <FileText className="h-12 w-12 mb-4 opacity-20" />
+                            <p>Select a completed item to view results</p>
+                        </div>
+                    )}
+                </div>
             </div>
 
             <AlertDialog open={showClearDialog} onOpenChange={setShowClearDialog}>
