@@ -12,6 +12,7 @@ import TableDetectionVisualizer from './detection/visualizer';
 import TableStructureVisualizer from './structure/visualizer';
 import TableDataVisualizer from './data/visualizer';
 import TableDetectionEditor from './detection/editor';
+import TableDataEditor from './data/editor';
 
 // Export the table analysis components
 export const TableAnalysisComponents: BaseAnalysisComponents = {
@@ -33,6 +34,7 @@ export const TableAnalysisComponents: BaseAnalysisComponents = {
         [TableAnalysisStepCode.TABLE_DATA]: {
             // Will be implemented later
             [StepComponentType.VISUALIZER]: TableDataVisualizer,
+            [StepComponentType.EDITOR]: TableDataEditor,
         }
     }
 };
