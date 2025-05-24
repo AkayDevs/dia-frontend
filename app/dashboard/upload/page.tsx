@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { FileUpload } from '@/components/ui/file-upload';
 import { DocumentPreview } from '@/components/documents/document-preview';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -40,7 +39,7 @@ export default function UploadPage() {
     };
 
     return (
-        <DashboardLayout>
+        <div>
             <div className="space-y-8">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight">Upload Document</h1>
@@ -83,6 +82,6 @@ export default function UploadPage() {
                     )}
                 </div>
             </div>
-        </DashboardLayout>
+        </div>
     );
 } 

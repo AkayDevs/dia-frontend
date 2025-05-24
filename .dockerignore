@@ -1,0 +1,33 @@
+# Versioning and metadata
+.git
+.gitignore
+.dockerignore
+
+# Build dependencies
+node_modules
+dist
+
+# Environment (contains sensitive data)
+.env
+.env.*
+
+# Files not required for production
+README.md
+CHANGELOG.md
+docker-compose.yml
+Dockerfile
+.eslintrc
+.editorconfig
+.prettierrc
+.vscode
+
+# Debug log from npm
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local development specific files
+.DS_Store
+.idea
+*.swp
+*.swo 
