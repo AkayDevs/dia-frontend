@@ -33,7 +33,13 @@ import { StepComponentType } from '@/components/analysis/definitions/base';
 import { StepResultResponse } from '@/types/analysis/base';
 import { cn } from '@/lib/utils';
 import { DOCUMENT_TYPE_ICONS, ANALYSIS_STATUS_ICONS } from '@/constants/icons';
-interface AnalysisDetailPageProps {
+
+type PageProps = {
+    params: { [key: string]: string };
+    searchParams?: { [key: string]: string | string[] | undefined };
+};
+
+interface AnalysisDetailPageProps extends PageProps {
     params: {
         analysisId: string;
     };
